@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { Clock } from 'lucide-react';
+import { Clock, AlertCircle, CheckCircle, Clock4, FileQuestion, Loader2, UserCheck, UserX } from 'lucide-react';
 
 interface KanbanCardProps {
   candidate: Candidate;
@@ -11,11 +11,30 @@ interface KanbanCardProps {
   className?: string;
 }
 
-export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('');
-  }
+const getInitials = (name: string) => {
+    if (!name) return '??';
+    const nameParts = name.split(' ');
+    if (nameParts.length > 1) {
+        return `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+}
 
+const StatusInfo = ({ status, candidate }: { status: string, candidate: Candidate }) => {
+    switch (status) {
+        case 'Uploaded': return <><Clock4 className="h-3 w-3"/><span>Ready for screening</span></>;
+        case 'Screening': return <><CheckCircle className="h-3 w-3 text-green-500"/><span>Screening passed</span></>;
+        case 'Manual Review': return <><FileQuestion className="h-3 w-3 text-yellow-500"/><span>Needs deep review</span></>;
+        case 'Interview': return <><UserCheck className="h-3 w-3 text-blue-500"/><span>Ready for interview</span></>;
+        case 'Rejected': return <><UserX className="h-3 w-3 text-red-500"/><span>Rejected</span></>;
+        case 'Error': return <><AlertCircle className="h-3 w-3 text-red-500"/><span>Processing Error</span></>;
+        case 'Processing': return <><Loader2 className="h-3 w-3 animate-spin"/><span>Processing...</span></>;
+        default: return <><Clock className='h-3 w-3'/><span>{candidate.lastUpdated}</span></>;
+    }
+};
+
+export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
+  
   return (
     <Card
       onClick={onClick}
@@ -28,7 +47,7 @@ export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
             <AvatarFallback>{getInitials(candidate.name)}</AvatarFallback>
           </Avatar>
           <div className="flex-1">
-            <p className="font-semibold text-foreground">{candidate.name}</p>
+            <p className="font-semibold text-foreground truncate">{candidate.name}</p>
             <p className="text-sm text-muted-foreground">{candidate.role}</p>
           </div>
         </div>
@@ -41,9 +60,8 @@ export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
           )}
         </div>
         <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-            <div className='flex items-center gap-1'>
-                <Clock className='h-3 w-3'/>
-                <span>{candidate.lastUpdated}</span>
+            <div className='flex items-center gap-1.5'>
+                <StatusInfo status={candidate.status} candidate={candidate} />
             </div>
         </div>
       </CardContent>

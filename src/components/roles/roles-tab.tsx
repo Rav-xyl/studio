@@ -1,6 +1,4 @@
-
 'use client'
-import { mockJobRoles } from '@/lib/mock-data';
 import type { JobRole } from '@/lib/types';
 import { PlusCircle } from 'lucide-react';
 import { useState } from 'react';
@@ -8,10 +6,23 @@ import { Button } from '../ui/button';
 import { GenerateJdDialog } from './generate-jd-dialog';
 import { RoleCard } from './role-card';
 
+interface RolesTabProps {
+    roles: JobRole[];
+    setRoles: React.Dispatch<React.SetStateAction<JobRole[]>>;
+}
 
-export function RolesTab() {
-    const [roles, setRoles] = useState<JobRole[]>(mockJobRoles)
+
+export function RolesTab({ roles, setRoles }: RolesTabProps) {
     const [isJdDialogOpen, setIsJdDialogOpen] = useState(false);
+
+    const handleAddRole = (newRole: Omit<JobRole, 'id' | 'openings'>) => {
+        const fullNewRole: JobRole = {
+            id: `role-${Date.now()}`,
+            ...newRole,
+            openings: 0, // Let's start with 0 openings
+        };
+        setRoles(prev => [...prev, fullNewRole]);
+    }
 
     return (
         <div className="fade-in">
@@ -35,7 +46,7 @@ export function RolesTab() {
                     <p className="text-slate-400 mt-2">Use the button above to synthesize a new Job Description.</p>
                 </div>
             )}
-            <GenerateJdDialog open={isJdDialogOpen} onOpenChange={setIsJdDialogOpen} />
+            <GenerateJdDialog open={isJdDialogOpen} onOpenChange={setIsJdDialogOpen} onSave={handleAddRole} />
         </div>
     )
 }

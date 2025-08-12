@@ -15,43 +15,48 @@ import { Label } from '@/components/ui/label';
 import { Zap, Loader2 } from 'lucide-react';
 import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
+import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
+import type { JobRole } from '@/lib/types';
 
 interface GenerateJdDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSave: (newRole: Omit<JobRole, 'id' | 'openings'>) => void;
 }
 
-const placeholderJd = `## About the Role
 
-As a Senior Frontend Developer at [Your Company], you will be a key player in shaping the user experience of our flagship products. We're looking for someone who is passionate about building beautiful, performant, and accessible user interfaces that delight our customers. You'll work within a talented, cross-functional team to bring our vision to life.
-
-## Responsibilities
-
-- Develop and maintain web applications using React, TypeScript, and Next.js.
-- Collaborate with Product Managers, UX Designers, and Backend Engineers to translate requirements into well-crafted features.
-- Uphold high standards for code quality, performance, and accessibility.
-- Mentor junior developers and contribute to our growing component library.
-
-## Qualifications
-
-- 5+ years of professional experience in frontend development.
-- Expertise in modern JavaScript frameworks, particularly React.
-- Strong proficiency with TypeScript.
-- Experience with GraphQL and data-fetching libraries.
-...
-`;
-
-
-export function GenerateJdDialog({ open, onOpenChange }: GenerateJdDialogProps) {
+export function GenerateJdDialog({ open, onOpenChange, onSave }: GenerateJdDialogProps) {
     const [isLoading, setIsLoading] = useState(false);
+    const [jobTitle, setJobTitle] = useState("");
+    const [companyInfo, setCompanyInfo] = useState("");
     const [generatedJd, setGeneratedJd] = useState("");
 
-    const handleGenerate = () => {
+    const handleGenerate = async () => {
+        if(!jobTitle) return;
         setIsLoading(true);
-        setTimeout(() => {
-            setGeneratedJd(placeholderJd);
+        try {
+            const result = await synthesizeJobDescription({ jobTitle, companyInformation: companyInfo });
+            setGeneratedJd(result.jobDescription);
+        } catch (error) {
+            console.error("Failed to synthesize JD:", error);
+            // You might want to show a toast notification here
+        } finally {
             setIsLoading(false);
-        }, 1500);
+        }
+    }
+
+    const handleSave = () => {
+        if (!generatedJd || !jobTitle) return;
+        onSave({
+            title: jobTitle,
+            department: "Uncategorized", // Default department
+            description: generatedJd,
+        });
+        // Reset state and close
+        setJobTitle("");
+        setCompanyInfo("");
+        setGeneratedJd("");
+        onOpenChange(false);
     }
     
   return (
@@ -67,13 +72,13 @@ export function GenerateJdDialog({ open, onOpenChange }: GenerateJdDialogProps) 
             <div className='space-y-4'>
                 <div>
                     <Label htmlFor="job-title">Job Title</Label>
-                    <Input id="job-title" placeholder="e.g., Senior Frontend Developer" />
+                    <Input id="job-title" placeholder="e.g., Senior Frontend Developer" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
                 </div>
                 <div>
                     <Label htmlFor="company-info">Company Information (Optional)</Label>
-                    <Textarea id="company-info" placeholder="Paste company website URL, values, or other info here..." className='h-48'/>
+                    <Textarea id="company-info" placeholder="Paste company website URL, values, or other info here..." className='h-48' value={companyInfo} onChange={(e) => setCompanyInfo(e.target.value)} />
                 </div>
-                <Button onClick={handleGenerate} disabled={isLoading} className='w-full'>
+                <Button onClick={handleGenerate} disabled={isLoading || !jobTitle} className='w-full'>
                     {isLoading ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
@@ -97,7 +102,7 @@ export function GenerateJdDialog({ open, onOpenChange }: GenerateJdDialogProps) 
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="submit" disabled={!generatedJd}>Save Job Description</Button>
+          <Button onClick={handleSave} disabled={!generatedJd}>Save Job Description</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

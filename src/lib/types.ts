@@ -1,4 +1,4 @@
-export type KanbanStatus = 'Uploaded' | 'Screening' | 'Manual Review' | 'Interview' | 'Offer' | 'Hired' | 'Rejected';
+export type KanbanStatus = 'Uploaded' | 'Screening' | 'Manual Review' | 'Interview' | 'Offer' | 'Hired' | 'Rejected' | 'Processing' | 'Error';
 
 export interface Candidate {
   id: string;
@@ -10,6 +10,8 @@ export interface Candidate {
   narrative: string;
   inferredSkills: string[];
   lastUpdated: string;
+  // Optional fields from AI processing
+  [key: string]: any; 
 }
 
 export interface JobRole {
@@ -17,4 +19,5 @@ export interface JobRole {
   title: string;
   department: string;
   openings: number;
+  description?: string;
 }

@@ -16,18 +16,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import { useState } from 'react';
-import { KANBAN_COLUMNS, mockCandidates } from '@/lib/mock-data';
+import { useState, useRef } from 'react';
 import type { Candidate, KanbanStatus } from '@/lib/types';
 import { KanbanColumn } from './kanban-column';
 import { CandidateDetailSheet } from './candidate-detail-sheet';
-import { BulkUploadDialog } from './bulk-upload-dialog';
+import { KANBAN_COLUMNS } from '@/lib/mock-data';
 
-export function CandidatePoolTab() {
-  const [candidates, setCandidates] = useState<Candidate[]>(mockCandidates);
+interface CandidatePoolTabProps {
+    candidates: Candidate[];
+    onUpload: (files: FileList | null) => void;
+    onScreenAll: () => void;
+    onAryaReviewAll: () => void;
+    onSuggestRoleMatches: () => void;
+    onFindPotentialRoles: () => void;
+    onStimulateFullPipeline: () => void;
+}
+
+export function CandidatePoolTab({
+    candidates,
+    onUpload,
+    onScreenAll,
+    onAryaReviewAll,
+    onSuggestRoleMatches,
+    onFindPotentialRoles,
+    onStimulateFullPipeline
+}: CandidatePoolTabProps) {
+  
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [isSheetOpen, setSheetOpen] = useState(false);
-  const [isUploadOpen, setUploadOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCardClick = (candidate: Candidate) => {
     setSelectedCandidate(candidate);
@@ -75,24 +92,32 @@ export function CandidatePoolTab() {
       </div>
       
       <div className="flex flex-wrap items-center gap-4 mb-6">
-        <Button onClick={() => setUploadOpen(true)} variant="secondary" className="btn-secondary px-4 py-2">
+        <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            multiple 
+            accept=".pdf,.doc,.docx,.txt"
+            onChange={(e) => onUpload(e.target.files)}
+        />
+        <Button onClick={() => fileInputRef.current?.click()} variant="secondary" className="btn-secondary px-4 py-2">
           <Upload className="w-5 h-5" /> Upload Resumes
         </Button>
 
-        <Button className="btn-primary px-4 py-2">
+        <Button className="btn-primary px-4 py-2" onClick={onScreenAll}>
           <Scan className="w-5 h-5" /> Screen All Resumes
         </Button>
-        <Button className="btn-primary px-4 py-2">
+        <Button className="btn-primary px-4 py-2" onClick={onAryaReviewAll}>
           <ScanFace className="w-5 h-5" /> Arya, Review All
         </Button>
 
-        <Button variant="secondary" className="btn-secondary px-4 py-2">
+        <Button variant="secondary" className="btn-secondary px-4 py-2" onClick={onSuggestRoleMatches}>
           <GitMerge className="w-5 h-5" /> Suggest Role Matches
         </Button>
-        <Button variant="secondary" className="btn-secondary px-4 py-2">
+        <Button variant="secondary" className="btn-secondary px-4 py-2" onClick={onFindPotentialRoles}>
           <Lightbulb className="w-5 h-5" /> Find Potential Roles
         </Button>
-        <Button className="btn-primary px-4 py-2">
+        <Button className="btn-primary px-4 py-2" onClick={onStimulateFullPipeline}>
           <Zap className="w-5 h-5" /> Stimulate Full Pipeline
         </Button>
       </div>
@@ -107,7 +132,6 @@ export function CandidatePoolTab() {
         ))}
       </div>
       <CandidateDetailSheet open={isSheetOpen} onOpenChange={onOpenChange} candidate={selectedCandidate} />
-      <BulkUploadDialog open={isUploadOpen} onOpenChange={setUploadOpen} />
     </div>
   );
 }

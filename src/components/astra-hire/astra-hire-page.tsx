@@ -1,21 +1,209 @@
 'use client';
 
-import { useState } from 'react';
-import { BarChart2, Briefcase, Users } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { BarChart2, Briefcase, Users, Brain, Loader2, X } from 'lucide-react';
 import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
 import { AnalyticsTab } from '../analytics/analytics-tab';
+import type { Candidate, JobRole, KanbanStatus } from '@/lib/types';
+import { KANBAN_COLUMNS, mockCandidates, mockJobRoles } from '@/lib/mock-data';
+import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
+import { automatedResumeScreening } from '@/ai/flows/automated-resume-screening';
+import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
+import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
+import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
+import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
+import { SaarthiReportModal } from './saarthi-report-modal';
+
+// --- Helper Functions ---
+const getInitials = (name: string) => {
+    return name ? name.split(' ').map(n => n[0]).join('') : '';
+}
+
+function convertFileToDataUri(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (error) => reject(error);
+    });
+}
 
 export function AstraHirePage() {
   const [activeTab, setActiveTab] = useState('pool');
+  const [companyType, setCompanyType] = useState('startup');
 
+  // --- State Management ---
+  const [roles, setRoles] = useState<JobRole[]>(mockJobRoles);
+  const [candidates, setCandidates] = useState<Candidate[]>(mockCandidates);
+  const [simulationLog, setSimulationLog] = useState<any[]>([]);
+  const [lastSaarthiReport, setLastSaarthiReport] = useState<any>(null);
+
+  // UI State
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('Loading...');
+  const [isSaarthiReportOpen, setIsSaarthiReportOpen] = useState(false);
+
+  // This will hold file objects for upload processing
+  const [uploadedFiles, setUploadedFiles] = useState<Map<string, File>>(new Map());
+
+  // --- Core Logic from HTML Script ---
+
+  const handleBulkUpload = (files: FileList | null) => {
+    if (!files) return;
+
+    const newFilesMap = new Map(uploadedFiles);
+    const newCandidates: Candidate[] = [];
+
+    for (const file of files) {
+      if (!newFilesMap.has(file.name) && !candidates.some(c => c.name === file.name)) {
+        newFilesMap.set(file.name, file);
+        const newCandidate: Candidate = {
+          id: `cand-${Date.now()}-${Math.random()}`,
+          name: file.name,
+          avatarUrl: '',
+          role: 'New Upload',
+          skills: [],
+          status: 'Uploaded',
+          narrative: `Resume file: ${file.name}`,
+          inferredSkills: [],
+          lastUpdated: 'Just now',
+        };
+        newCandidates.push(newCandidate);
+      }
+    }
+    setUploadedFiles(newFilesMap);
+    setCandidates(prev => [...prev, ...newCandidates]);
+  };
+
+  const handleScreenResumes = async () => {
+    const candidatesToProcess = candidates.filter(c => c.status === 'Uploaded');
+    if (candidatesToProcess.length === 0) {
+      console.log('No new resumes to screen.');
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingText(`Screening ${candidatesToProcess.length} resumes...`);
+    setSimulationLog(prev => [...prev, { step: 'Resume Screening', description: `Starting screening for ${candidatesToProcess.length} resumes.` }]);
+
+    const screeningPromises = candidatesToProcess.map(async (candidate) => {
+      const file = uploadedFiles.get(candidate.name);
+      if (!file) {
+        return { ...candidate, status: 'Error' as KanbanStatus, narrative: 'File not found for processing.' };
+      }
+      try {
+        const resumeDataUri = await convertFileToDataUri(file);
+        const result = await automatedResumeScreening({ resumeDataUri });
+
+        const updatedCandidate = {
+          ...candidate,
+          skills: result.extractedInformation.skills,
+          narrative: result.extractedInformation.experience,
+          // Placeholder for other info if needed
+          status: result.candidateScore >= 70 ? 'Manual Review' : ('Rejected' as KanbanStatus),
+          lastUpdated: 'Just now'
+        };
+        
+        // This is a simplified scoring logic, can be expanded
+        if (result.candidateScore < 50) updatedCandidate.status = 'Rejected';
+        else if (result.candidateScore < 70) updatedCandidate.status = 'Manual Review';
+        else updatedCandidate.status = 'Screening';
+        
+        return updatedCandidate;
+      } catch (error) {
+        console.error(`Failed to process ${candidate.name}:`, error);
+        return { ...candidate, status: 'Error' as KanbanStatus, narrative: 'AI screening failed.' };
+      }
+    });
+
+    const updatedCandidates = await Promise.all(screeningPromises);
+
+    setCandidates(prev => prev.map(c => updatedCandidates.find(uc => uc.id === c.id) || c));
+
+    setIsLoading(false);
+    setSimulationLog(prev => [...prev, { step: 'Resume Screening', description: `Finished screening. See candidate statuses for results.` }]);
+  };
+  
+  const handleAryaReviewAll = async () => {
+        const candidatesToReview = candidates.filter(c => c.status === 'Manual Review');
+        if(candidatesToReview.length === 0) return;
+
+        setIsLoading(true);
+        setLoadingText(`Arya is reviewing ${candidatesToReview.length} candidates...`);
+        setSimulationLog(prev => [...prev, { step: 'AI Deep Review', description: `Starting deep review for ${candidatesToReview.length} candidates.` }]);
+
+        const reviewPromises = candidatesToReview.map(async (candidate) => {
+            try {
+                // Assuming a generic job description for this high-level review
+                const jobDescription = "A challenging role at a leading tech company requiring strong problem-solving skills and relevant technical expertise.";
+                const result = await reviewCandidate({ candidateData: candidate.narrative, jobDescription });
+
+                let newStatus: KanbanStatus = 'Manual Review';
+                if (result.recommendation.toLowerCase() === 'hire') {
+                    newStatus = 'Interview';
+                } else if (result.recommendation.toLowerCase() === 'reject') {
+                    newStatus = 'Rejected';
+                } else {
+                    newStatus = 'Interview'; // Let's be optimistic for "Maybe"
+                }
+
+                return { ...candidate, status: newStatus, narrative: `${candidate.narrative}\n\nAI Review: ${result.justification}` };
+
+            } catch (error) {
+                console.error(`Failed to review ${candidate.name}:`, error);
+                return { ...candidate, status: 'Error' as KanbanStatus, narrative: `${candidate.narrative}\n\nAI review failed.` };
+            }
+        });
+
+        const reviewedCandidates = await Promise.all(reviewPromises);
+        setCandidates(prev => prev.map(c => reviewedCandidates.find(rc => rc.id === c.id) || c));
+        
+        setIsLoading(false);
+        setSimulationLog(prev => [...prev, { step: 'AI Deep Review', description: `Finished deep review.` }]);
+    };
+  
+  const handleStimulateFullPipeline = async () => {
+    setIsLoading(true);
+    setSimulationLog([]); // Clear previous log
+
+    setLoadingText("Phase 1: Screening all new resumes...");
+    await handleScreenResumes();
+    await new Promise(r => setTimeout(r, 1000));
+
+    setLoadingText("Phase 2: Arya is performing deep reviews...");
+    await handleAryaReviewAll();
+    await new Promise(r => setTimeout(r, 1000));
+    
+    setLoadingText("Generating SAARTHI Report...");
+    setLastSaarthiReport({
+        simulationSummary: "The simulation processed all uploaded candidates, performed automated screening, and conducted AI-assisted deep reviews. Candidates were sorted into appropriate pipeline stages based on score and AI recommendation. This iterative process refines the talent pool for optimal role matching.",
+        detailedProcessLog: simulationLog,
+        candidateOutcomesAnalysis: candidates.map(c => ({ candidateName: c.name, outcomeDetails: `Final status: ${c.status}. ${c.narrative}` })),
+        roleManagementInsights: ["The system effectively filtered candidates, preparing a qualified pool for role-specific matching.", "Next step would be to create specific roles and run 'Suggest Role Matches' to build the interview pipelines."],
+        systemLearningAndFutureImprovements: "Each screening and review cycle provides data to refine scoring rubrics and improve future AI accuracy. The system learns which resume patterns correlate with successful progression, enhancing its predictive capabilities."
+    });
+    setIsSaarthiReportOpen(true);
+    setIsLoading(false);
+  };
+  
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
-        return <RolesTab />;
+        return <RolesTab roles={roles} setRoles={setRoles} />;
       case 'pool':
-        return <CandidatePoolTab />;
+        return (
+            <CandidatePoolTab 
+                candidates={candidates}
+                onUpload={handleBulkUpload}
+                onScreenAll={handleScreenResumes}
+                onAryaReviewAll={handleAryaReviewAll}
+                onSuggestRoleMatches={async () => { /* Implement */}}
+                onFindPotentialRoles={async () => { /* Implement */}}
+                onStimulateFullPipeline={handleStimulateFullPipeline}
+            />
+        );
       case 'analytics':
         return <AnalyticsTab />;
       default:
@@ -25,7 +213,29 @@ export function AstraHirePage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
-      <AstraHireHeader />
+       {isLoading && (
+            <div className="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center z-50">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="animate-spin h-10 w-10 text-primary" />
+                    <p className="text-slate-300">{loadingText}</p>
+                </div>
+            </div>
+        )}
+
+      <SaarthiReportModal 
+        isOpen={isSaarthiReportOpen}
+        onClose={() => setIsSaarthiReportOpen(false)}
+        reportData={lastSaarthiReport}
+      />
+
+      <AstraHireHeader onReportClick={() => {
+          if (lastSaarthiReport) {
+              setIsSaarthiReportOpen(true);
+          } else {
+              // You can use the toast hook here later
+              alert("No SAARTHI report available yet. Please run the 'Stimulate Full Pipeline' first.");
+          }
+      }} />
       <main>
         <div className="border-b border-slate-700 mb-6">
           <nav className="flex -mb-px">

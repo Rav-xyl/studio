@@ -16,7 +16,7 @@ export function KanbanColumn({ title, candidates, onCardClick }: KanbanColumnPro
           {title} <span className="text-sm font-normal text-muted-foreground">{candidates.length}</span>
         </h3>
       </div>
-      <ScrollArea className="h-[calc(100vh-22rem)]">
+      <ScrollArea className="h-[calc(100vh-25rem)]">
         <div className="flex flex-1 flex-col gap-3 p-3 pt-0">
             {candidates.length > 0 ? candidates.map((candidate) => (
             <KanbanCard
