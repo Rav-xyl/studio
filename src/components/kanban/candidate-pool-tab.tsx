@@ -8,6 +8,7 @@ import {
   ScanFace,
   Upload,
   Zap,
+  FilterX
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -17,8 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import { useState, useRef } from 'react';
-import type { Candidate, KanbanStatus } from '@/lib/types';
+import { useState, useRef, useMemo } from 'react';
+import type { Candidate, KanbanStatus, JobRole } from '@/lib/types';
 import { KanbanColumn } from './kanban-column';
 import { CandidateDetailSheet } from './candidate-detail-sheet';
 import { KANBAN_COLUMNS } from '@/lib/mock-data';
@@ -31,6 +32,8 @@ interface CandidatePoolTabProps {
     onSuggestRoleMatches: () => void;
     onFindPotentialRoles: () => void;
     onStimulateFullPipeline: () => void;
+    filteredRole: JobRole | null;
+    onClearFilter: () => void;
 }
 
 export function CandidatePoolTab({
@@ -40,7 +43,9 @@ export function CandidatePoolTab({
     onAryaReviewAll,
     onSuggestRoleMatches,
     onFindPotentialRoles,
-    onStimulateFullPipeline
+    onStimulateFullPipeline,
+    filteredRole,
+    onClearFilter
 }: CandidatePoolTabProps) {
   
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -54,13 +59,8 @@ export function CandidatePoolTab({
   
   const handleUpdateCandidate = (updatedCandidate: Candidate) => {
     // This function will be called from the detail sheet to update the candidate in the main list
-    const index = candidates.findIndex(c => c.id === updatedCandidate.id);
-    if (index !== -1) {
-        const newCandidates = [...candidates];
-        newCandidates[index] = updatedCandidate;
-        // In a real app, you'd call a state setter here, e.g., setCandidates(newCandidates);
-        // For now, we rely on the parent component's state management.
-    }
+    // In a real app with global state, this would dispatch an action.
+    // For now, we rely on parent state updates.
   }
 
   const onOpenChange = (open: boolean) => {
@@ -70,17 +70,41 @@ export function CandidatePoolTab({
     }
   }
 
+  const displayedCandidates = useMemo(() => {
+    if (!filteredRole) {
+      return candidates;
+    }
+    const roleSkills = new Set((filteredRole.description?.match(/\b(\w+)\b/g) || []).map(s => s.toLowerCase()));
+    return candidates.filter(c => {
+        const candidateSkills = new Set(c.skills.map(s => s.toLowerCase()));
+        const intersection = new Set([...candidateSkills].filter(skill => roleSkills.has(skill)));
+        return (intersection.size / roleSkills.size) * 100 > 30; // 30% skill overlap
+    });
+}, [candidates, filteredRole]);
+
+
   const columns = KANBAN_COLUMNS.map((status: KanbanStatus) => ({
     title: status,
-    candidates: candidates.filter((c) => c.status === status),
+    candidates: displayedCandidates.filter((c) => c.status === status),
   }));
 
   return (
     <div className="fade-in">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h2 className="text-3xl font-bold text-slate-100">
-          Candidate Screening Pool
-        </h2>
+        <div className='flex flex-col'>
+          <h2 className="text-3xl font-bold text-slate-100">
+            Candidate Screening Pool
+          </h2>
+          {filteredRole && (
+            <div className='flex items-center gap-2 mt-2'>
+              <span className='text-sm text-muted-foreground'>Filtering for:</span>
+              <span className='font-semibold text-primary'>{filteredRole.title}</span>
+              <Button variant="ghost" size="icon" className='h-6 w-6' onClick={onClearFilter}>
+                <FilterX className='h-4 w-4'/>
+              </Button>
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <label
             htmlFor="company-type-select-main"
@@ -152,5 +176,3 @@ export function CandidatePoolTab({
     </div>
   );
 }
-
-    

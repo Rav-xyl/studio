@@ -1,24 +1,15 @@
 
 import type { JobRole } from '@/lib/types'
-import { Building, Users } from 'lucide-react'
+import { Building, Users, Eye } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
-import { useToast } from '@/hooks/use-toast'
 
 interface RoleCardProps {
     role: JobRole
+    onViewCandidates: (role: JobRole) => void;
 }
 
-export function RoleCard({ role }: RoleCardProps) {
-    const { toast } = useToast();
-
-    const handleViewCandidates = () => {
-        toast({
-            title: "Feature In Development",
-            description: "This will soon filter the candidate pool for this specific role.",
-            variant: "destructive"
-        })
-    }
+export function RoleCard({ role, onViewCandidates }: RoleCardProps) {
 
     return (
         <Card className="glass-card flex flex-col">
@@ -37,10 +28,10 @@ export function RoleCard({ role }: RoleCardProps) {
                  <p className='text-xs text-muted-foreground mt-4 line-clamp-3'>{role.description}</p>
             </CardContent>
             <CardFooter>
-                <Button variant="outline" className='w-full' onClick={handleViewCandidates}>View Candidates</Button>
+                <Button variant="outline" className='w-full' onClick={() => onViewCandidates(role)}>
+                    <Eye className="mr-2 h-4 w-4" /> View Candidates
+                </Button>
             </CardFooter>
         </Card>
     )
 }
-
-    

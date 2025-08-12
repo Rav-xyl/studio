@@ -19,10 +19,6 @@ import { SaarthiReportModal } from './saarthi-report-modal';
 import { useToast } from '@/hooks/use-toast';
 
 // --- Helper Functions ---
-const getInitials = (name: string) => {
-    return name ? name.split(' ').map(n => n[0]).join('') : '';
-}
-
 function convertFileToDataUri(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -41,6 +37,8 @@ export function AstraHirePage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [simulationLog, setSimulationLog] = useState<any[]>([]);
   const [lastSaarthiReport, setLastSaarthiReport] = useState<any>(null);
+  const [filteredRole, setFilteredRole] = useState<JobRole | null>(null);
+
 
   // UI State
   const [isLoading, setIsLoading] = useState(false);
@@ -48,10 +46,9 @@ export function AstraHirePage() {
   const [isSaarthiReportOpen, setIsSaarthiReportOpen] = useState(false);
   const { toast } = useToast();
 
-  // This will hold file objects for upload processing
   const [uploadedFiles, setUploadedFiles] = useState<Map<string, File>>(new Map());
 
-  // --- Core Logic from HTML Script ---
+  // --- Core Logic ---
 
   const handleBulkUpload = (files: FileList | null) => {
     if (!files) return;
@@ -104,24 +101,23 @@ export function AstraHirePage() {
         return { ...candidate, status: 'Error' as KanbanStatus, narrative: 'File not found for processing.' };
       }
       try {
+        setCandidates(prev => prev.map(c => c.id === candidate.id ? { ...c, status: 'Processing' } : c));
         const resumeDataUri = await convertFileToDataUri(file);
         const result = await automatedResumeScreening({ resumeDataUri });
 
-        const updatedCandidate = {
+        const updatedCandidate: Candidate = {
           ...candidate,
-          skills: result.extractedInformation.skills,
-          narrative: result.extractedInformation.experience,
-          // Placeholder for other info if needed
-          status: result.candidateScore >= 70 ? 'Manual Review' : ('Rejected' as KanbanStatus),
+          ...result.extractedInformation,
+          status: result.candidateScore >= 70 ? 'Manual Review' : 'Rejected',
           lastUpdated: 'Just now'
         };
         
-        // This is a simplified scoring logic, can be expanded
         if (result.candidateScore < 50) updatedCandidate.status = 'Rejected';
         else if (result.candidateScore < 70) updatedCandidate.status = 'Manual Review';
         else updatedCandidate.status = 'Screening';
         
         return updatedCandidate;
+
       } catch (error) {
         console.error(`Failed to process ${candidate.name}:`, error);
         return { ...candidate, status: 'Error' as KanbanStatus, narrative: 'AI screening failed.' };
@@ -129,7 +125,6 @@ export function AstraHirePage() {
     });
 
     const updatedCandidates = await Promise.all(screeningPromises);
-
     setCandidates(prev => prev.map(c => updatedCandidates.find(uc => uc.id === c.id) || c));
 
     setIsLoading(false);
@@ -144,14 +139,13 @@ export function AstraHirePage() {
             return;
         }
 
-
         setIsLoading(true);
         setLoadingText(`Arya is reviewing ${candidatesToReview.length} candidates...`);
         setSimulationLog(prev => [...prev, { step: 'AI Deep Review', description: `Starting deep review for ${candidatesToReview.length} candidates.` }]);
 
         const reviewPromises = candidatesToReview.map(async (candidate) => {
             try {
-                // Assuming a generic job description for this high-level review
+                setCandidates(prev => prev.map(c => c.id === candidate.id ? { ...c, status: 'Processing' } : c));
                 const jobDescription = "A challenging role at a leading tech company requiring strong problem-solving skills and relevant technical expertise.";
                 const result = await reviewCandidate({ candidateData: candidate.narrative, jobDescription });
 
@@ -161,7 +155,7 @@ export function AstraHirePage() {
                 } else if (result.recommendation.toLowerCase() === 'reject') {
                     newStatus = 'Rejected';
                 } else {
-                    newStatus = 'Interview'; // Let's be optimistic for "Maybe"
+                    newStatus = 'Interview'; // Optimistic for "Maybe"
                 }
 
                 return { ...candidate, status: newStatus, narrative: `${candidate.narrative}\n\nAI Review: ${result.justification}` };
@@ -179,10 +173,107 @@ export function AstraHirePage() {
         toast({ title: 'AI Review Complete', description: `Finished deep review of ${reviewedCandidates.length} candidates.` });
         setSimulationLog(prev => [...prev, { step: 'AI Deep Review', description: `Finished deep review.` }]);
     };
+
+    const handleSuggestRoleMatches = async () => {
+        const candidatesToAnalyze = candidates.filter(c => c.status === 'Screening');
+        if (candidatesToAnalyze.length === 0) {
+            toast({ title: "No screened candidates available", description: "Screen some resumes first to find candidates eligible for role matching." });
+            return;
+        }
+
+        setIsLoading(true);
+        setLoadingText("Analyzing candidate pool to suggest new roles...");
+
+        // Create a batch job to suggest roles for all eligible candidates
+        const suggestionPromises = candidatesToAnalyze.map(c => suggestRoleMatches({
+            candidateName: c.name,
+            candidateSkills: c.skills.join(', '),
+            candidateNarrative: c.narrative,
+            candidateInferredSkills: c.inferredSkills.join(', ')
+        }));
+
+        try {
+            const results = await Promise.all(suggestionPromises);
+            const allRoles = results.flatMap(r => r.roles);
+
+            // Aggregate and count role suggestions
+            const roleCounts = allRoles.reduce((acc, role) => {
+                acc[role.roleTitle] = (acc[role.roleTitle] || 0) + 1;
+                return acc;
+            }, {} as Record<string, number>);
+
+            // Filter for roles suggested more than once or for a significant candidate
+            const frequentRoles = Object.entries(roleCounts).filter(([_, count]) => count > 1).map(([title]) => title);
+
+            if (frequentRoles.length > 0) {
+                 toast({
+                    title: "Potential New Roles Identified!",
+                    description: `Based on your candidate pool, you might consider opening roles for: ${frequentRoles.join(', ')}. Use 'Synthesize New JD' to create them.`,
+                    duration: 9000
+                });
+            } else {
+                toast({ title: "No strong role patterns found", description: "The AI didn't find enough overlapping skills to suggest a new, distinct role." });
+            }
+
+        } catch (error) {
+            console.error("Failed to suggest role matches:", error);
+            toast({ title: "Error Suggesting Roles", description: "An AI error occurred. Please check the console.", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleFindPotentialRoles = async () => {
+        const candidatesToMatch = candidates.filter(c => c.status === 'Screening');
+        if (candidatesToMatch.length === 0) {
+            toast({ title: "No screened candidates to match." });
+            return;
+        }
+        if (roles.length === 0) {
+            toast({ title: "No roles to match against.", description: "Please create a client role first." });
+            return;
+        }
+
+        setIsLoading(true);
+        setLoadingText("Matching candidates to existing roles...");
+
+        let matchedCount = 0;
+        const updatedCandidates = [...candidates];
+        const updatedRoles = [...roles];
+
+        for (const candidate of candidatesToMatch) {
+            for (const role of updatedRoles) {
+                const candidateSkills = new Set(candidate.skills.map(s => s.toLowerCase()));
+                const roleSkills = new Set((role.description?.match(/\b(\w+)\b/g) || []).map(s => s.toLowerCase())); // Simple skill extraction
+                
+                const intersection = new Set([...candidateSkills].filter(skill => roleSkills.has(skill)));
+                const score = (intersection.size / roleSkills.size) * 100;
+
+                if (score > 50) { // Threshold for a potential match
+                    const candidateIndex = updatedCandidates.findIndex(c => c.id === candidate.id);
+                    if (candidateIndex !== -1) {
+                        updatedCandidates[candidateIndex] = { ...updatedCandidates[candidateIndex], status: 'Interview', role: role.title };
+                        matchedCount++;
+                    }
+                    break; 
+                }
+            }
+        }
+
+        setCandidates(updatedCandidates);
+        setRoles(updatedRoles);
+        setIsLoading(false);
+        toast({ title: "Matching Complete", description: `${matchedCount} candidates were matched to potential roles and moved to the 'Interview' stage.` });
+    };
+
+    const handleViewCandidatesForRole = (role: JobRole) => {
+        setFilteredRole(role);
+        setActiveTab('pool');
+    };
   
   const handleStimulateFullPipeline = async () => {
     setIsLoading(true);
-    setSimulationLog([]); // Clear previous log
+    setSimulationLog([]);
 
     setLoadingText("Phase 1: Screening all new resumes...");
     await handleScreenResumes();
@@ -207,7 +298,7 @@ export function AstraHirePage() {
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
-        return <RolesTab roles={roles} setRoles={setRoles} />;
+        return <RolesTab roles={roles} setRoles={setRoles} onViewCandidates={handleViewCandidatesForRole} />;
       case 'pool':
         return (
             <CandidatePoolTab 
@@ -215,9 +306,11 @@ export function AstraHirePage() {
                 onUpload={handleBulkUpload}
                 onScreenAll={handleScreenResumes}
                 onAryaReviewAll={handleAryaReviewAll}
-                onSuggestRoleMatches={async () => toast({ title: "Feature coming soon!", description: "Suggest Role Matches will be implemented in a future update.", variant: "destructive"})}
-                onFindPotentialRoles={async () => toast({ title: "Feature coming soon!", description: "Find Potential Roles will be implemented in a future update.", variant: "destructive"})}
+                onSuggestRoleMatches={handleSuggestRoleMatches}
+                onFindPotentialRoles={handleFindPotentialRoles}
                 onStimulateFullPipeline={handleStimulateFullPipeline}
+                filteredRole={filteredRole}
+                onClearFilter={() => setFilteredRole(null)}
             />
         );
       case 'analytics':
@@ -256,7 +349,7 @@ export function AstraHirePage() {
           <nav className="flex -mb-px">
             <button
               className={`tab-btn ${activeTab === 'roles' ? 'active' : ''}`}
-              onClick={() => setActiveTab('roles')}
+              onClick={() => { setActiveTab('roles'); setFilteredRole(null); }}
             >
               <Briefcase className="inline-block w-4 h-4 mr-2" />
               Client Roles
@@ -270,7 +363,7 @@ export function AstraHirePage() {
             </button>
             <button
               className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
-              onClick={() => setActiveTab('analytics')}
+              onClick={() => { setActiveTab('analytics'); setFilteredRole(null); }}
             >
               <BarChart2 className="inline-block w-4 h-4 mr-2" />
               Analytics
@@ -282,5 +375,3 @@ export function AstraHirePage() {
     </div>
   );
 }
-
-    
