@@ -38,7 +38,7 @@ export function CandidateDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-[600px] flex flex-col p-0">
+      <SheetContent className="w-full sm:max-w-[600px] flex flex-col p-0 glass-card border-l border-slate-700/80">
         <ScrollArea className='h-full'>
           <div className='p-6'>
             <SheetHeader className="flex flex-row items-start gap-4 space-y-0">
@@ -61,7 +61,7 @@ export function CandidateDetailSheet({
             <Separator className="my-4" />
             
             <Tabs defaultValue="profile" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-4 bg-secondary/50">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
                 <TabsTrigger value="review">AI Review</TabsTrigger>
                 <TabsTrigger value="interview">Interview</TabsTrigger>
@@ -71,7 +71,7 @@ export function CandidateDetailSheet({
               <TabsContent value="profile" className="mt-4">
                 <Card className='glass-card'>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2'><FileText className='h-5 w-5 text-primary'/> Candidate Profile</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-xl'><FileText className='h-5 w-5 text-primary'/> Candidate Profile</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground mb-4">{candidate.narrative}</p>
@@ -88,7 +88,7 @@ export function CandidateDetailSheet({
                 </Card>
                 <Card className='glass-card mt-4'>
                   <CardHeader>
-                     <CardTitle className='flex items-center gap-2'><Lightbulb className='h-5 w-5 text-primary'/> AI Role Suggestions</CardTitle>
+                     <CardTitle className='flex items-center gap-2 text-xl'><Lightbulb className='h-5 w-5 text-primary'/> AI Role Suggestions</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                      <p className='text-sm text-muted-foreground'>AI has identified these potential roles based on the candidate's profile.</p>
@@ -111,7 +111,7 @@ export function CandidateDetailSheet({
               <TabsContent value="review" className="mt-4">
                 <Card className='glass-card'>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2'><Scan className='h-5 w-5 text-primary' /> AI-Assisted Review</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-xl'><Scan className='h-5 w-5 text-primary' /> AI-Assisted Review</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className='text-sm text-muted-foreground mb-2'>For candidates requiring manual review, AI provides the following analysis.</p>
@@ -127,7 +127,7 @@ export function CandidateDetailSheet({
                 </Card>
                 <Card className='glass-card mt-4'>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2'><Star className='h-5 w-5 text-primary' /> Skill Gap & Training</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-xl'><Star className='h-5 w-5 text-primary' /> Skill Gap & Training</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className='text-sm text-muted-foreground mb-4'>AI analysis of skill gaps and suggested training for future opportunities.</p>
@@ -142,11 +142,11 @@ export function CandidateDetailSheet({
               <TabsContent value="interview" className="mt-4">
                 <Card className='glass-card'>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2'><Brain className='h-5 w-5 text-primary' /> Dynamic Interview Questions</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> Dynamic Interview Questions</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className='text-sm text-muted-foreground mb-4'>AI-generated questions tailored to this candidate and role.</p>
-                    <ol className='list-decimal list-inside space-y-2 text-sm bg-secondary p-4 rounded-md'>
+                    <ol className='list-decimal list-inside space-y-2 text-sm bg-secondary/50 p-4 rounded-md'>
                         <li>"Can you walk me through a complex Next.js project you've led?"</li>
                         <li>"How do you approach state management in a large-scale React application?"</li>
                         <li>"Describe a time you had to optimize the performance of a web app. What were the results?"</li>
@@ -159,7 +159,7 @@ export function CandidateDetailSheet({
                 </Card>
                 <Card className='glass-card mt-4'>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2'><Video className='h-5 w-5 text-primary' /> AI Video Interview</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-xl'><Video className='h-5 w-5 text-primary' /> AI Video Interview</CardTitle>
                   </CardHeader>
                   <CardContent className='text-center'>
                     <p className='text-sm text-muted-foreground mb-4'>Invite the candidate to an automated AI-powered video interview.</p>
@@ -175,13 +175,13 @@ export function CandidateDetailSheet({
               <TabsContent value="engage" className="mt-4">
                  <Card className='glass-card'>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2'><Send className='h-5 w-5 text-primary' /> AI-Driven Engagement</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-xl'><Send className='h-5 w-5 text-primary' /> AI-Driven Engagement</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className='text-sm text-muted-foreground mb-4'>Let AI draft a personalized email based on the candidate's current stage.</p>
                     <Textarea
                         readOnly
-                        className="h-48 font-code bg-secondary"
+                        className="h-48 font-mono bg-secondary/50 text-sm"
                         value={`Subject: Exciting Opportunity at TalentFlow AI - ${candidate.role}
 
 Dear ${candidate.name},
