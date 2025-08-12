@@ -1,7 +1,7 @@
 import { Brain } from "lucide-react";
 import { Button } from "../ui/button";
 
-export function AstraHireHeader() {
+export function AstraHireHeader({ onReportClick }: { onReportClick: () => void }) {
   return (
     <header className="flex justify-between items-center mb-6">
       <div className="flex items-center gap-6">
@@ -47,6 +47,7 @@ export function AstraHireHeader() {
         <Button
           variant="secondary"
           className="btn-secondary px-3 py-1 text-sm flex items-center gap-1"
+          onClick={onReportClick}
         >
           <Brain className="w-4 h-4" /> View SAARTHI Report
         </Button>
