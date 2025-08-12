@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -13,16 +14,23 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Lightbulb, Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText } from 'lucide-react';
+import { Lightbulb, Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
+import { useState } from 'react';
+import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
+import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
+import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
+import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
+import { useToast } from '@/hooks/use-toast';
 
 interface CandidateDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   candidate: Candidate | null;
+  onUpdateCandidate: (updatedCandidate: Candidate) => void;
 }
 
 const getInitials = (name: string) => {
@@ -33,8 +41,84 @@ export function CandidateDetailSheet({
   open,
   onOpenChange,
   candidate,
+  onUpdateCandidate,
 }: CandidateDetailSheetProps) {
+  const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
+  const [generatedData, setGeneratedData] = useState<Record<string, any>>({});
+  const { toast } = useToast();
+
   if (!candidate) return null;
+
+  const handleGenerateClick = async (type: 'suggestions' | 'review' | 'questions' | 'email') => {
+    if (!candidate) return;
+    setIsGenerating(prev => ({ ...prev, [type]: true }));
+    try {
+        let result;
+        if (type === 'suggestions') {
+            result = await suggestRoleMatches({
+                candidateName: candidate.name,
+                candidateSkills: candidate.skills.join(', '),
+                candidateNarrative: candidate.narrative,
+                candidateInferredSkills: candidate.inferredSkills.join(', '),
+            });
+        } else if (type === 'review') {
+            result = await reviewCandidate({
+                candidateData: candidate.narrative,
+                jobDescription: candidate.role
+            });
+        } else if (type === 'questions') {
+            result = await generateInterviewQuestions({
+                resumeText: candidate.narrative,
+                jobDescription: candidate.role,
+                candidateAnalysis: 'An promising candidate with strong skills in their domain.'
+            });
+        } else if (type === 'email') {
+            result = await aiDrivenCandidateEngagement({
+                candidateName: candidate.name,
+                candidateStage: candidate.status,
+                jobTitle: candidate.role,
+                companyName: 'AstraHire',
+                recruiterName: 'The Hiring Team',
+                candidateSkills: candidate.skills.join(', '),
+            });
+        }
+        setGeneratedData(prev => ({...prev, [type]: result }));
+        toast({ title: `AI ${type} generated successfully!`})
+    } catch (error) {
+        console.error(`Failed to generate ${type}`, error);
+        toast({ title: `Error generating ${type}`, description: "Please check the console for details.", variant: 'destructive'})
+    } finally {
+        setIsGenerating(prev => ({ ...prev, [type]: false }));
+    }
+  };
+
+  const handleMoveToNextStage = () => {
+    if (!candidate) return;
+
+    let nextStatus: any = candidate.status;
+    switch(candidate.status) {
+        case 'Uploaded': nextStatus = 'Screening'; break;
+        case 'Screening': nextStatus = 'Manual Review'; break;
+        case 'Manual Review': nextStatus = 'Interview'; break;
+        case 'Interview': nextStatus = 'Offer'; break;
+        case 'Offer': nextStatus = 'Hired'; break;
+    }
+
+    if (nextStatus !== candidate.status) {
+        const updatedCandidate = { ...candidate, status: nextStatus };
+        onUpdateCandidate(updatedCandidate);
+        toast({ title: 'Candidate Updated', description: `${candidate.name} moved to ${nextStatus}`});
+        onOpenChange(false);
+    } else {
+        toast({ title: 'No action taken', description: `Candidate is already in the final stage or cannot be moved.`});
+    }
+  }
+
+
+  const suggestions = generatedData.suggestions?.roles || [];
+  const review = generatedData.review;
+  const questions = generatedData.questions?.questions || [];
+  const email = generatedData.email;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -91,17 +175,19 @@ export function CandidateDetailSheet({
                      <CardTitle className='flex items-center gap-2 text-xl'><Lightbulb className='h-5 w-5 text-primary'/> AI Role Suggestions</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                     <p className='text-sm text-muted-foreground'>AI has identified these potential roles based on the candidate's profile.</p>
-                     <div>
-                        <h5 className="font-semibold">Senior AI Prompt Engineer</h5>
-                        <p className="text-sm text-muted-foreground">Rationale: Matches candidate's deep experience with NLP and creative problem-solving.</p>
-                     </div>
-                     <div>
-                        <h5 className="font-semibold">Lead Conversational Designer</h5>
-                        <p className="text-sm text-muted-foreground">Rationale: Aligns with their background in UX and understanding of language models.</p>
-                     </div>
-                     <Button variant="outline" className="w-full">
-                      <Zap className="mr-2 h-4 w-4" />
+                     {suggestions.length > 0 ? (
+                        suggestions.map((s: any) => (
+                          <div key={s.roleTitle}>
+                            <h5 className="font-semibold">{s.roleTitle}</h5>
+                            <p className="text-sm text-muted-foreground">Rationale: {s.rationale}</p>
+                          </div>
+                        ))
+                     ) : (
+                       <p className='text-sm text-muted-foreground'>Click the button below to generate AI role suggestions.</p>
+                     )}
+                     
+                     <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('suggestions')} disabled={isGenerating.suggestions}>
+                      {isGenerating.suggestions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                       Generate New Suggestions
                     </Button>
                   </CardContent>
@@ -115,12 +201,16 @@ export function CandidateDetailSheet({
                   </CardHeader>
                   <CardContent>
                     <p className='text-sm text-muted-foreground mb-2'>For candidates requiring manual review, AI provides the following analysis.</p>
-                    <div className="rounded-md border border-dashed border-accent p-4 text-center">
-                      <p className="font-semibold text-accent mb-1">Recommendation: Maybe</p>
-                      <p className="text-sm text-muted-foreground">Justification: Candidate shows strong potential in adjacent skills but lacks direct experience in the core technology stack. Worth exploring for a related role.</p>
-                    </div>
-                    <Button variant="outline" className="w-full mt-4">
-                      <Zap className="mr-2 h-4 w-4" />
+                     {review ? (
+                        <div className="rounded-md border border-dashed border-accent p-4 text-center">
+                          <p className="font-semibold text-accent mb-1">Recommendation: {review.recommendation}</p>
+                          <p className="text-sm text-muted-foreground">Justification: {review.justification}</p>
+                        </div>
+                     ) : (
+                        <p className='text-sm text-muted-foreground text-center p-4'>Click the button to generate a review.</p>
+                     )}
+                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('review')} disabled={isGenerating.review}>
+                       {isGenerating.review ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                       Run Full Review
                     </Button>
                   </CardContent>
@@ -130,8 +220,8 @@ export function CandidateDetailSheet({
                     <CardTitle className='flex items-center gap-2 text-xl'><Star className='h-5 w-5 text-primary' /> Skill Gap & Training</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className='text-sm text-muted-foreground mb-4'>AI analysis of skill gaps and suggested training for future opportunities.</p>
-                    <ul className='list-disc list-inside space-y-2 text-sm'>
+                    <p className='text-sm text-muted-foreground mb-4'>AI analysis of skill gaps and suggested training for future opportunities. (Coming Soon)</p>
+                     <ul className='list-disc list-inside space-y-2 text-sm opacity-50'>
                         <li><span className='font-semibold'>Gap:</span> Advanced Kubernetes knowledge. <span className='text-muted-foreground'>Suggestion: CKA Certification.</span></li>
                         <li><span className='font-semibold'>Gap:</span> Experience with Terraform. <span className='text-muted-foreground'>Suggestion: Complete "Terraform for Beginners" on Udemy.</span></li>
                     </ul>
@@ -145,14 +235,15 @@ export function CandidateDetailSheet({
                     <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> Dynamic Interview Questions</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className='text-sm text-muted-foreground mb-4'>AI-generated questions tailored to this candidate and role.</p>
-                    <ol className='list-decimal list-inside space-y-2 text-sm bg-secondary/50 p-4 rounded-md'>
-                        <li>"Can you walk me through a complex Next.js project you've led?"</li>
-                        <li>"How do you approach state management in a large-scale React application?"</li>
-                        <li>"Describe a time you had to optimize the performance of a web app. What were the results?"</li>
-                    </ol>
-                    <Button variant="outline" className="w-full mt-4">
-                      <Zap className="mr-2 h-4 w-4" />
+                     {questions.length > 0 ? (
+                        <ol className='list-decimal list-inside space-y-2 text-sm bg-secondary/50 p-4 rounded-md'>
+                          {questions.map((q: string) => <li key={q}>"{q}"</li>)}
+                        </ol>
+                     ) : (
+                       <p className='text-sm text-muted-foreground mb-4'>Click the button to generate AI-powered questions tailored to this candidate and role.</p>
+                     )}
+                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('questions')} disabled={isGenerating.questions}>
+                      {isGenerating.questions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                       Generate New Questions
                     </Button>
                   </CardContent>
@@ -163,11 +254,11 @@ export function CandidateDetailSheet({
                   </CardHeader>
                   <CardContent className='text-center'>
                     <p className='text-sm text-muted-foreground mb-4'>Invite the candidate to an automated AI-powered video interview.</p>
-                    <Button>
+                    <Button disabled>
                       <Send className="mr-2 h-4 w-4" />
                       Send Interview Invite
                     </Button>
-                    <p className="text-xs text-muted-foreground mt-4">Status: Not Invited</p>
+                    <p className="text-xs text-muted-foreground mt-4">Status: Not Invited (Feature Coming Soon)</p>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -182,19 +273,10 @@ export function CandidateDetailSheet({
                     <Textarea
                         readOnly
                         className="h-48 font-mono bg-secondary/50 text-sm"
-                        value={`Subject: Exciting Opportunity at TalentFlow AI - ${candidate.role}
-
-Dear ${candidate.name},
-
-We were very impressed with your background in ${candidate.skills[0]} and ${candidate.skills[1]}. Your experience seems like a strong match for the ${candidate.role} position.
-
-We would like to invite you to the next stage of our process. Please let us know a few times that work for you to connect briefly.
-
-Best,
-The TalentFlow AI Team`}
+                        value={email ? `Subject: ${email.emailSubject}\n\n${email.emailBody}` : "Click button to generate email..."}
                     />
-                    <Button variant="outline" className="w-full mt-4">
-                      <Zap className="mr-2 h-4 w-4" />
+                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('email')} disabled={isGenerating.email}>
+                      {isGenerating.email ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                       Generate New Draft
                     </Button>
                   </CardContent>
@@ -208,9 +290,11 @@ The TalentFlow AI Team`}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          <Button>Move to Next Stage</Button>
+          <Button onClick={handleMoveToNextStage}>Move to Next Stage</Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -50,6 +51,17 @@ export function CandidatePoolTab({
     setSelectedCandidate(candidate);
     setSheetOpen(true);
   };
+  
+  const handleUpdateCandidate = (updatedCandidate: Candidate) => {
+    // This function will be called from the detail sheet to update the candidate in the main list
+    const index = candidates.findIndex(c => c.id === updatedCandidate.id);
+    if (index !== -1) {
+        const newCandidates = [...candidates];
+        newCandidates[index] = updatedCandidate;
+        // In a real app, you'd call a state setter here, e.g., setCandidates(newCandidates);
+        // For now, we rely on the parent component's state management.
+    }
+  }
 
   const onOpenChange = (open: boolean) => {
     setSheetOpen(open);
@@ -131,7 +143,14 @@ export function CandidatePoolTab({
           />
         ))}
       </div>
-      <CandidateDetailSheet open={isSheetOpen} onOpenChange={onOpenChange} candidate={selectedCandidate} />
+      <CandidateDetailSheet 
+        open={isSheetOpen} 
+        onOpenChange={onOpenChange} 
+        candidate={selectedCandidate}
+        onUpdateCandidate={handleUpdateCandidate}
+        />
     </div>
   );
 }
+
+    

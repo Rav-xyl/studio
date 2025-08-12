@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,7 +8,7 @@ import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
 import { AnalyticsTab } from '../analytics/analytics-tab';
 import type { Candidate, JobRole, KanbanStatus } from '@/lib/types';
-import { KANBAN_COLUMNS, mockCandidates, mockJobRoles } from '@/lib/mock-data';
+import { KANBAN_COLUMNS, mockJobRoles } from '@/lib/mock-data';
 import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
 import { automatedResumeScreening } from '@/ai/flows/automated-resume-screening';
 import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
@@ -15,6 +16,7 @@ import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
 import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
 import { SaarthiReportModal } from './saarthi-report-modal';
+import { useToast } from '@/hooks/use-toast';
 
 // --- Helper Functions ---
 const getInitials = (name: string) => {
@@ -36,7 +38,7 @@ export function AstraHirePage() {
 
   // --- State Management ---
   const [roles, setRoles] = useState<JobRole[]>(mockJobRoles);
-  const [candidates, setCandidates] = useState<Candidate[]>(mockCandidates);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [simulationLog, setSimulationLog] = useState<any[]>([]);
   const [lastSaarthiReport, setLastSaarthiReport] = useState<any>(null);
 
@@ -44,6 +46,7 @@ export function AstraHirePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('Loading...');
   const [isSaarthiReportOpen, setIsSaarthiReportOpen] = useState(false);
+  const { toast } = useToast();
 
   // This will hold file objects for upload processing
   const [uploadedFiles, setUploadedFiles] = useState<Map<string, File>>(new Map());
@@ -56,6 +59,7 @@ export function AstraHirePage() {
     const newFilesMap = new Map(uploadedFiles);
     const newCandidates: Candidate[] = [];
 
+    let addedCount = 0;
     for (const file of files) {
       if (!newFilesMap.has(file.name) && !candidates.some(c => c.name === file.name)) {
         newFilesMap.set(file.name, file);
@@ -71,16 +75,22 @@ export function AstraHirePage() {
           lastUpdated: 'Just now',
         };
         newCandidates.push(newCandidate);
+        addedCount++;
       }
     }
     setUploadedFiles(newFilesMap);
     setCandidates(prev => [...prev, ...newCandidates]);
+    if (addedCount > 0) {
+        toast({ title: "Upload Successful", description: `${addedCount} new resumes added to the pool.`});
+    } else {
+        toast({ title: "No new resumes added", description: "All selected files were already in the pool.", variant: "destructive" });
+    }
   };
 
   const handleScreenResumes = async () => {
     const candidatesToProcess = candidates.filter(c => c.status === 'Uploaded');
     if (candidatesToProcess.length === 0) {
-      console.log('No new resumes to screen.');
+      toast({ title: 'No new resumes to screen.' });
       return;
     }
 
@@ -123,12 +133,17 @@ export function AstraHirePage() {
     setCandidates(prev => prev.map(c => updatedCandidates.find(uc => uc.id === c.id) || c));
 
     setIsLoading(false);
+    toast({ title: 'Screening Complete', description: `Processed ${updatedCandidates.length} resumes.` });
     setSimulationLog(prev => [...prev, { step: 'Resume Screening', description: `Finished screening. See candidate statuses for results.` }]);
   };
   
   const handleAryaReviewAll = async () => {
         const candidatesToReview = candidates.filter(c => c.status === 'Manual Review');
-        if(candidatesToReview.length === 0) return;
+        if(candidatesToReview.length === 0) {
+            toast({ title: "No candidates to review."});
+            return;
+        }
+
 
         setIsLoading(true);
         setLoadingText(`Arya is reviewing ${candidatesToReview.length} candidates...`);
@@ -161,6 +176,7 @@ export function AstraHirePage() {
         setCandidates(prev => prev.map(c => reviewedCandidates.find(rc => rc.id === c.id) || c));
         
         setIsLoading(false);
+        toast({ title: 'AI Review Complete', description: `Finished deep review of ${reviewedCandidates.length} candidates.` });
         setSimulationLog(prev => [...prev, { step: 'AI Deep Review', description: `Finished deep review.` }]);
     };
   
@@ -199,8 +215,8 @@ export function AstraHirePage() {
                 onUpload={handleBulkUpload}
                 onScreenAll={handleScreenResumes}
                 onAryaReviewAll={handleAryaReviewAll}
-                onSuggestRoleMatches={async () => { /* Implement */}}
-                onFindPotentialRoles={async () => { /* Implement */}}
+                onSuggestRoleMatches={async () => toast({ title: "Feature coming soon!", description: "Suggest Role Matches will be implemented in a future update.", variant: "destructive"})}
+                onFindPotentialRoles={async () => toast({ title: "Feature coming soon!", description: "Find Potential Roles will be implemented in a future update.", variant: "destructive"})}
                 onStimulateFullPipeline={handleStimulateFullPipeline}
             />
         );
@@ -232,8 +248,7 @@ export function AstraHirePage() {
           if (lastSaarthiReport) {
               setIsSaarthiReportOpen(true);
           } else {
-              // You can use the toast hook here later
-              alert("No SAARTHI report available yet. Please run the 'Stimulate Full Pipeline' first.");
+              toast({ title: "No SAARTHI report available yet.", description: "Please run the 'Stimulate Full Pipeline' first.", variant: "destructive" });
           }
       }} />
       <main>
@@ -267,3 +282,5 @@ export function AstraHirePage() {
     </div>
   );
 }
+
+    
