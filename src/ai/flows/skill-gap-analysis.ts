@@ -1,0 +1,61 @@
+'use server';
+/**
+ * @fileOverview A Genkit flow for analyzing skill gaps and suggesting training.
+ *
+ * - skillGapAnalysis - A function that identifies skill gaps and suggests improvements.
+ * - SkillGapAnalysisInput - The input type for the skillGapAnalysis function.
+ * - SkillGapAnalysisOutput - The return type for the skillGapAnalysis function.
+ */
+
+import {ai} from '@/ai/genkit';
+import {z} from 'genkit';
+
+const SkillGapAnalysisInputSchema = z.object({
+  candidateSkills: z.array(z.string()).describe("The candidate's current list of skills."),
+  jobDescription: z.string().describe('The job description for the target role.'),
+});
+export type SkillGapAnalysisInput = z.infer<typeof SkillGapAnalysisInputSchema>;
+
+const SkillGapSchema = z.object({
+    skill: z.string().describe('The skill that is missing or needs improvement.'),
+    suggestion: z.string().describe('A specific, actionable recommendation for how the candidate can acquire this skill (e.g., a specific online course, certification, or type of project).'),
+});
+
+const SkillGapAnalysisOutputSchema = z.object({
+  skillGaps: z.array(SkillGapSchema).describe("A list of identified skill gaps and actionable training suggestions."),
+});
+export type SkillGapAnalysisOutput = z.infer<typeof SkillGapAnalysisOutputSchema>;
+
+export async function skillGapAnalysis(input: SkillGapAnalysisInput): Promise<SkillGapAnalysisOutput> {
+  return skillGapAnalysisFlow(input);
+}
+
+const prompt = ai.definePrompt({
+  name: 'skillGapAnalysisPrompt',
+  input: {schema: SkillGapAnalysisInputSchema},
+  output: {schema: SkillGapAnalysisOutputSchema},
+  prompt: `You are an AI career coach. Analyze the gap between the candidate's skills and the requirements of the job description.
+
+Candidate's Skills:
+{{{candidateSkills}}}
+
+Job Description:
+{{{jobDescription}}}
+
+Task:
+Identify the top 2-3 most critical skills the candidate is missing or could improve upon to better fit this role. For each identified gap, provide a specific, actionable suggestion for upskilling, such as an online course, a certification, or a type of project to build.
+
+Return your analysis in the specified JSON format.`,
+});
+
+const skillGapAnalysisFlow = ai.defineFlow(
+  {
+    name: 'skillGapAnalysisFlow',
+    inputSchema: SkillGapAnalysisInputSchema,
+    outputSchema: SkillGapAnalysisOutputSchema,
+  },
+  async input => {
+    const {output} = await prompt(input);
+    return output!;
+  }
+);

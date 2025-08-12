@@ -19,5 +19,5 @@ export interface JobRole {
   title: string;
   department: string;
   openings: number;
-  description?: string;
+  description: string;
 }

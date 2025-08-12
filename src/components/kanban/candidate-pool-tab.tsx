@@ -8,7 +8,8 @@ import {
   ScanFace,
   Upload,
   Zap,
-  FilterX
+  FilterX,
+  PlusCircle
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -26,26 +27,32 @@ import { KANBAN_COLUMNS } from '@/lib/mock-data';
 
 interface CandidatePoolTabProps {
     candidates: Candidate[];
+    roles: JobRole[];
     onUpload: (files: FileList | null) => void;
     onScreenAll: () => void;
     onAryaReviewAll: () => void;
     onSuggestRoleMatches: () => void;
     onFindPotentialRoles: () => void;
     onStimulateFullPipeline: () => void;
+    onProactiveSourcing: () => void;
     filteredRole: JobRole | null;
     onClearFilter: () => void;
+    onUpdateCandidate: (candidate: Candidate) => void;
 }
 
 export function CandidatePoolTab({
     candidates,
+    roles,
     onUpload,
     onScreenAll,
     onAryaReviewAll,
     onSuggestRoleMatches,
     onFindPotentialRoles,
     onStimulateFullPipeline,
+    onProactiveSourcing,
     filteredRole,
-    onClearFilter
+    onClearFilter,
+    onUpdateCandidate
 }: CandidatePoolTabProps) {
   
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -57,12 +64,6 @@ export function CandidatePoolTab({
     setSheetOpen(true);
   };
   
-  const handleUpdateCandidate = (updatedCandidate: Candidate) => {
-    // This function will be called from the detail sheet to update the candidate in the main list
-    // In a real app with global state, this would dispatch an action.
-    // For now, we rely on parent state updates.
-  }
-
   const onOpenChange = (open: boolean) => {
     setSheetOpen(open);
     if (!open) {
@@ -74,13 +75,10 @@ export function CandidatePoolTab({
     if (!filteredRole) {
       return candidates;
     }
-    const roleSkills = new Set((filteredRole.description?.match(/\b(\w+)\b/g) || []).map(s => s.toLowerCase()));
-    return candidates.filter(c => {
-        const candidateSkills = new Set(c.skills.map(s => s.toLowerCase()));
-        const intersection = new Set([...candidateSkills].filter(skill => roleSkills.has(skill)));
-        return (intersection.size / roleSkills.size) * 100 > 30; // 30% skill overlap
-    });
-}, [candidates, filteredRole]);
+    // Simple filter: Check if candidate role matches the filtered role title.
+    // A more complex filter could check for skill overlap.
+    return candidates.filter(c => c.role === filteredRole.title);
+  }, [candidates, filteredRole]);
 
 
   const columns = KANBAN_COLUMNS.map((status: KanbanStatus) => ({
@@ -127,7 +125,7 @@ export function CandidatePoolTab({
         </div>
       </div>
       
-      <div className="flex flex-wrap items-center gap-4 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-6">
         <input 
             type="file" 
             ref={fileInputRef} 
@@ -136,25 +134,30 @@ export function CandidatePoolTab({
             accept=".pdf,.doc,.docx,.txt"
             onChange={(e) => onUpload(e.target.files)}
         />
-        <Button onClick={() => fileInputRef.current?.click()} variant="secondary" className="btn-secondary px-4 py-2">
-          <Upload className="w-5 h-5" /> Upload Resumes
+        <Button onClick={() => fileInputRef.current?.click()} variant="secondary">
+          <Upload className="w-4 h-4" /> Upload Resumes
         </Button>
 
-        <Button className="btn-primary px-4 py-2" onClick={onScreenAll}>
-          <Scan className="w-5 h-5" /> Screen All Resumes
+        <Button className="btn-primary" onClick={onScreenAll}>
+          <Scan className="w-4 h-4" /> Screen All
         </Button>
-        <Button className="btn-primary px-4 py-2" onClick={onAryaReviewAll}>
-          <ScanFace className="w-5 h-5" /> Arya, Review All
+        <Button className="btn-primary" onClick={onAryaReviewAll}>
+          <ScanFace className="w-4 h-4" /> Arya, Review All
+        </Button>
+         <Button variant="secondary" onClick={onProactiveSourcing}>
+            <PlusCircle className="w-4 h-4" /> Proactive Sourcing
         </Button>
 
-        <Button variant="secondary" className="btn-secondary px-4 py-2" onClick={onSuggestRoleMatches}>
-          <GitMerge className="w-5 h-5" /> Suggest Role Matches
+        <div className="flex-grow"></div>
+
+        <Button variant="outline" onClick={onSuggestRoleMatches}>
+          <GitMerge className="w-4 h-4" /> Suggest Role Matches
         </Button>
-        <Button variant="secondary" className="btn-secondary px-4 py-2" onClick={onFindPotentialRoles}>
-          <Lightbulb className="w-5 h-5" /> Find Potential Roles
+        <Button variant="outline" onClick={onFindPotentialRoles}>
+          <Lightbulb className="w-4 h-4" /> Find Potential Roles
         </Button>
-        <Button className="btn-primary px-4 py-2" onClick={onStimulateFullPipeline}>
-          <Zap className="w-5 h-5" /> Stimulate Full Pipeline
+        <Button className="btn-primary" onClick={onStimulateFullPipeline}>
+          <Zap className="w-4 h-4" /> Stimulate Full Pipeline
         </Button>
       </div>
       <div className="flex gap-6 overflow-x-auto pb-4">
@@ -171,7 +174,7 @@ export function CandidatePoolTab({
         open={isSheetOpen} 
         onOpenChange={onOpenChange} 
         candidate={selectedCandidate}
-        onUpdateCandidate={handleUpdateCandidate}
+        onUpdateCandidate={onUpdateCandidate}
         />
     </div>
   );

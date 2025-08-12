@@ -24,7 +24,9 @@ import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
 import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
 import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
+import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 interface CandidateDetailSheetProps {
   open: boolean;
@@ -46,10 +48,11 @@ export function CandidateDetailSheet({
   const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
   const [generatedData, setGeneratedData] = useState<Record<string, any>>({});
   const { toast } = useToast();
+  const router = useRouter();
 
   if (!candidate) return null;
 
-  const handleGenerateClick = async (type: 'suggestions' | 'review' | 'questions' | 'email') => {
+  const handleGenerateClick = async (type: 'suggestions' | 'review' | 'questions' | 'email' | 'skillGap') => {
     if (!candidate) return;
     setIsGenerating(prev => ({ ...prev, [type]: true }));
     try {
@@ -80,6 +83,11 @@ export function CandidateDetailSheet({
                 companyName: 'AstraHire',
                 recruiterName: 'The Hiring Team',
                 candidateSkills: candidate.skills.join(', '),
+            });
+        } else if (type === 'skillGap') {
+            result = await skillGapAnalysis({
+                candidateSkills: candidate.skills,
+                jobDescription: candidate.role, // In a real app, you'd use a more detailed JD
             });
         }
         setGeneratedData(prev => ({...prev, [type]: result }));
@@ -114,11 +122,21 @@ export function CandidateDetailSheet({
     }
   }
 
+  const handleSendInterviewInvite = () => {
+    if (!candidate) return;
+    toast({
+        title: "Interview Invite Sent!",
+        description: `An invitation for the AI video interview has been sent to ${candidate.name}.`
+    });
+    router.push(`/interview/${candidate.id}`);
+  }
+
 
   const suggestions = generatedData.suggestions?.roles || [];
   const review = generatedData.review;
   const questions = generatedData.questions?.questions || [];
   const email = generatedData.email;
+  const skillGaps = generatedData.skillGap?.skillGaps || [];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -220,11 +238,19 @@ export function CandidateDetailSheet({
                     <CardTitle className='flex items-center gap-2 text-xl'><Star className='h-5 w-5 text-primary' /> Skill Gap & Training</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className='text-sm text-muted-foreground mb-4'>AI analysis of skill gaps and suggested training for future opportunities. (Coming Soon)</p>
-                     <ul className='list-disc list-inside space-y-2 text-sm opacity-50'>
-                        <li><span className='font-semibold'>Gap:</span> Advanced Kubernetes knowledge. <span className='text-muted-foreground'>Suggestion: CKA Certification.</span></li>
-                        <li><span className='font-semibold'>Gap:</span> Experience with Terraform. <span className='text-muted-foreground'>Suggestion: Complete "Terraform for Beginners" on Udemy.</span></li>
-                    </ul>
+                    {skillGaps.length > 0 ? (
+                        <ul className='list-disc list-inside space-y-2 text-sm'>
+                            {skillGaps.map((gap: any) => (
+                                <li key={gap.skill}><span className='font-semibold'>{gap.skill}:</span> <span className='text-muted-foreground'>{gap.suggestion}</span></li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className='text-sm text-muted-foreground mb-4'>Click the button to analyze skill gaps and get training suggestions.</p>
+                    )}
+                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('skillGap')} disabled={isGenerating.skillGap}>
+                       {isGenerating.skillGap ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                      Analyze Skill Gap
+                    </Button>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -254,11 +280,10 @@ export function CandidateDetailSheet({
                   </CardHeader>
                   <CardContent className='text-center'>
                     <p className='text-sm text-muted-foreground mb-4'>Invite the candidate to an automated AI-powered video interview.</p>
-                    <Button disabled>
+                    <Button onClick={handleSendInterviewInvite}>
                       <Send className="mr-2 h-4 w-4" />
                       Send Interview Invite
                     </Button>
-                    <p className="text-xs text-muted-foreground mt-4">Status: Not Invited (Feature Coming Soon)</p>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -296,5 +321,3 @@ export function CandidateDetailSheet({
     </Sheet>
   );
 }
-
-    
