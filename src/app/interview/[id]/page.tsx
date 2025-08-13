@@ -30,7 +30,7 @@ type ConversationEntry = {
     evaluation?: any;
 };
 
-export function InterviewPage({ candidateId }: { candidateId: string }) {
+export default function InterviewPage({ params }: { params: { id: string } }) {
     const router = useRouter();
     const { toast } = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -41,6 +41,7 @@ export function InterviewPage({ candidateId }: { candidateId: string }) {
     const [conversation, setConversation] = useState<ConversationEntry[]>([]);
     const [isFinished, setIsFinished] = useState(false);
     
+    const candidateId = params.id;
     const candidate = (mockCandidateData as any)[candidateId]; 
 
     useEffect(() => {
