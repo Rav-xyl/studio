@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Lightbulb, Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2 } from 'lucide-react';
+import { Lightbulb, Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2, FileSignature, Award } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Textarea } from '../ui/textarea';
@@ -27,6 +27,8 @@ import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-enga
 import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
+import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 
 interface CandidateDetailSheetProps {
   open: boolean;
@@ -52,7 +54,7 @@ export function CandidateDetailSheet({
 
   if (!candidate) return null;
 
-  const handleGenerateClick = async (type: 'suggestions' | 'review' | 'questions' | 'email' | 'skillGap') => {
+  const handleGenerateClick = async (type: 'suggestions' | 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding') => {
     if (!candidate) return;
     setIsGenerating(prev => ({ ...prev, [type]: true }));
     try {
@@ -88,6 +90,24 @@ export function CandidateDetailSheet({
             result = await skillGapAnalysis({
                 candidateSkills: candidate.skills,
                 jobDescription: candidate.role, // In a real app, you'd use a more detailed JD
+            });
+        } else if (type === 'offer') {
+             result = await draftOfferLetter({
+                candidateName: candidate.name,
+                roleTitle: candidate.role,
+                candidateSkills: candidate.skills,
+                candidateExperience: candidate.narrative,
+                companyName: "AstraHire Client",
+                companySalaryBands: "For a senior role, the band is typically between $120,000 and $150,000.",
+                simulatedMarketData: "Market analysis indicates the average salary for this role with this experience is around $135,000."
+            });
+        } else if (type === 'onboarding') {
+            result = await generateOnboardingPlan({
+                candidateName: candidate.name,
+                roleTitle: candidate.role,
+                roleResponsibilities: "Lead frontend development efforts, mentor junior developers, and drive architectural decisions.",
+                candidateStrengths: candidate.skills,
+                companyCulture: "A fast-paced startup focused on innovation and collaboration."
             });
         }
         setGeneratedData(prev => ({...prev, [type]: result }));
@@ -137,6 +157,39 @@ export function CandidateDetailSheet({
   const questions = generatedData.questions?.questions || [];
   const email = generatedData.email;
   const skillGaps = generatedData.skillGap?.skillGaps || [];
+  const offer = generatedData.offer;
+  const onboardingPlan = generatedData.onboarding;
+
+
+  const renderOnboardingPlan = () => {
+    if (!onboardingPlan) return null;
+    return (
+        <div className='space-y-4'>
+            <div>
+                <h5 className="font-semibold text-primary">Performance Forecast</h5>
+                <p className='text-sm text-muted-foreground'>{onboardingPlan.performanceForecast}</p>
+            </div>
+            <div>
+                <h5 className="font-semibold">First 30 Days</h5>
+                <ul className='list-disc list-inside text-sm text-muted-foreground'>
+                    {onboardingPlan.onboardingPlan.days30.map((item: string, i: number) => <li key={i}>{item}</li>)}
+                </ul>
+            </div>
+             <div>
+                <h5 className="font-semibold">Days 31-60</h5>
+                <ul className='list-disc list-inside text-sm text-muted-foreground'>
+                    {onboardingPlan.onboardingPlan.days60.map((item: string, i: number) => <li key={i}>{item}</li>)}
+                </ul>
+            </div>
+             <div>
+                <h5 className="font-semibold">Days 61-90</h5>
+                <ul className='list-disc list-inside text-sm text-muted-foreground'>
+                    {onboardingPlan.onboardingPlan.days90.map((item: string, i: number) => <li key={i}>{item}</li>)}
+                </ul>
+            </div>
+        </div>
+    )
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -163,11 +216,12 @@ export function CandidateDetailSheet({
             <Separator className="my-4" />
             
             <Tabs defaultValue="profile" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 bg-secondary/50">
+              <TabsList className="grid w-full grid-cols-5 bg-secondary/50">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
                 <TabsTrigger value="review">AI Review</TabsTrigger>
                 <TabsTrigger value="interview">Interview</TabsTrigger>
                 <TabsTrigger value="engage">Engage</TabsTrigger>
+                <TabsTrigger value="post-hire">Post-Hire</TabsTrigger>
               </TabsList>
               
               <TabsContent value="profile" className="mt-4">
@@ -303,6 +357,46 @@ export function CandidateDetailSheet({
                     <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('email')} disabled={isGenerating.email}>
                       {isGenerating.email ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                       Generate New Draft
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="post-hire" className="mt-4">
+                 <Card className='glass-card'>
+                  <CardHeader>
+                    <CardTitle className='flex items-center gap-2 text-xl'><FileSignature className='h-5 w-5 text-primary' /> Autonomous Offer Drafting</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {offer ? (
+                        <div>
+                            <p className='font-semibold'>Suggested Salary: <span className='text-primary'>{offer.suggestedSalary}</span></p>
+                            <p className='font-semibold mt-2'>Benefits:</p>
+                            <ul className='list-disc list-inside text-sm text-muted-foreground'>
+                                {offer.benefitsPackage.map((b: string) => <li key={b}>{b}</li>)}
+                            </ul>
+                            <Textarea readOnly className='h-48 mt-4 font-mono bg-secondary/50' value={offer.offerLetterBody} />
+                        </div>
+                    ) : (
+                         <p className='text-sm text-muted-foreground mb-4'>Let AI analyze market data and draft a competitive offer. (Only available for candidates in 'Offer' stage)</p>
+                    )}
+                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('offer')} disabled={isGenerating.offer || candidate.status !== 'Offer'}>
+                      {isGenerating.offer ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                      Draft Offer Letter
+                    </Button>
+                  </CardContent>
+                </Card>
+                 <Card className='glass-card mt-4'>
+                  <CardHeader>
+                    <CardTitle className='flex items-center gap-2 text-xl'><Award className='h-5 w-5 text-primary' /> Onboarding & Success Plan</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {onboardingPlan ? renderOnboardingPlan() : (
+                         <p className='text-sm text-muted-foreground mb-4'>Generate a personalized 30-60-90 day plan and success forecast. (Only available for 'Hired' candidates)</p>
+                    )}
+                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('onboarding')} disabled={isGenerating.onboarding || candidate.status !== 'Hired'}>
+                      {isGenerating.onboarding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                      Generate Onboarding Plan
                     </Button>
                   </CardContent>
                 </Card>

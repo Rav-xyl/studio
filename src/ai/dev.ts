@@ -10,3 +10,6 @@ import '@/ai/flows/ai-driven-candidate-engagement.ts';
 import '@/ai/flows/skill-gap-analysis.ts';
 import '@/ai/flows/proactive-candidate-sourcing.ts';
 import '@/ai/flows/evaluate-interview-response.ts';
+import '@/ai/flows/autonomous-offer-drafting.ts';
+import '@/ai/flows/self-correcting-rubric.ts';
+import '@/ai/flows/automated-onboarding-plan.ts';
