@@ -31,7 +31,8 @@ type ConversationEntry = {
     evaluation?: any;
 };
 
-export default function InterviewPage({ params: { id: candidateId } }: { params: { id: string } }) {
+export default function InterviewPage({ params }: { params: { id: string } }) {
+    const { id: candidateId } = params;
     const router = useRouter();
     const { toast } = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -262,5 +263,3 @@ export default function InterviewPage({ params: { id: candidateId } }: { params:
         </div>
     );
 }
-
-    
