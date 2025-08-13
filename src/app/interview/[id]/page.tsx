@@ -12,6 +12,7 @@ import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-questio
 import { evaluateInterviewResponse } from '@/ai/flows/evaluate-interview-response';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 
 const mockCandidateData = {
     'cand-123': {
@@ -30,7 +31,7 @@ type ConversationEntry = {
     evaluation?: any;
 };
 
-export default function InterviewPage({ params }: { params: { id: string } }) {
+export default function InterviewPage({ params: { id: candidateId } }: { params: { id: string } }) {
     const router = useRouter();
     const { toast } = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -41,7 +42,6 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     const [conversation, setConversation] = useState<ConversationEntry[]>([]);
     const [isFinished, setIsFinished] = useState(false);
     
-    const candidateId = params.id;
     const candidate = (mockCandidateData as any)[candidateId]; 
 
     useEffect(() => {
@@ -262,3 +262,5 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
         </div>
     );
 }
+
+    
