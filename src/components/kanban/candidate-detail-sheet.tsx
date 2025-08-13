@@ -155,7 +155,9 @@ export function CandidateDetailSheet({
         title: "Interview Invite Sent!",
         description: `An invitation for the AI video interview has been sent to ${candidate.name}.`
     });
-    router.push(`/interview/${candidate.id}`);
+    // This is a mock ID for demonstration purposes. In a real app, this would be the candidate's actual ID.
+    const mockCandidateId = 'cand-123';
+    router.push(`/interview/${mockCandidateId}`);
   }
 
 
