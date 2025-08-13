@@ -45,7 +45,9 @@ const reviewCandidatePrompt = ai.definePrompt({
   Provide a recommendation (Hire, Reject, Maybe) and a justification for your recommendation.
   Ensure the recommendation aligns with the job description and candidate's qualifications.
   Consider skills, experience, and overall fit for the role.
-  \n  Return your response in JSON format.\n  `,
+  
+  IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.
+  `,
 });
 
 const reviewCandidateFlow = ai.defineFlow(

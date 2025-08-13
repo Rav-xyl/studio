@@ -76,7 +76,8 @@ const prompt = ai.definePrompt({
   - Infer 2-3 relevant soft skills or related technical skills.
   - Candidate score should be between 0 and 100.
   - Reasoning should incorporate skill mappings and company preferences if they are provided.
-  - Return your response in JSON format.
+  
+  IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.
   `,
 });
 
