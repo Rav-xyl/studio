@@ -10,7 +10,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const ReEngageCandidateInputSchema = z.object({
+const ReEngageCandidateInputSchema = z.object({
   candidateName: z.string().describe("The candidate's full name."),
   candidateSkills: z.array(z.string()).describe("The candidate's list of skills."),
   candidateNarrative: z.string().describe("The original narrative summary of the candidate."),
@@ -20,7 +20,7 @@ export const ReEngageCandidateInputSchema = z.object({
 });
 export type ReEngageCandidateInput = z.infer<typeof ReEngageCandidateInputSchema>;
 
-export const ReEngageCandidateOutputSchema = z.object({
+const ReEngageCandidateOutputSchema = z.object({
   isMatch: z.boolean().describe("Whether the AI determined the candidate is a strong match for the new role."),
   confidenceScore: z.number().describe("A confidence score (0-100) of how good a fit the candidate is for the new role."),
   emailSubject: z.string().optional().describe("The subject of the re-engagement email, if the candidate is a match."),
