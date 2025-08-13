@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -53,18 +54,14 @@ const prompt = ai.definePrompt({
   Resume:
   {{media url=resumeDataUri}}
 
-  Skill Mappings (if available):
   {{#if skillMappings}}
-  {{skillMappings}}
-  {{else}}
-  Not provided.
+  Skill Mappings:
+  {{{skillMappings}}}
   {{/if}}
 
-  Company Preferences (if available):
   {{#if companyPreferences}}
-  {{companyPreferences}}
-  {{else}}
-  Not provided.
+  Company Preferences:
+  {{{companyPreferences}}}
   {{/if}}
 
   Provide a candidate score and reasoning for the score.
