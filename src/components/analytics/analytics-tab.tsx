@@ -7,6 +7,7 @@ import { BarChart2, Check, TrendingUp, Users } from "lucide-react";
 import { PredictiveHiresChart } from "./predictive-hires-chart";
 import { RoleDistributionChart } from "./role-distribution-chart";
 import { RubricRefinement } from "../settings/rubric-refinement";
+import { Button } from "../ui/button";
 
 
 export function AnalyticsTab() {
