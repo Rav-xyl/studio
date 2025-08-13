@@ -27,7 +27,6 @@ import { KANBAN_COLUMNS } from '@/lib/mock-data';
 
 interface CandidatePoolTabProps {
     candidates: Candidate[];
-    roles: JobRole[];
     onUpload: (files: FileList | null) => void;
     onScreenAll: () => void;
     onAryaReviewAll: () => void;
@@ -42,7 +41,6 @@ interface CandidatePoolTabProps {
 
 export function CandidatePoolTab({
     candidates,
-    roles,
     onUpload,
     onScreenAll,
     onAryaReviewAll,
@@ -76,7 +74,6 @@ export function CandidatePoolTab({
       return candidates;
     }
     // Simple filter: Check if candidate role matches the filtered role title.
-    // A more complex filter could check for skill overlap.
     return candidates.filter(c => c.role === filteredRole.title);
   }, [candidates, filteredRole]);
 
@@ -167,6 +164,7 @@ export function CandidatePoolTab({
             title={col.title}
             candidates={col.candidates}
             onCardClick={handleCardClick}
+            onUpdateCandidate={onUpdateCandidate}
           />
         ))}
       </div>

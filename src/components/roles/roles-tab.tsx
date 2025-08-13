@@ -11,10 +11,11 @@ interface RolesTabProps {
     roles: JobRole[];
     setRoles: React.Dispatch<React.SetStateAction<JobRole[]>>;
     onViewCandidates: (role: JobRole) => void;
+    onReEngage: (role: JobRole) => void;
 }
 
 
-export function RolesTab({ roles, setRoles, onViewCandidates }: RolesTabProps) {
+export function RolesTab({ roles, setRoles, onViewCandidates, onReEngage }: RolesTabProps) {
     const [isJdDialogOpen, setIsJdDialogOpen] = useState(false);
 
     const handleAddRole = (newRole: Omit<JobRole, 'id' | 'openings'>) => {
@@ -39,7 +40,7 @@ export function RolesTab({ roles, setRoles, onViewCandidates }: RolesTabProps) {
             {roles.length > 0 ? (
                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {roles.map(role => (
-                        <RoleCard key={role.id} role={role} onViewCandidates={onViewCandidates} />
+                        <RoleCard key={role.id} role={role} onViewCandidates={onViewCandidates} onReEngage={onReEngage} />
                     ))}
                 </div>
             ) : (

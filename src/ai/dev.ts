@@ -16,3 +16,4 @@ import '@/ai/flows/automated-onboarding-plan.ts';
 import '@/ai/flows/predictive-analytics.ts';
 import '@/ai/flows/talent-mapping.ts';
 import '@/ai/flows/culture-fit-synthesis.ts';
+import '@/ai/flows/re-engage-candidate.ts';

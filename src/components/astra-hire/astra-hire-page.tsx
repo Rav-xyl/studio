@@ -1,22 +1,21 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { BarChart2, Briefcase, Users, Brain, Loader2, X } from 'lucide-react';
+import { useState } from 'react';
+import { BarChart2, Briefcase, Users, Loader2 } from 'lucide-react';
 import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
 import { AnalyticsTab } from '../analytics/analytics-tab';
-import type { Candidate, JobRole, KanbanStatus } from '@/lib/types';
-import { KANBAN_COLUMNS, mockJobRoles } from '@/lib/mock-data';
-import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
+import type { Candidate, JobRole, KanbanStatus, RubricChange } from '@/lib/types';
 import { automatedResumeScreening } from '@/ai/flows/automated-resume-screening';
 import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
 import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
-import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
-import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
 import { SaarthiReportModal } from './saarthi-report-modal';
 import { useToast } from '@/hooks/use-toast';
+import { proactiveCandidateSourcing } from '@/ai/flows/proactive-candidate-sourcing';
+import { analyzeHiringOverride } from '@/ai/flows/self-correcting-rubric';
+import { reEngageCandidate, ReEngageCandidateOutput } from '@/ai/flows/re-engage-candidate';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -30,14 +29,14 @@ function convertFileToDataUri(file: File): Promise<string> {
 
 export function AstraHirePage() {
   const [activeTab, setActiveTab] = useState('pool');
-  const [companyType, setCompanyType] = useState('startup');
 
   // --- State Management ---
-  const [roles, setRoles] = useState<JobRole[]>(mockJobRoles);
+  const [roles, setRoles] = useState<JobRole[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [simulationLog, setSimulationLog] = useState<any[]>([]);
   const [lastSaarthiReport, setLastSaarthiReport] = useState<any>(null);
   const [filteredRole, setFilteredRole] = useState<JobRole | null>(null);
+  const [suggestedChanges, setSuggestedChanges] = useState<RubricChange[]>([]);
 
 
   // UI State
@@ -49,6 +48,47 @@ export function AstraHirePage() {
   const [uploadedFiles, setUploadedFiles] = useState<Map<string, File>>(new Map());
 
   // --- Core Logic ---
+
+  const handleUpdateCandidate = async (updatedCandidate: Candidate) => {
+    const oldCandidate = candidates.find(c => c.id === updatedCandidate.id);
+    
+    // --- Self-Correcting Rubric Trigger ---
+    // If a candidate was rejected by AI but hired by a human, trigger the analysis.
+    if (oldCandidate && oldCandidate.aiInitialDecision === 'Rejected' && updatedCandidate.status === 'Hired') {
+        toast({ title: "Learning Event Triggered", description: "Analyzing recruiter override to improve AI accuracy..." });
+        try {
+            const result = await analyzeHiringOverride({
+                candidateProfile: {
+                    name: updatedCandidate.name,
+                    skills: updatedCandidate.skills,
+                    narrative: updatedCandidate.narrative,
+                    aiInitialDecision: oldCandidate.aiInitialDecision,
+                    aiInitialScore: oldCandidate.aiInitialScore || 0,
+                    humanFinalDecision: updatedCandidate.status,
+                },
+                roleTitle: updatedCandidate.role,
+                currentRubricWeights: "Standard weights: skills: 25%, experience: 25%, narrative: 20%, inferred: 30%",
+            });
+
+            const newChange: RubricChange = {
+                id: Date.now(),
+                criteria: updatedCandidate.role,
+                change: result.suggestedChange,
+                reason: result.analysis,
+                status: 'Pending',
+            };
+            setSuggestedChanges(prev => [...prev, newChange]);
+            toast({ title: "AI Rubric Suggestion Ready", description: "A new suggestion for improving the AI is available on the Analytics tab." });
+
+        } catch (error) {
+            console.error("Failed to analyze hiring override:", error);
+            toast({ variant: "destructive", title: "Error", description: "Could not perform self-correction analysis." });
+        }
+    }
+
+    setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
+  };
+
 
   const handleBulkUpload = (files: FileList | null) => {
     if (!files) return;
@@ -108,7 +148,8 @@ export function AstraHirePage() {
         const updatedCandidate: Candidate = {
           ...candidate,
           ...result.extractedInformation,
-          status: result.candidateScore >= 70 ? 'Manual Review' : 'Rejected',
+          status: result.candidateScore >= 70 ? 'Screening' : 'Manual Review',
+          aiInitialScore: result.candidateScore,
           lastUpdated: 'Just now'
         };
         
@@ -158,7 +199,7 @@ export function AstraHirePage() {
                     newStatus = 'Interview'; // Optimistic for "Maybe"
                 }
 
-                return { ...candidate, status: newStatus, narrative: `${candidate.narrative}\n\nAI Review: ${result.justification}` };
+                return { ...candidate, status: newStatus, narrative: `${candidate.narrative}\n\nAI Review: ${result.justification}`, aiInitialDecision: result.recommendation === 'Reject' ? 'Rejected' : 'Hired' };
 
             } catch (error) {
                 console.error(`Failed to review ${candidate.name}:`, error);
@@ -184,7 +225,6 @@ export function AstraHirePage() {
         setIsLoading(true);
         setLoadingText("Analyzing candidate pool to suggest new roles...");
 
-        // Create a batch job to suggest roles for all eligible candidates
         const suggestionPromises = candidatesToAnalyze.map(c => suggestRoleMatches({
             candidateName: c.name,
             candidateSkills: c.skills.join(', '),
@@ -195,14 +235,10 @@ export function AstraHirePage() {
         try {
             const results = await Promise.all(suggestionPromises);
             const allRoles = results.flatMap(r => r.roles);
-
-            // Aggregate and count role suggestions
             const roleCounts = allRoles.reduce((acc, role) => {
                 acc[role.roleTitle] = (acc[role.roleTitle] || 0) + 1;
                 return acc;
             }, {} as Record<string, number>);
-
-            // Filter for roles suggested more than once or for a significant candidate
             const frequentRoles = Object.entries(roleCounts).filter(([_, count]) => count > 1).map(([title]) => title);
 
             if (frequentRoles.length > 0) {
@@ -238,37 +274,113 @@ export function AstraHirePage() {
         setLoadingText("Matching candidates to existing roles...");
 
         let matchedCount = 0;
-        const updatedCandidates = [...candidates];
-        const updatedRoles = [...roles];
+        
+        const updatedCandidates = candidates.map(candidate => {
+            if (candidate.status !== 'Screening') return candidate;
 
-        for (const candidate of candidatesToMatch) {
-            for (const role of updatedRoles) {
-                const candidateSkills = new Set(candidate.skills.map(s => s.toLowerCase()));
-                const roleSkills = new Set((role.description?.match(/\b(\w+)\b/g) || []).map(s => s.toLowerCase())); // Simple skill extraction
+            for (const role of roles) {
+                 const candidateSkills = new Set(candidate.skills.map(s => s.toLowerCase()));
+                 const roleKeywords = new Set(role.description.toLowerCase().match(/\b(\w+)\b/g) || []);
                 
-                const intersection = new Set([...candidateSkills].filter(skill => roleSkills.has(skill)));
-                const score = (intersection.size / roleSkills.size) * 100;
+                 const intersection = new Set([...candidateSkills].filter(skill => roleKeywords.has(skill)));
+                 const score = (intersection.size / (role.description.split(' ').length || 1) * 100) + (intersection.size * 10);
+
 
                 if (score > 50) { // Threshold for a potential match
-                    const candidateIndex = updatedCandidates.findIndex(c => c.id === candidate.id);
-                    if (candidateIndex !== -1) {
-                        updatedCandidates[candidateIndex] = { ...updatedCandidates[candidateIndex], status: 'Interview', role: role.title };
-                        matchedCount++;
-                    }
-                    break; 
+                    matchedCount++;
+                    return { ...candidate, status: 'Interview' as KanbanStatus, role: role.title };
                 }
             }
-        }
+            return candidate;
+        });
 
         setCandidates(updatedCandidates);
-        setRoles(updatedRoles);
         setIsLoading(false);
         toast({ title: "Matching Complete", description: `${matchedCount} candidates were matched to potential roles and moved to the 'Interview' stage.` });
     };
 
+    const handleProactiveSourcing = async () => {
+        if (roles.length === 0) {
+            toast({ title: "No roles to source for", description: "Please create at least one client role before sourcing.", variant: "destructive" });
+            return;
+        }
+        setIsLoading(true);
+        setLoadingText("AI is proactively sourcing new candidates...");
+        try {
+            const result = await proactiveCandidateSourcing({
+                openRoles: roles.map(r => ({ title: r.title, description: r.description })),
+                numberOfCandidates: 5,
+            });
+
+            const newCandidates: Candidate[] = result.sourcedCandidates.map(sc => ({
+                id: `cand-${Date.now()}-${Math.random()}`,
+                name: sc.name,
+                avatarUrl: '',
+                role: sc.role,
+                skills: sc.skills,
+                status: 'Uploaded',
+                narrative: sc.narrative,
+                inferredSkills: sc.inferredSkills,
+                lastUpdated: 'Just now',
+            }));
+            
+            setCandidates(prev => [...prev, ...newCandidates]);
+            toast({ title: "Sourcing Complete!", description: `${newCandidates.length} new candidate profiles have been added to the pool.`});
+
+        } catch (error) {
+            console.error("Failed to source candidates:", error);
+            toast({ title: "Sourcing Error", description: "An AI error occurred during proactive sourcing.", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+
     const handleViewCandidatesForRole = (role: JobRole) => {
         setFilteredRole(role);
         setActiveTab('pool');
+    };
+
+    const handleReEngage = async (role: JobRole) => {
+        const rejectedCandidates = candidates.filter(c => c.status === 'Rejected');
+        if (rejectedCandidates.length === 0) {
+            toast({ title: "No rejected candidates to re-engage." });
+            return;
+        }
+
+        setIsLoading(true);
+        setLoadingText(`AI is re-evaluating ${rejectedCandidates.length} rejected candidates for ${role.title}...`);
+
+        const reEngagementPromises = rejectedCandidates.map(c => reEngageCandidate({
+            candidateName: c.name,
+            candidateSkills: c.skills,
+            candidateNarrative: c.narrative,
+            newJobTitle: role.title,
+            newJobDescription: role.description,
+            companyName: "AstraHire Client"
+        }).then(result => ({ candidateId: c.id, result })));
+
+        const results = await Promise.all(reEngagementPromises);
+        const matches = results.filter(r => r.result.isMatch);
+
+        if (matches.length > 0) {
+            setCandidates(prev => prev.map(c => {
+                const match = matches.find(m => m.candidateId === c.id);
+                if (match) {
+                    return { ...c, status: 'Interview', role: role.title };
+                }
+                return c;
+            }));
+             toast({
+                title: "Re-engagement Successful!",
+                description: `${matches.length} previously rejected candidates have been identified as a strong match and moved to the 'Interview' stage for '${role.title}'.`,
+                duration: 9000,
+            });
+        } else {
+            toast({ title: "No Matches Found", description: "No previously rejected candidates were a strong fit for this role." });
+        }
+
+        setIsLoading(false);
     };
   
   const handleStimulateFullPipeline = async () => {
@@ -298,7 +410,7 @@ export function AstraHirePage() {
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
-        return <RolesTab roles={roles} setRoles={setRoles} onViewCandidates={handleViewCandidatesForRole} />;
+        return <RolesTab roles={roles} setRoles={setRoles} onViewCandidates={handleViewCandidatesForRole} onReEngage={handleReEngage} />;
       case 'pool':
         return (
             <CandidatePoolTab 
@@ -309,12 +421,14 @@ export function AstraHirePage() {
                 onSuggestRoleMatches={handleSuggestRoleMatches}
                 onFindPotentialRoles={handleFindPotentialRoles}
                 onStimulateFullPipeline={handleStimulateFullPipeline}
+                onProactiveSourcing={handleProactiveSourcing}
+                onUpdateCandidate={handleUpdateCandidate}
                 filteredRole={filteredRole}
                 onClearFilter={() => setFilteredRole(null)}
             />
         );
       case 'analytics':
-        return <AnalyticsTab />;
+        return <AnalyticsTab roles={roles} candidates={candidates} suggestedChanges={suggestedChanges} setSuggestedChanges={setSuggestedChanges} />;
       default:
         return null;
     }

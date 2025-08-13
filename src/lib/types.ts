@@ -1,4 +1,4 @@
-export type KanbanStatus = 'Uploaded' | 'Screening' | 'Manual Review' | 'Interview' | 'Offer' | 'Hired' | 'Rejected' | 'Processing' | 'Error';
+export type KanbanStatus = 'Uploaded' | 'Processing' | 'Screening' | 'Manual Review' | 'Interview' | 'Offer' | 'Hired' | 'Rejected' | 'Error';
 
 export interface Candidate {
   id: string;
@@ -13,7 +13,7 @@ export interface Candidate {
   // Optional fields from AI processing
   [key: string]: any; 
   // For rubric refinement
-  aiInitialDecision?: KanbanStatus;
+  aiInitialDecision?: 'Hired' | 'Rejected' | 'Maybe';
   aiInitialScore?: number;
 }
 
@@ -41,4 +41,12 @@ export type TalentHotspot = {
     location: string;
     talentCount: number;
     topSkills: string[];
+}
+
+export interface RubricChange {
+  id: number;
+  criteria: string;
+  change: string;
+  reason: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
 }

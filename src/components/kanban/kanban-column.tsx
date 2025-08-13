@@ -1,16 +1,29 @@
-import type { Candidate } from '@/lib/types';
+import type { Candidate, KanbanStatus } from '@/lib/types';
 import { KanbanCard } from './kanban-card';
 import { ScrollArea } from '../ui/scroll-area';
+import { useDrop } from 'react-dnd';
 
 interface KanbanColumnProps {
-  title: string;
+  title: KanbanStatus;
   candidates: Candidate[];
   onCardClick: (candidate: Candidate) => void;
+  onUpdateCandidate: (candidate: Candidate) => void;
 }
 
-export function KanbanColumn({ title, candidates, onCardClick }: KanbanColumnProps) {
+export function KanbanColumn({ title, candidates, onCardClick, onUpdateCandidate }: KanbanColumnProps) {
+  const [{ isOver }, drop] = useDrop(() => ({
+    accept: 'candidate',
+    drop: (item: { candidate: Candidate }) => {
+      onUpdateCandidate({ ...item.candidate, status: title });
+    },
+    collect: (monitor) => ({
+      isOver: !!monitor.isOver(),
+    }),
+  }));
+
+
   return (
-    <div className="flex flex-col rounded-lg bg-secondary/30 flex-shrink-0 w-[300px]">
+    <div ref={drop} className={`flex flex-col rounded-lg flex-shrink-0 w-[300px] transition-colors ${isOver ? 'bg-primary/20' : 'bg-secondary/30'}`}>
       <div className="p-3 sticky top-0 bg-secondary/30 backdrop-blur-sm z-10">
         <h3 className="font-semibold text-foreground">
           {title} <span className="text-sm font-normal text-muted-foreground">{candidates.length}</span>
