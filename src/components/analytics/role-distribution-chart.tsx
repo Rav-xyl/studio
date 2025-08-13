@@ -4,12 +4,8 @@ import { Pie, PieChart, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from '../ui/chart';
 
 
-const data = [
-  { name: 'Engineering', value: 400, fill: 'var(--color-engineering)' },
-  { name: 'Product', value: 300, fill: 'var(--color-product)' },
-  { name: 'Design', value: 300, fill: 'var(--color-design)' },
-  { name: 'Data', value: 200, fill: 'var(--color-data)' },
-  { name: 'Marketing', value: 278, fill: 'var(--color-marketing)' },
+const data: any[] = [
+  // Data will be populated dynamically
 ];
 
 const chartConfig = {
@@ -42,6 +38,11 @@ const chartConfig = {
 export function RoleDistributionChart() {
   return (
     <div className="h-[350px]">
+      {data.length === 0 ? (
+        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+          No data available to display chart.
+        </div>
+      ) : (
       <ChartContainer config={chartConfig} className="w-full h-full">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -89,6 +90,7 @@ export function RoleDistributionChart() {
           </PieChart>
         </ResponsiveContainer>
       </ChartContainer>
+      )}
     </div>
   );
 }

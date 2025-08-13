@@ -3,13 +3,8 @@
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '../ui/chart';
 
-const data = [
-  { month: 'Jan', uploaded: 120, screening: 90, interview: 40, hired: 10 },
-  { month: 'Feb', uploaded: 150, screening: 110, interview: 55, hired: 15 },
-  { month: 'Mar', uploaded: 130, screening: 100, interview: 60, hired: 20 },
-  { month: 'Apr', uploaded: 180, screening: 140, interview: 70, hired: 25 },
-  { month: 'May', uploaded: 220, screening: 160, interview: 80, hired: 30 },
-  { month: 'Jun', uploaded: 210, screening: 155, interview: 85, hired: 35 },
+const data: any[] = [
+  // Data will be populated dynamically
 ];
 
 const chartConfig = {
@@ -34,6 +29,11 @@ const chartConfig = {
 export function HiringVelocityChart() {
   return (
     <div className="h-[350px]">
+       {data.length === 0 ? (
+        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+          No data available to display chart.
+        </div>
+      ) : (
       <ChartContainer config={chartConfig} className="w-full h-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
@@ -52,6 +52,7 @@ export function HiringVelocityChart() {
           </BarChart>
         </ResponsiveContainer>
       </ChartContainer>
+      )}
     </div>
   );
 }

@@ -8,9 +8,18 @@ import { PredictiveHiresChart } from "./predictive-hires-chart";
 import { RoleDistributionChart } from "./role-distribution-chart";
 import { RubricRefinement } from "../settings/rubric-refinement";
 import { Button } from "../ui/button";
+import type { Candidate, JobRole, RubricChange } from "@/lib/types";
 
+interface AnalyticsTabProps {
+    candidates: Candidate[];
+    roles: JobRole[];
+    suggestedChanges: RubricChange[];
+    setSuggestedChanges: React.Dispatch<React.SetStateAction<RubricChange[]>>;
+}
 
-export function AnalyticsTab() {
+export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggestedChanges }: AnalyticsTabProps) {
+
+    const hiredCount = candidates.filter(c => c.status === 'Hired').length;
 
     return (
         <div className="fade-in space-y-6">
@@ -23,8 +32,8 @@ export function AnalyticsTab() {
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">1,023</div>
-                        <p className="text-xs text-muted-foreground">+18.2% from last month</p>
+                        <div className="text-2xl font-bold">{candidates.length}</div>
+                        <p className="text-xs text-muted-foreground">resumes in the pool</p>
                     </CardContent>
                 </Card>
                 <Card className="glass-card">
@@ -33,18 +42,18 @@ export function AnalyticsTab() {
                         <Check className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">142</div>
-                        <p className="text-xs text-muted-foreground">+25.1% from last month</p>
+                        <div className="text-2xl font-bold">{hiredCount}</div>
+                        <p className="text-xs text-muted-foreground">candidates hired</p>
                     </CardContent>
                 </Card>
                  <Card className="glass-card">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Time-to-Hire (Avg)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Open Roles</CardTitle>
                         <BarChart2 className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">21 days</div>
-                        <p className="text-xs text-muted-foreground">-5.8% from last month</p>
+                        <div className="text-2xl font-bold">{roles.length}</div>
+                        <p className="text-xs text-muted-foreground">active client roles</p>
                     </CardContent>
                 </Card>
             </div>
@@ -91,7 +100,7 @@ export function AnalyticsTab() {
                 </div>
             </div>
 
-            <RubricRefinement />
+            <RubricRefinement suggestedChanges={suggestedChanges} setSuggestedChanges={setSuggestedChanges} />
         </div>
     )
 }
