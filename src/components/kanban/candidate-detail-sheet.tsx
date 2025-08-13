@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Lightbulb, Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2, FileSignature, Award } from 'lucide-react';
+import { Lightbulb, Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2, FileSignature, Award, ShieldCheck } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Textarea } from '../ui/textarea';
@@ -29,6 +29,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
+import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
 
 interface CandidateDetailSheetProps {
   open: boolean;
@@ -54,7 +55,7 @@ export function CandidateDetailSheet({
 
   if (!candidate) return null;
 
-  const handleGenerateClick = async (type: 'suggestions' | 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding') => {
+  const handleGenerateClick = async (type: 'suggestions' | 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit') => {
     if (!candidate) return;
     setIsGenerating(prev => ({ ...prev, [type]: true }));
     try {
@@ -109,6 +110,12 @@ export function CandidateDetailSheet({
                 candidateStrengths: candidate.skills,
                 companyCulture: "A fast-paced startup focused on innovation and collaboration."
             });
+        } else if (type === 'cultureFit') {
+            result = await cultureFitSynthesis({
+                candidateNarrative: candidate.narrative,
+                inferredSoftSkills: candidate.inferredSkills,
+                companyValues: "Innovation, Collaboration, Customer-Centricity, Fast-Paced Growth", // This could be dynamic in a real app
+            });
         }
         setGeneratedData(prev => ({...prev, [type]: result }));
         toast({ title: `AI ${type} generated successfully!`})
@@ -133,7 +140,7 @@ export function CandidateDetailSheet({
     }
 
     if (nextStatus !== candidate.status) {
-        const updatedCandidate = { ...candidate, status: nextStatus };
+        const updatedCandidate = { ...candidate, status: nextStatus, aiInitialDecision: candidate.status };
         onUpdateCandidate(updatedCandidate);
         toast({ title: 'Candidate Updated', description: `${candidate.name} moved to ${nextStatus}`});
         onOpenChange(false);
@@ -159,6 +166,7 @@ export function CandidateDetailSheet({
   const skillGaps = generatedData.skillGap?.skillGaps || [];
   const offer = generatedData.offer;
   const onboardingPlan = generatedData.onboarding;
+  const cultureFit = generatedData.cultureFit;
 
 
   const renderOnboardingPlan = () => {
@@ -284,6 +292,33 @@ export function CandidateDetailSheet({
                     <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('review')} disabled={isGenerating.review}>
                        {isGenerating.review ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                       Run Full Review
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card className='glass-card mt-4'>
+                  <CardHeader>
+                    <CardTitle className='flex items-center gap-2 text-xl'><ShieldCheck className='h-5 w-5 text-primary' /> Culture Fit Synthesis</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {cultureFit ? (
+                        <div className="space-y-2">
+                           <p className='font-semibold'>Alignment Score: <span className='text-primary'>{cultureFit.alignmentScore}/100</span></p>
+                           <p className='text-sm'><strong className='text-primary'>Summary:</strong> <span className='text-muted-foreground'>{cultureFit.summary}</span></p>
+                           <div>
+                               <h5 className='font-semibold mt-2'>Alignment Breakdown:</h5>
+                               <ul className='list-disc list-inside text-sm text-muted-foreground'>
+                                   {cultureFit.alignmentBreakdown.map((item: any) => (
+                                       <li key={item.value}><strong>{item.value}:</strong> {item.evidence}</li>
+                                   ))}
+                               </ul>
+                           </div>
+                        </div>
+                    ) : (
+                         <p className='text-sm text-muted-foreground mb-4'>Let AI analyze the candidate's narrative and soft skills to generate a "Cultural Alignment Profile."</p>
+                    )}
+                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('cultureFit')} disabled={isGenerating.cultureFit}>
+                      {isGenerating.cultureFit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                      Synthesize Culture Fit
                     </Button>
                   </CardContent>
                 </Card>
