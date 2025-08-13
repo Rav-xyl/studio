@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Lightbulb, Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2, FileSignature, Award, ShieldCheck } from 'lucide-react';
+import { Lightbulb, Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2, FileSignature, Award, ShieldCheck, Upload } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Textarea } from '../ui/textarea';
@@ -30,6 +30,9 @@ import { useRouter } from 'next/navigation';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
+import { finalInterviewReview } from '@/ai/flows/final-interview-review';
+import { Input } from '../ui/input';
+
 
 interface CandidateDetailSheetProps {
   open: boolean;
@@ -50,13 +53,20 @@ export function CandidateDetailSheet({
 }: CandidateDetailSheetProps) {
   const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
   const [generatedData, setGeneratedData] = useState<Record<string, any>>({});
+  const [reportFile, setReportFile] = useState<File | null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
   if (!candidate) return null;
 
-  const handleGenerateClick = async (type: 'suggestions' | 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit') => {
+  const handleGenerateClick = async (type: 'suggestions' | 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'finalReview') => {
     if (!candidate) return;
+
+    if (type === 'finalReview' && !reportFile) {
+      toast({ title: 'Please upload the interview report first.', variant: 'destructive' });
+      return;
+    }
+    
     setIsGenerating(prev => ({ ...prev, [type]: true }));
     try {
         let result;
@@ -116,6 +126,24 @@ export function CandidateDetailSheet({
                 inferredSoftSkills: candidate.inferredSkills,
                 companyValues: "Innovation, Collaboration, Customer-Centricity, Fast-Paced Growth", // This could be dynamic in a real app
             });
+        } else if (type === 'finalReview' && reportFile) {
+          const reader = new FileReader();
+          reader.readAsText(reportFile);
+          reader.onload = async (e) => {
+            const reportContent = e.target?.result as string;
+             try {
+                const finalResult = await finalInterviewReview({interviewReport: reportContent});
+                setGeneratedData(prev => ({...prev, [type]: finalResult }));
+                toast({ title: `AI ${type} generated successfully!`})
+              } catch(e) {
+                console.error(`Failed to generate ${type}`, e);
+                toast({ title: `Error generating ${type}`, description: "Please check the console for details.", variant: 'destructive'})
+              } finally {
+                setIsGenerating(prev => ({ ...prev, [type]: false }));
+              }
+          };
+          // Since FileReader is async, we return here and let the callback handle state updates.
+          return;
         }
         setGeneratedData(prev => ({...prev, [type]: result }));
         toast({ title: `AI ${type} generated successfully!`})
@@ -123,7 +151,9 @@ export function CandidateDetailSheet({
         console.error(`Failed to generate ${type}`, error);
         toast({ title: `Error generating ${type}`, description: "Please check the console for details.", variant: 'destructive'})
     } finally {
-        setIsGenerating(prev => ({ ...prev, [type]: false }));
+        if (type !== 'finalReview') {
+            setIsGenerating(prev => ({ ...prev, [type]: false }));
+        }
     }
   };
 
@@ -140,7 +170,7 @@ export function CandidateDetailSheet({
     }
 
     if (nextStatus !== candidate.status) {
-        const updatedCandidate = { ...candidate, status: nextStatus, aiInitialDecision: candidate.status };
+        const updatedCandidate = { ...candidate, status: nextStatus };
         onUpdateCandidate(updatedCandidate);
         toast({ title: 'Candidate Updated', description: `${candidate.name} moved to ${nextStatus}`});
         onOpenChange(false);
@@ -169,6 +199,7 @@ export function CandidateDetailSheet({
   const offer = generatedData.offer;
   const onboardingPlan = generatedData.onboarding;
   const cultureFit = generatedData.cultureFit;
+  const finalReview = generatedData.finalReview;
 
 
   const renderOnboardingPlan = () => {
@@ -226,10 +257,11 @@ export function CandidateDetailSheet({
             <Separator className="my-4" />
             
             <Tabs defaultValue="profile" className="w-full">
-              <TabsList className="grid w-full grid-cols-5 bg-secondary/50">
+              <TabsList className="grid w-full grid-cols-6 bg-secondary/50">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
                 <TabsTrigger value="review">AI Review</TabsTrigger>
                 <TabsTrigger value="interview">Interview</TabsTrigger>
+                <TabsTrigger value="final-review">Final Review</TabsTrigger>
                 <TabsTrigger value="engage">Engage</TabsTrigger>
                 <TabsTrigger value="post-hire">Post-Hire</TabsTrigger>
               </TabsList>
@@ -375,6 +407,46 @@ export function CandidateDetailSheet({
                       <Send className="mr-2 h-4 w-4" />
                       Send Interview Invite
                     </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+               <TabsContent value="final-review" className="mt-4">
+                 <Card className='glass-card'>
+                  <CardHeader>
+                    <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> The "BOSS" Final Review</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className='text-sm text-muted-foreground mb-4'>Upload the generated interview report to get the final, holistic analysis and hiring recommendation from the advanced AI supervisor.</p>
+                     <div className="flex items-center gap-2">
+                        <Input type="file" accept=".txt" onChange={(e) => setReportFile(e.target.files ? e.target.files[0] : null)} className="flex-1" />
+                        <Button onClick={() => handleGenerateClick('finalReview')} disabled={isGenerating.finalReview || !reportFile}>
+                            {isGenerating.finalReview ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                            Run Final Review
+                        </Button>
+                     </div>
+
+                    {finalReview && (
+                        <div className="mt-4 p-4 rounded-lg bg-secondary/50 space-y-3">
+                            <h4 className="font-bold text-lg text-primary">Final Recommendation: {finalReview.finalRecommendation}</h4>
+                            <div>
+                                <h5 className="font-semibold">Overall Assessment</h5>
+                                <p className="text-sm text-muted-foreground">{finalReview.overallAssessment}</p>
+                            </div>
+                             <div>
+                                <h5 className="font-semibold">Key Strengths</h5>
+                                <ul className="list-disc list-inside text-sm text-muted-foreground">
+                                    {finalReview.keyStrengths.map((s: string, i:number) => <li key={i}>{s}</li>)}
+                                </ul>
+                            </div>
+                            <div>
+                                <h5 className="font-semibold">Potential Concerns</h5>
+                                <ul className="list-disc list-inside text-sm text-muted-foreground">
+                                    {finalReview.potentialConcerns.map((c: string, i:number) => <li key={i}>{c}</li>)}
+                                </ul>
+                            </div>
+                        </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
