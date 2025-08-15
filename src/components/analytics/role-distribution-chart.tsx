@@ -5,12 +5,8 @@ import { Pie, PieChart, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from '../ui/chart';
 
 
-const data = [
-  { name: 'Engineering', value: 55, fill: 'var(--color-engineering)' },
-  { name: 'Product', value: 20, fill: 'var(--color-product)' },
-  { name: 'Design', value: 15, fill: 'var(--color-design)' },
-  { name: 'Data', value: 5, fill: 'var(--color-data)' },
-  { name: 'Marketing', value: 5, fill: 'var(--color-marketing)' },
+const data: any[] = [
+  // Data will be populated dynamically in a real application
 ];
 
 const chartConfig = {

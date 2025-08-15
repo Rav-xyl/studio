@@ -8,11 +8,8 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const historicalData = [
-  { quarter: 'Q1', actual: 45 },
-  { quarter: 'Q2', actual: 55 },
-  { quarter: 'Q3', actual: 70 },
-  { quarter: 'Q4', actual: 80 },
+const historicalData: any[] = [
+  // Data will be populated dynamically in a real application
 ];
 
 const chartConfig = {
@@ -69,9 +66,13 @@ export function PredictiveHiresChart() {
 
   return (
     <div className="h-[350px]">
-       {isLoading ? (
+       {isLoading && chartData.length === 0 ? (
         <div className="flex h-full w-full items-center justify-center text-muted-foreground">
           <Loader2 className="animate-spin h-8 w-8 text-primary"/>
+        </div>
+      ) : chartData.length === 0 ? (
+        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+          No data available to display chart.
         </div>
       ) : (
       <ChartContainer config={chartConfig} className="w-full h-full">

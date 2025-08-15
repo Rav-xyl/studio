@@ -4,13 +4,8 @@
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '../ui/chart';
 
-const data = [
-  { month: 'Jan', uploaded: 120, screening: 90, interview: 60, hired: 20 },
-  { month: 'Feb', uploaded: 130, screening: 100, interview: 70, hired: 25 },
-  { month: 'Mar', uploaded: 150, screening: 110, interview: 80, hired: 30 },
-  { month: 'Apr', uploaded: 140, screening: 120, interview: 90, hired: 35 },
-  { month: 'May', uploaded: 160, screening: 130, interview: 100, hired: 40 },
-  { month: 'Jun', uploaded: 170, screening: 140, interview: 110, hired: 45 },
+const data: any[] = [
+  // Data will be populated dynamically in a real application
 ];
 
 const chartConfig = {

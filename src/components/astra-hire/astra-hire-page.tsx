@@ -18,7 +18,6 @@ import { analyzeHiringOverride } from '@/ai/flows/self-correcting-rubric';
 import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
 import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
 import { nanoid } from 'nanoid';
-import { mockCandidates, mockJobRoles } from '@/lib/mock-data';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -34,8 +33,8 @@ export function AstraHirePage() {
   const [activeTab, setActiveTab] = useState('pool');
 
   // --- State Management ---
-  const [roles, setRoles] = useState<JobRole[]>(mockJobRoles);
-  const [candidates, setCandidates] = useState<Candidate[]>(mockCandidates);
+  const [roles, setRoles] = useState<JobRole[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [lastSaarthiReport, setLastSaarthiReport] = useState<any>(null);
   const [filteredRole, setFilteredRole] = useState<JobRole | null>(null);
   const [suggestedChanges, setSuggestedChanges] = useState<RubricChange[]>([]);
