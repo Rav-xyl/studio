@@ -1,6 +1,7 @@
+
 'use client';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Brain, X } from "lucide-react";
 
 interface SaarthiReportModalProps {
