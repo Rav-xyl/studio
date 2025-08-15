@@ -394,17 +394,28 @@ export function AstraHirePage() {
 
             // --- Phase 1: Screening ---
             setLoadingText("Phase 1/5: Screening all new resumes...");
-            let currentCandidates = candidates;
+            let currentCandidates = [...candidates];
             let candidatesToScreen = getCandidatesByStatus('Uploaded', currentCandidates);
+
             if (candidatesToScreen.length > 0) {
-                await handleScreenResumes();
-                // We need to get the updated state of candidates after the async operation
-                currentCandidates = await new Promise(resolve => {
-                    setCandidates(prev => {
-                        resolve(prev);
-                        return prev;
-                    });
+                const screeningPromises = candidatesToScreen.map(async (candidate) => {
+                    const file = uploadedFiles.get(candidate.name);
+                    if (!file) {
+                        return { ...candidate, status: 'Error' as KanbanStatus, narrative: 'File not found.' };
+                    }
+                    try {
+                        const resumeDataUri = await convertFileToDataUri(file);
+                        const result = await automatedResumeScreening({ resumeDataUri });
+                        const updatedCandidate: Candidate = { ...candidate, ...result.extractedInformation, aiInitialScore: result.candidateScore };
+                        if (result.candidateScore < 50) updatedCandidate.status = 'Rejected';
+                        else if (result.candidateScore < 70) updatedCandidate.status = 'Manual Review';
+                        else updatedCandidate.status = 'Screening';
+                        return updatedCandidate;
+                    } catch (e) { return { ...candidate, status: 'Error' as KanbanStatus }; }
                 });
+                const screened = await Promise.all(screeningPromises);
+                currentCandidates = currentCandidates.map(c => screened.find(s => s.id === c.id) || c);
+                setCandidates(currentCandidates);
                 log("Screening", `Screening completed for ${candidatesToScreen.length} candidates.`);
             } else {
                 log("Screening", "No new resumes to screen. Skipped.");
@@ -451,9 +462,21 @@ export function AstraHirePage() {
             // --- Phase 3: Deep Review ---
             setLoadingText("Phase 3/5: Arya is performing deep reviews...");
             let candidatesToReview = getCandidatesByStatus('Manual Review', currentCandidates);
-             if (candidatesToReview.length > 0) {
-                await handleAryaReviewAll();
-                currentCandidates = await new Promise(resolve => { setCandidates(prev => { resolve(prev); return prev; }); });
+            if (candidatesToReview.length > 0) {
+                const reviewPromises = candidatesToReview.map(async (candidate) => {
+                    try {
+                        const jobDescription = "A challenging role at a leading tech company requiring strong problem-solving skills and relevant technical expertise.";
+                        const result = await reviewCandidate({ candidateData: candidate.narrative, jobDescription });
+                        let newStatus: KanbanStatus = 'Manual Review';
+                        if (result.recommendation.toLowerCase() === 'hire') newStatus = 'Interview';
+                        else if (result.recommendation.toLowerCase() === 'reject') newStatus = 'Rejected';
+                        else newStatus = 'Interview';
+                        return { ...candidate, status: newStatus, narrative: `${candidate.narrative}\n\nAI Review: ${result.justification}`, aiInitialDecision: result.recommendation === 'Reject' ? 'Rejected' : 'Hired' };
+                    } catch (e) { return { ...candidate, status: 'Error' as KanbanStatus }; }
+                });
+                const reviewed = await Promise.all(reviewPromises);
+                currentCandidates = currentCandidates.map(c => reviewed.find(r => r.id === c.id) || c);
+                setCandidates(currentCandidates);
                 log("AI Deep Review", `Deep review completed for ${candidatesToReview.length} candidates.`);
             } else {
                 log("AI Deep Review", "No candidates in 'Manual Review'. Skipped.");
@@ -464,13 +487,12 @@ export function AstraHirePage() {
             let matchedCount = 0;
             let learningEventCandidate: Candidate | null = null;
             
-            // First, find a rejected candidate to 'hire' for the learning event
             const rejectedCandidates = getCandidatesByStatus('Rejected', currentCandidates);
             if (rejectedCandidates.length > 0) {
                 learningEventCandidate = rejectedCandidates[0];
             }
 
-            currentCandidates = currentCandidates.map(c => {
+            let finalCandidates = currentCandidates.map(c => {
                 if (c.id === learningEventCandidate?.id) {
                     matchedCount++;
                     return { ...c, status: 'Hired' as KanbanStatus, role: createdRole?.title || "Simulated Role" };
@@ -481,22 +503,33 @@ export function AstraHirePage() {
                 }
                 return c;
             });
-            setCandidates(currentCandidates);
-            log("Role Matching", `Matched ${matchedCount} candidates to the new role.`);
 
             if (learningEventCandidate) {
-                await handleUpdateCandidate(currentCandidates.find(c => c.id === learningEventCandidate!.id)!);
-                log("Self-Correction Simulation", `Simulated a human override by hiring a rejected candidate ('${learningEventCandidate.name}'). The AI will now analyze this decision to refine its rubric.`);
+                const hiredCandidate = finalCandidates.find(c => c.id === learningEventCandidate!.id)!;
+                const result = await analyzeHiringOverride({
+                    candidateProfile: {
+                        name: hiredCandidate.name, skills: hiredCandidate.skills, narrative: hiredCandidate.narrative,
+                        aiInitialDecision: 'Rejected', aiInitialScore: hiredCandidate.aiInitialScore || 0,
+                        humanFinalDecision: 'Hired',
+                    },
+                    roleTitle: hiredCandidate.role,
+                    currentRubricWeights: "Standard weights: skills: 25%, experience: 25%, narrative: 20%, inferred: 30%",
+                });
+                setSuggestedChanges(prev => [...prev, { id: Date.now(), criteria: hiredCandidate.role, change: result.suggestedChange, reason: result.analysis, status: 'Pending' }]);
+                log("Self-Correction Simulation", `Simulated a human override by hiring a rejected candidate ('${learningEventCandidate.name}'). The AI analyzed this decision to refine its rubric.`);
             } else {
                  log("Self-Correction Simulation", `No rejected candidates were available to simulate a learning event.`);
             }
+            setCandidates(finalCandidates);
+            log("Role Matching", `Matched ${matchedCount} candidates to the new role.`);
+
 
             // --- Phase 5: Finalize & Generate Report ---
             setLoadingText("Phase 5/5: Generating SAARTHI Report...");
             setLastSaarthiReport({
                 simulationSummary: `The end-to-end simulation tested all core AI functionalities. ${candidatesToScreen.length} resumes were screened, leading to the autonomous creation of the '${createdRole?.title || 'N/A'}' role. The system then performed deep reviews, matched candidates, and simulated a hiring override to trigger its self-correction learning mechanism.`,
                 detailedProcessLog: currentSimulationLog,
-                candidateOutcomesAnalysis: currentCandidates.map(c => ({ candidateName: c.name, outcomeDetails: `Final status: ${c.status}. Role: ${c.role}. Initial Score: ${c.aiInitialScore || 'N/A'}.` })),
+                candidateOutcomesAnalysis: finalCandidates.map(c => ({ candidateName: c.name, outcomeDetails: `Final status: ${c.status}. Role: ${c.role}. Initial Score: ${c.aiInitialScore || 'N/A'}.` })),
                 roleManagementInsights: createdRole ? [`The AI successfully identified a need and created the '${createdRole.title}' role.`] : ["No new role was created due to insufficient data."],
                 systemLearningAndFutureImprovements: learningEventCandidate ? `The system successfully triggered a self-correction event based on the simulated hiring of '${learningEventCandidate.name}'. Check the Analytics tab for a new rubric refinement suggestion.` : "No self-correction event was triggered."
             });
@@ -593,5 +626,3 @@ export function AstraHirePage() {
     </div>
   );
 }
-
-    
