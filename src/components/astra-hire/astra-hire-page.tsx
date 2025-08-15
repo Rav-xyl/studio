@@ -16,6 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import { proactiveCandidateSourcing } from '@/ai/flows/proactive-candidate-sourcing';
 import { analyzeHiringOverride } from '@/ai/flows/self-correcting-rubric';
 import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
+import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
+import { nanoid } from 'nanoid';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -100,7 +102,7 @@ export function AstraHirePage() {
       if (!newFilesMap.has(file.name) && !candidates.some(c => c.name === file.name)) {
         newFilesMap.set(file.name, file);
         const newCandidate: Candidate = {
-          id: `cand-${Date.now()}-${Math.random()}`,
+          id: `cand-${nanoid(10)}`,
           name: file.name,
           avatarUrl: '',
           role: 'New Upload',
@@ -308,7 +310,7 @@ export function AstraHirePage() {
             });
 
             const newCandidates: Candidate[] = result.sourcedCandidates.map(sc => ({
-                id: `cand-${Date.now()}-${Math.random()}`,
+                id: `cand-${nanoid(10)}`,
                 name: sc.name,
                 avatarUrl: '',
                 role: sc.role,
@@ -385,64 +387,118 @@ export function AstraHirePage() {
             currentSimulationLog.push({ step, description });
         };
 
-        try {
-            log("Start Simulation", "Beginning end-to-end test of the hiring pipeline.");
+        const getCandidatesByStatus = (status: KanbanStatus, currentCandidates: Candidate[]) => currentCandidates.filter(c => c.status === status);
 
-            // Phase 1: Screening
-            setLoadingText("Phase 1/4: Screening all new resumes...");
-            const candidatesToScreen = candidates.filter(c => c.status === 'Uploaded');
+        try {
+            log("Start Simulation", "Beginning enhanced end-to-end test of the hiring pipeline.");
+
+            // --- Phase 1: Screening ---
+            setLoadingText("Phase 1/5: Screening all new resumes...");
+            let currentCandidates = candidates;
+            let candidatesToScreen = getCandidatesByStatus('Uploaded', currentCandidates);
             if (candidatesToScreen.length > 0) {
                 await handleScreenResumes();
+                // We need to get the updated state of candidates after the async operation
+                currentCandidates = await new Promise(resolve => {
+                    setCandidates(prev => {
+                        resolve(prev);
+                        return prev;
+                    });
+                });
                 log("Screening", `Screening completed for ${candidatesToScreen.length} candidates.`);
             } else {
                 log("Screening", "No new resumes to screen. Skipped.");
             }
-            await new Promise(r => setTimeout(r, 500));
 
-            // Phase 2: Deep Review
-            setLoadingText("Phase 2/4: Arya is performing deep reviews...");
-            const candidatesToReview = candidates.filter(c => c.status === 'Manual Review');
-            if (candidatesToReview.length > 0) {
+            // --- Phase 2: Autonomous Role Creation ---
+            setLoadingText("Phase 2/5: AI is analyzing talent pool to suggest and create a new role...");
+            const candidatesForSuggestion = getCandidatesByStatus('Screening', currentCandidates);
+            let createdRole: JobRole | null = null;
+            if (candidatesForSuggestion.length > 0) {
+                const suggestionResults = await Promise.all(candidatesForSuggestion.map(c => suggestRoleMatches({
+                    candidateName: c.name,
+                    candidateSkills: c.skills.join(', '),
+                    candidateNarrative: c.narrative,
+                    candidateInferredSkills: c.inferredSkills.join(', ')
+                })));
+                const allRoles = suggestionResults.flatMap(r => r.roles);
+                const roleCounts = allRoles.reduce((acc, role) => {
+                    acc[role.roleTitle] = (acc[role.roleTitle] || 0) + 1;
+                    return acc;
+                }, {} as Record<string, number>);
+
+                const mostSuggestedRoleTitle = Object.keys(roleCounts).reduce((a, b) => roleCounts[a] > roleCounts[b] ? a : b, '');
+                
+                if (mostSuggestedRoleTitle) {
+                    const jdResult = await synthesizeJobDescription({ jobTitle: mostSuggestedRoleTitle, companyInformation: "A fast-growing tech startup in the AI space." });
+                    createdRole = {
+                        id: `role-${nanoid(10)}`,
+                        title: mostSuggestedRoleTitle,
+                        department: "AI Suggested",
+                        openings: 1,
+                        description: jdResult.jobDescription,
+                    };
+                    setRoles(prev => [...prev, createdRole!]);
+                    log("Autonomous Role Creation", `AI identified a talent cluster and created a new role: '${mostSuggestedRoleTitle}'.`);
+                } else {
+                    log("Autonomous Role Creation", "Not enough data to suggest and create a new role. Skipped.");
+                }
+            } else {
+                 log("Autonomous Role Creation", "No screened candidates to analyze for role creation. Skipped.");
+            }
+
+
+            // --- Phase 3: Deep Review ---
+            setLoadingText("Phase 3/5: Arya is performing deep reviews...");
+            let candidatesToReview = getCandidatesByStatus('Manual Review', currentCandidates);
+             if (candidatesToReview.length > 0) {
                 await handleAryaReviewAll();
+                currentCandidates = await new Promise(resolve => { setCandidates(prev => { resolve(prev); return prev; }); });
                 log("AI Deep Review", `Deep review completed for ${candidatesToReview.length} candidates.`);
             } else {
                 log("AI Deep Review", "No candidates in 'Manual Review'. Skipped.");
             }
-            await new Promise(r => setTimeout(r, 500));
 
-            // Phase 3: Role Matching
-            setLoadingText("Phase 3/4: Matching candidates to roles...");
-            let testRole = roles.find(r => r.title === "Software Engineer");
-            if (!testRole) {
-                testRole = { id: 'test-role-1', title: 'Software Engineer', department: 'Engineering', openings: 1, description: "Develop and maintain web applications using React and Node.js." };
-                setRoles(prev => [...prev, testRole!]);
-                log("Role Management", "Created a temporary 'Software Engineer' role for testing.");
+            // --- Phase 4: Role Matching & Self-Correction Simulation ---
+            setLoadingText("Phase 4/5: Matching roles and simulating learning event...");
+            let matchedCount = 0;
+            let learningEventCandidate: Candidate | null = null;
+            
+            // First, find a rejected candidate to 'hire' for the learning event
+            const rejectedCandidates = getCandidatesByStatus('Rejected', currentCandidates);
+            if (rejectedCandidates.length > 0) {
+                learningEventCandidate = rejectedCandidates[0];
             }
-            await handleFindPotentialRoles();
-            log("Role Matching", "Attempted to match all screened candidates to available roles.");
-            await new Promise(r => setTimeout(r, 500));
 
-            // Phase 4: Simulate Hires
-            setLoadingText("Phase 4/4: Simulating final hiring decisions...");
-            let hiredCount = 0;
-            setCandidates(prev => prev.map(c => {
-                if (c.status === 'Interview' && hiredCount < 2) {
-                    hiredCount++;
-                    return { ...c, status: 'Hired' };
+            currentCandidates = currentCandidates.map(c => {
+                if (c.id === learningEventCandidate?.id) {
+                    matchedCount++;
+                    return { ...c, status: 'Hired' as KanbanStatus, role: createdRole?.title || "Simulated Role" };
+                }
+                if (c.status === 'Screening' && createdRole) {
+                    matchedCount++;
+                    return { ...c, status: 'Interview' as KanbanStatus, role: createdRole.title };
                 }
                 return c;
-            }));
-            log("Simulate Hires", `Automatically moved ${hiredCount} candidates from 'Interview' to 'Hired' to test final stage logic.`);
-            await new Promise(r => setTimeout(r, 500));
+            });
+            setCandidates(currentCandidates);
+            log("Role Matching", `Matched ${matchedCount} candidates to the new role.`);
 
-            // Final Report Generation
-            setLoadingText("Generating SAARTHI Report...");
+            if (learningEventCandidate) {
+                await handleUpdateCandidate(currentCandidates.find(c => c.id === learningEventCandidate!.id)!);
+                log("Self-Correction Simulation", `Simulated a human override by hiring a rejected candidate ('${learningEventCandidate.name}'). The AI will now analyze this decision to refine its rubric.`);
+            } else {
+                 log("Self-Correction Simulation", `No rejected candidates were available to simulate a learning event.`);
+            }
+
+            // --- Phase 5: Finalize & Generate Report ---
+            setLoadingText("Phase 5/5: Generating SAARTHI Report...");
             setLastSaarthiReport({
-                simulationSummary: "The end-to-end simulation tested all core AI functionalities, from resume ingestion to final hiring. The system automatically screened, reviewed, matched, and hired candidates. This report details the outcomes and confirms system health.",
+                simulationSummary: `The end-to-end simulation tested all core AI functionalities. ${candidatesToScreen.length} resumes were screened, leading to the autonomous creation of the '${createdRole?.title || 'N/A'}' role. The system then performed deep reviews, matched candidates, and simulated a hiring override to trigger its self-correction learning mechanism.`,
                 detailedProcessLog: currentSimulationLog,
-                candidateOutcomesAnalysis: candidates.map(c => ({ candidateName: c.name, outcomeDetails: `Final status: ${c.status}. Score: ${c.aiInitialScore || 'N/A'}.` })),
-                roleManagementInsights: ["The simulation successfully used a test role to validate the matching algorithm.", "This process confirms that candidates correctly move through the pipeline stages as intended by the AI logic."],
-                systemLearningAndFutureImprovements: "This full pipeline test provides a baseline for system performance. Each step's success or failure can be analyzed from this report to target and fix specific functionalities, ensuring the entire system works cohesively."
+                candidateOutcomesAnalysis: currentCandidates.map(c => ({ candidateName: c.name, outcomeDetails: `Final status: ${c.status}. Role: ${c.role}. Initial Score: ${c.aiInitialScore || 'N/A'}.` })),
+                roleManagementInsights: createdRole ? [`The AI successfully identified a need and created the '${createdRole.title}' role.`] : ["No new role was created due to insufficient data."],
+                systemLearningAndFutureImprovements: learningEventCandidate ? `The system successfully triggered a self-correction event based on the simulated hiring of '${learningEventCandidate.name}'. Check the Analytics tab for a new rubric refinement suggestion.` : "No self-correction event was triggered."
             });
             setIsSaarthiReportOpen(true);
 
@@ -537,3 +593,5 @@ export function AstraHirePage() {
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 export type KanbanStatus = 'Uploaded' | 'Processing' | 'Screening' | 'Manual Review' | 'Interview' | 'Offer' | 'Hired' | 'Rejected' | 'Error';
 
 export interface Candidate {
@@ -50,3 +51,5 @@ export interface RubricChange {
   reason: string;
   status: 'Pending' | 'Approved' | 'Rejected';
 }
+
+    
