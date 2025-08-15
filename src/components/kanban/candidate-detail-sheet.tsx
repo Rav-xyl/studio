@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2, FileSignature, Award, ShieldCheck, Upload, Briefcase } from 'lucide-react';
+import { Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2, FileSignature, Award, ShieldCheck, Upload, Briefcase, GitMerge } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Textarea } from '../ui/textarea';
@@ -31,6 +31,7 @@ import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 import { Input } from '../ui/input';
+import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
 
 
 interface CandidateDetailSheetProps {
@@ -58,7 +59,7 @@ export function CandidateDetailSheet({
 
   if (!candidate) return null;
 
-  const handleGenerateClick = async (type: 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'finalReview') => {
+  const handleGenerateClick = async (type: 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'finalReview' | 'roleMatches') => {
     if (!candidate) return;
 
     if (type === 'finalReview' && !reportFile) {
@@ -117,6 +118,13 @@ export function CandidateDetailSheet({
                 candidateNarrative: candidate.narrative,
                 inferredSoftSkills: candidate.inferredSkills,
                 companyValues: "Innovation, Collaboration, Customer-Centricity, Fast-Paced Growth", // This could be dynamic in a real app
+            });
+        } else if (type === 'roleMatches') {
+            result = await suggestRoleMatches({
+                candidateName: candidate.name,
+                candidateSkills: candidate.skills.join(', '),
+                candidateNarrative: candidate.narrative,
+                candidateInferredSkills: candidate.inferredSkills.join(', '),
             });
         } else if (type === 'finalReview' && reportFile) {
           const reader = new FileReader();
@@ -193,6 +201,7 @@ export function CandidateDetailSheet({
   const onboardingPlan = generatedData.onboarding;
   const cultureFit = generatedData.cultureFit;
   const finalReview = generatedData.finalReview;
+  const roleMatches = generatedData.roleMatches?.roles || [];
 
 
   const renderOnboardingPlan = () => {
@@ -278,7 +287,31 @@ export function CandidateDetailSheet({
                 </Card>
               </TabsContent>
 
-              <TabsContent value="ai-analysis" className="mt-4">
+              <TabsContent value="ai-analysis" className="mt-4 space-y-4">
+                <Card className='glass-card'>
+                    <CardHeader>
+                        <CardTitle className='flex items-center gap-2 text-xl'><GitMerge className='h-5 w-5 text-primary' /> Potential Role Matches</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className='text-sm text-muted-foreground mb-4'>Discover other roles this candidate might be a great fit for, highlighting their versatility.</p>
+                        {roleMatches.length > 0 ? (
+                            <div className='space-y-3'>
+                                {roleMatches.map((match: any, index: number) => (
+                                    <div key={index} className="p-3 rounded-md border border-dashed border-accent">
+                                        <p className="font-semibold text-accent">{match.roleTitle}</p>
+                                        <p className="text-xs text-muted-foreground">{match.rationale}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className='text-sm text-muted-foreground text-center p-4'>Click the button to generate potential role matches.</p>
+                        )}
+                        <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('roleMatches')} disabled={isGenerating.roleMatches}>
+                            {isGenerating.roleMatches ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                            Suggest Potential Roles
+                        </Button>
+                    </CardContent>
+                </Card>
                 <Card className='glass-card'>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><Scan className='h-5 w-5 text-primary' /> AI-Assisted Review</CardTitle>
@@ -299,7 +332,7 @@ export function CandidateDetailSheet({
                     </Button>
                   </CardContent>
                 </Card>
-                <Card className='glass-card mt-4'>
+                <Card className='glass-card'>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><ShieldCheck className='h-5 w-5 text-primary' /> Culture Fit Synthesis</CardTitle>
                   </CardHeader>
@@ -326,7 +359,7 @@ export function CandidateDetailSheet({
                     </Button>
                   </CardContent>
                 </Card>
-                <Card className='glass-card mt-4'>
+                <Card className='glass-card'>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><Star className='h-5 w-5 text-primary' /> Skill Gap Analysis</CardTitle>
                   </CardHeader>
