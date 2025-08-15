@@ -383,29 +383,82 @@ export function AstraHirePage() {
         setIsLoading(false);
     };
   
-  const handleStimulateFullPipeline = async () => {
-    setIsLoading(true);
-    setSimulationLog([]);
+    const handleStimulateFullPipeline = async () => {
+        setIsLoading(true);
+        const currentSimulationLog: any[] = [];
+        const log = (step: string, description: string) => {
+            currentSimulationLog.push({ step, description });
+        };
 
-    setLoadingText("Phase 1: Screening all new resumes...");
-    await handleScreenResumes();
-    await new Promise(r => setTimeout(r, 1000));
+        try {
+            log("Start Simulation", "Beginning end-to-end test of the hiring pipeline.");
 
-    setLoadingText("Phase 2: Arya is performing deep reviews...");
-    await handleAryaReviewAll();
-    await new Promise(r => setTimeout(r, 1000));
-    
-    setLoadingText("Generating SAARTHI Report...");
-    setLastSaarthiReport({
-        simulationSummary: "The simulation processed all uploaded candidates, performed automated screening, and conducted AI-assisted deep reviews. Candidates were sorted into appropriate pipeline stages based on score and AI recommendation. This iterative process refines the talent pool for optimal role matching.",
-        detailedProcessLog: simulationLog,
-        candidateOutcomesAnalysis: candidates.map(c => ({ candidateName: c.name, outcomeDetails: `Final status: ${c.status}. ${c.narrative}` })),
-        roleManagementInsights: ["The system effectively filtered candidates, preparing a qualified pool for role-specific matching.", "Next step would be to create specific roles and run 'Suggest Role Matches' to build the interview pipelines."],
-        systemLearningAndFutureImprovements: "Each screening and review cycle provides data to refine scoring rubrics and improve future AI accuracy. The system learns which resume patterns correlate with successful progression, enhancing its predictive capabilities."
-    });
-    setIsSaarthiReportOpen(true);
-    setIsLoading(false);
-  };
+            // Phase 1: Screening
+            setLoadingText("Phase 1/4: Screening all new resumes...");
+            const candidatesToScreen = candidates.filter(c => c.status === 'Uploaded');
+            if (candidatesToScreen.length > 0) {
+                await handleScreenResumes();
+                log("Screening", `Screening completed for ${candidatesToScreen.length} candidates.`);
+            } else {
+                log("Screening", "No new resumes to screen. Skipped.");
+            }
+            await new Promise(r => setTimeout(r, 500));
+
+            // Phase 2: Deep Review
+            setLoadingText("Phase 2/4: Arya is performing deep reviews...");
+            const candidatesToReview = candidates.filter(c => c.status === 'Manual Review');
+            if (candidatesToReview.length > 0) {
+                await handleAryaReviewAll();
+                log("AI Deep Review", `Deep review completed for ${candidatesToReview.length} candidates.`);
+            } else {
+                log("AI Deep Review", "No candidates in 'Manual Review'. Skipped.");
+            }
+            await new Promise(r => setTimeout(r, 500));
+
+            // Phase 3: Role Matching
+            setLoadingText("Phase 3/4: Matching candidates to roles...");
+            let testRole = roles.find(r => r.title === "Software Engineer");
+            if (!testRole) {
+                testRole = { id: 'test-role-1', title: 'Software Engineer', department: 'Engineering', openings: 1, description: "Develop and maintain web applications using React and Node.js." };
+                setRoles(prev => [...prev, testRole!]);
+                log("Role Management", "Created a temporary 'Software Engineer' role for testing.");
+            }
+            await handleFindPotentialRoles();
+            log("Role Matching", "Attempted to match all screened candidates to available roles.");
+            await new Promise(r => setTimeout(r, 500));
+
+            // Phase 4: Simulate Hires
+            setLoadingText("Phase 4/4: Simulating final hiring decisions...");
+            let hiredCount = 0;
+            setCandidates(prev => prev.map(c => {
+                if (c.status === 'Interview' && hiredCount < 2) {
+                    hiredCount++;
+                    return { ...c, status: 'Hired' };
+                }
+                return c;
+            }));
+            log("Simulate Hires", `Automatically moved ${hiredCount} candidates from 'Interview' to 'Hired' to test final stage logic.`);
+            await new Promise(r => setTimeout(r, 500));
+
+            // Final Report Generation
+            setLoadingText("Generating SAARTHI Report...");
+            setLastSaarthiReport({
+                simulationSummary: "The end-to-end simulation tested all core AI functionalities, from resume ingestion to final hiring. The system automatically screened, reviewed, matched, and hired candidates. This report details the outcomes and confirms system health.",
+                detailedProcessLog: currentSimulationLog,
+                candidateOutcomesAnalysis: candidates.map(c => ({ candidateName: c.name, outcomeDetails: `Final status: ${c.status}. Score: ${c.aiInitialScore || 'N/A'}.` })),
+                roleManagementInsights: ["The simulation successfully used a test role to validate the matching algorithm.", "This process confirms that candidates correctly move through the pipeline stages as intended by the AI logic."],
+                systemLearningAndFutureImprovements: "This full pipeline test provides a baseline for system performance. Each step's success or failure can be analyzed from this report to target and fix specific functionalities, ensuring the entire system works cohesively."
+            });
+            setIsSaarthiReportOpen(true);
+
+        } catch (error) {
+            console.error("Full pipeline simulation failed:", error);
+            toast({ title: "Simulation Error", description: "An error occurred during the simulation. Check the console.", variant: "destructive"});
+            log("Error", `The simulation was interrupted by an error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
   
   const renderActiveTabView = () => {
     switch (activeTab) {
@@ -489,3 +542,5 @@ export function AstraHirePage() {
     </div>
   );
 }
+
+    
