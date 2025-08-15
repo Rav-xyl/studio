@@ -30,8 +30,11 @@ export function RolesTab({ roles, setRoles, onViewCandidates, onReEngage }: Role
     return (
         <div className="fade-in">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold text-slate-100">Client Roles & Job Descriptions</h2>
-                <Button onClick={() => setIsJdDialogOpen(true)}>
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tighter">Client Roles & Job Descriptions</h2>
+                    <p className="text-muted-foreground mt-1">Manage and create new job roles for your clients.</p>
+                </div>
+                <Button onClick={() => setIsJdDialogOpen(true)} className='bg-foreground text-background hover:bg-foreground/90'>
                     <PlusCircle className="mr-2 h-5 w-5" />
                     Synthesize New JD
                 </Button>
@@ -44,10 +47,10 @@ export function RolesTab({ roles, setRoles, onViewCandidates, onReEngage }: Role
                     ))}
                 </div>
             ) : (
-                <div className="text-center py-16 glass-card rounded-lg">
-                    <FolderSearch className="w-16 h-16 mx-auto text-slate-500 mb-4" />
-                    <h3 className="text-xl font-semibold text-slate-300">No client roles defined yet.</h3>
-                    <p className="text-slate-400 mt-2">Use the button above to synthesize a new Job Description.</p>
+                <div className="text-center py-16 bg-secondary/30 rounded-lg">
+                    <FolderSearch className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-xl font-semibold text-foreground">No client roles defined yet.</h3>
+                    <p className="text-muted-foreground mt-2">Use the button above to synthesize a new Job Description.</p>
                 </div>
             )}
             <GenerateJdDialog open={isJdDialogOpen} onOpenChange={setIsJdDialogOpen} onSave={handleAddRole} />

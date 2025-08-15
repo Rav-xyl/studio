@@ -24,11 +24,11 @@ const getInitials = (name: string) => {
 const StatusInfo = ({ status, candidate }: { status: string, candidate: Candidate }) => {
     switch (status) {
         case 'Uploaded': return <><Clock4 className="h-3 w-3"/><span>Ready for screening</span></>;
-        case 'Screening': return <><CheckCircle className="h-3 w-3 text-green-500"/><span>Screening passed</span></>;
-        case 'Manual Review': return <><FileQuestion className="h-3 w-3 text-yellow-500"/><span>Needs deep review</span></>;
-        case 'Interview': return <><UserCheck className="h-3 w-3 text-blue-500"/><span>Ready for interview</span></>;
-        case 'Rejected': return <><UserX className="h-3 w-3 text-red-500"/><span>Rejected</span></>;
-        case 'Error': return <><AlertCircle className="h-3 w-3 text-red-500"/><span>Processing Error</span></>;
+        case 'Screening': return <><CheckCircle className="h-3 w-3 text-green-400"/><span>Screening passed</span></>;
+        case 'Manual Review': return <><FileQuestion className="h-3 w-3 text-yellow-400"/><span>Needs deep review</span></>;
+        case 'Interview': return <><UserCheck className="h-3 w-3 text-blue-400"/><span>Ready for interview</span></>;
+        case 'Rejected': return <><UserX className="h-3 w-3 text-red-400"/><span>Rejected</span></>;
+        case 'Error': return <><AlertCircle className="h-3 w-3 text-red-400"/><span>Processing Error</span></>;
         case 'Processing': return <><Loader2 className="h-3 w-3 animate-spin"/><span>Processing...</span></>;
         default: return <><Clock className='h-3 w-3'/><span>{candidate.lastUpdated}</span></>;
     }
@@ -48,14 +48,14 @@ export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
       ref={drag}
       onClick={onClick}
       className={cn(
-        'glass-card cursor-pointer hover:border-primary/80 transition-all',
-        isDragging ? 'opacity-50' : 'opacity-100',
+        'bg-secondary/50 cursor-pointer hover:border-foreground/20 transition-all border border-transparent',
+        isDragging ? 'opacity-30' : 'opacity-100',
         className
         )}
     >
-      <CardContent className="p-4">
+      <CardContent className="p-3">
         <div className="flex items-start gap-3">
-          <Avatar className="h-10 w-10 border">
+          <Avatar className="h-10 w-10 border-2 border-border">
             <AvatarImage src={candidate.avatarUrl} alt={candidate.name} data-ai-hint="person" />
             <AvatarFallback>{getInitials(candidate.name)}</AvatarFallback>
           </Avatar>
@@ -66,10 +66,10 @@ export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
         </div>
         <div className="mt-3 flex flex-wrap gap-1">
           {candidate.skills.slice(0, 3).map((skill) => (
-            <Badge key={skill} variant="secondary">{skill}</Badge>
+            <Badge key={skill} variant="secondary" className='bg-background/40 border-border'>{skill}</Badge>
           ))}
           {candidate.skills.length > 3 && (
-            <Badge variant="secondary">+{candidate.skills.length - 3}</Badge>
+            <Badge variant="secondary" className='bg-background/40 border-border'>+{candidate.skills.length - 3}</Badge>
           )}
         </div>
         <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">

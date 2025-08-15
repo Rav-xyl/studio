@@ -572,12 +572,12 @@ export function AstraHirePage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-10">
        {isLoading && (
-            <div className="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center z-50">
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
                 <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="animate-spin h-10 w-10 text-primary" />
-                    <p className="text-slate-300">{loadingText}</p>
+                    <Loader2 className="animate-spin h-10 w-10 text-foreground" />
+                    <p className="text-muted-foreground">{loadingText}</p>
                 </div>
             </div>
         )}
@@ -596,21 +596,21 @@ export function AstraHirePage() {
           }
       }} />
       <main>
-        <div className="border-b border-slate-700 mb-6">
-          <nav className="flex -mb-px">
-            <button
-              className={`tab-btn ${activeTab === 'roles' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('roles'); setFilteredRole(null); }}
-            >
-              <Briefcase className="inline-block w-4 h-4 mr-2" />
-              Client Roles
-            </button>
+        <div className="border-b border-border mb-6">
+          <nav className="flex space-x-2">
             <button
               className={`tab-btn ${activeTab === 'pool' ? 'active' : ''}`}
               onClick={() => setActiveTab('pool')}
             >
               <Users className="inline-block w-4 h-4 mr-2" />
               Candidate Pool
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'roles' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('roles'); setFilteredRole(null); }}
+            >
+              <Briefcase className="inline-block w-4 h-4 mr-2" />
+              Client Roles
             </button>
             <button
               className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}

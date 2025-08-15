@@ -25,9 +25,9 @@ export function KanbanColumn({ title, candidates, onCardClick, onUpdateCandidate
 
 
   return (
-    <div ref={drop} className={`flex flex-col rounded-lg flex-shrink-0 w-[300px] transition-colors ${isOver ? 'bg-primary/20' : 'bg-secondary/30'}`}>
+    <div ref={drop} className={`flex flex-col rounded-lg flex-shrink-0 w-[300px] transition-colors ${isOver ? 'bg-secondary' : 'bg-secondary/30'}`}>
       <div className="p-3 sticky top-0 bg-secondary/30 backdrop-blur-sm z-10">
-        <h3 className="font-semibold text-foreground">
+        <h3 className="font-semibold text-foreground tracking-tight">
           {title} <span className="text-sm font-normal text-muted-foreground">{candidates.length}</span>
         </h3>
       </div>
