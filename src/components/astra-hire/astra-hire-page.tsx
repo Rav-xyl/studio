@@ -17,6 +17,7 @@ import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
 import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
 import { analyzeHiringOverride } from '@/ai/flows/self-correcting-rubric';
 import { proactiveCandidateSourcing } from '@/ai/flows/proactive-candidate-sourcing';
+import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -287,11 +288,65 @@ export function AstraHirePage() {
         setFilteredRole(role);
         setActiveTab('pool');
     };
+
+    const handleReEngageForRole = async (role: JobRole) => {
+        setIsLoading(true);
+        setLoadingText(`Scanning for archived candidates for ${role.title}...`);
+        
+        const archivedCandidates = candidates.filter(c => c.archived);
+
+        if (archivedCandidates.length === 0) {
+            toast({
+                title: 'No Archived Candidates',
+                description: 'There are no archived candidates to re-engage.',
+            });
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            const reEngagePromises = archivedCandidates.map(c => 
+                reEngageCandidate({
+                    candidateName: c.name,
+                    candidateSkills: c.skills,
+                    candidateNarrative: c.narrative,
+                    newJobTitle: role.title,
+                    newJobDescription: role.description,
+                    companyName: "AstraHire"
+                }).then(result => ({ ...result, candidate: c }))
+            );
+            
+            const results = await Promise.all(reEngagePromises);
+            const strongMatches = results.filter(r => r.isMatch);
+
+            if (strongMatches.length > 0) {
+                 toast({
+                    title: `Found ${strongMatches.length} Potential Matches!`,
+                    description: `Found ${strongMatches.map(m => m.candidate.name).join(', ')}. Check the console for details.`,
+                });
+                console.log("Re-engagement opportunities:", strongMatches);
+            } else {
+                toast({
+                    title: 'No Matches Found',
+                    description: `The AI did not find any strong matches in the archives for the ${role.title} role.`,
+                });
+            }
+        } catch (error) {
+            console.error('Re-engagement failed:', error);
+            toast({
+                title: 'Re-engagement Error',
+                description: 'An AI error occurred. Please check the console.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
   
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
-        return <RolesTab roles={roles} setRoles={setRoles} onViewCandidates={handleViewCandidatesForRole} />;
+        return <RolesTab roles={roles} setRoles={setRoles} onViewCandidates={handleViewCandidatesForRole} onReEngage={handleReEngageForRole} />;
       case 'pool':
         return (
             <CandidatePoolTab 

@@ -11,10 +11,11 @@ interface RolesTabProps {
     roles: JobRole[];
     setRoles: React.Dispatch<React.SetStateAction<JobRole[]>>;
     onViewCandidates: (role: JobRole) => void;
+    onReEngage: (role: JobRole) => void;
 }
 
 
-export function RolesTab({ roles, setRoles, onViewCandidates }: RolesTabProps) {
+export function RolesTab({ roles, setRoles, onViewCandidates, onReEngage }: RolesTabProps) {
     const [isJdDialogOpen, setIsJdDialogOpen] = useState(false);
 
     const handleAddRole = (newRole: Omit<JobRole, 'id' | 'openings'>) => {
@@ -46,6 +47,7 @@ export function RolesTab({ roles, setRoles, onViewCandidates }: RolesTabProps) {
                             key={role.id} 
                             role={role} 
                             onViewCandidates={onViewCandidates} 
+                            onReEngage={onReEngage}
                             style={{ '--stagger-index': index } as React.CSSProperties}
                         />
                     ))}

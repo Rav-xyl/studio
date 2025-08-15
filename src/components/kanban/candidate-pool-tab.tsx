@@ -11,10 +11,16 @@ import { useState, useMemo } from 'react';
 import type { Candidate, KanbanStatus, JobRole } from '@/lib/types';
 import { KanbanColumn } from './kanban-column';
 import { CandidateDetailSheet } from './candidate-detail-sheet';
-import { KANBAN_COLUMNS } from '@/lib/mock-data';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { BulkUploadDialog } from './bulk-upload-dialog';
+
+const KANBAN_COLUMNS: KanbanStatus[] = [
+  'Sourcing',
+  'Screening',
+  'Interview',
+  'Hired',
+];
 
 interface CandidatePoolTabProps {
     candidates: Candidate[];
@@ -97,7 +103,7 @@ export function CandidatePoolTab({
         </div>
         
         <div className="flex gap-6 overflow-x-auto pb-4 -mx-10 px-10">
-            {columns.map((col) => (
+            {columns.map((col, i) => (
             <KanbanColumn
                 key={col.title}
                 title={col.title}
