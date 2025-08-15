@@ -16,6 +16,7 @@ import { nanoid } from 'nanoid';
 import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
 import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
 import { analyzeHiringOverride } from '@/ai/flows/self-correcting-rubric';
+import { proactiveCandidateSourcing } from '@/ai/flows/proactive-candidate-sourcing';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -68,7 +69,7 @@ export function AstraHirePage() {
           avatarUrl: '',
           role: 'New Upload',
           skills: [],
-          status: 'Sourcing', // New simplified status
+          status: 'Sourcing', 
           narrative: `Resume file: ${file.name}`,
           inferredSkills: [],
           lastUpdated: 'Just now',
@@ -84,7 +85,6 @@ export function AstraHirePage() {
     if (addedCount > 0) {
       toast({ title: "Upload Successful", description: `${addedCount} new resumes added. Screening automatically...` });
       
-      // Autonomous screening
       setIsLoading(true);
       setLoadingText(`Screening ${newCandidates.length} new resumes...`);
 
@@ -99,7 +99,7 @@ export function AstraHirePage() {
           return {
             ...candidate,
             ...result.extractedInformation,
-            status: 'Screening' as KanbanStatus, // Move to Screening after processing
+            status: 'Screening' as KanbanStatus,
             aiInitialScore: result.candidateScore,
             lastUpdated: 'Just now'
           };
@@ -134,14 +134,39 @@ export function AstraHirePage() {
         try {
             log("Start Simulation", "Beginning autonomous pipeline simulation.");
             
+            if (currentCandidates.filter(c => c.status === 'Sourcing' || c.status === 'Screening').length === 0) {
+              setLoadingText("Phase 1/6: No candidates found. Sourcing talent...");
+              log("Proactive Sourcing", "Candidate pool is empty. Generating fictional candidates to demonstrate pipeline.");
+              const sourcingResult = await proactiveCandidateSourcing({
+                  openRoles: roles.length > 0 ? roles : [{ title: "Senior Software Engineer", description: "Lead development of our core platform." }],
+                  numberOfCandidates: 5
+              });
+
+              const sourcedCandidates: Candidate[] = sourcingResult.sourcedCandidates.map(sc => ({
+                  id: `cand-${nanoid(10)}`,
+                  name: sc.name,
+                  role: sc.role,
+                  skills: sc.skills,
+                  narrative: sc.narrative,
+                  inferredSkills: sc.inferredSkills,
+                  status: 'Screening', // Start them at screening
+                  aiInitialScore: Math.floor(Math.random() * 20) + 75, // Give them a good score
+                  avatarUrl: '',
+                  lastUpdated: 'Just now'
+              }));
+              currentCandidates = [...currentCandidates, ...sourcedCandidates];
+              setCandidates(currentCandidates);
+              log("Proactive Sourcing Complete", `Generated ${sourcedCandidates.length} new candidates.`);
+            }
+
             // 1. Genuine AI Screening
-            setLoadingText("Phase 1/5: Screening candidates...");
+            setLoadingText("Phase 2/6: Screening candidates...");
             const candidatesToScreen = currentCandidates.filter(c => c.status === 'Sourcing');
             if (candidatesToScreen.length > 0) {
                 log("Screening", `Found ${candidatesToScreen.length} candidates in Sourcing. Invoking screening AI...`);
                 const screeningPromises = candidatesToScreen.map(async (c) => {
                     const file = uploadedFiles.get(c.name);
-                    if (!file) return c;
+                    if (!file) return { ...c, status: 'Screening' as KanbanStatus, aiInitialScore: 70, narrative: "This is a simulated candidate profile for demonstration." };
                     const resumeDataUri = await convertFileToDataUri(file);
                     const result = await automatedResumeScreening({ resumeDataUri });
                     return { ...c, ...result.extractedInformation, status: 'Screening' as KanbanStatus, aiInitialScore: result.candidateScore };
@@ -155,7 +180,7 @@ export function AstraHirePage() {
             }
 
             // 2. Autonomous Role Creation
-            setLoadingText("Phase 2/5: Analyzing talent pool to create role...");
+            setLoadingText("Phase 3/6: Analyzing talent pool to create role...");
             const topCandidatesForRoleGen = currentCandidates.filter(c => c.status === 'Screening').sort((a,b) => (b.aiInitialScore || 0) - (a.aiInitialScore || 0)).slice(0, 3);
             if(topCandidatesForRoleGen.length > 0) {
                 const roleSuggestionInput = topCandidatesForRoleGen[0];
@@ -186,7 +211,7 @@ export function AstraHirePage() {
                 log("Role Synthesis Complete", `Successfully created new role: '${newRole.title}'.`);
 
                 // 3. Intelligent Candidate Matching
-                setLoadingText("Phase 3/5: Matching candidates to new role...");
+                setLoadingText("Phase 4/6: Matching candidates to new role...");
                 const candidatesToReview = currentCandidates.filter(c => c.status === 'Screening').slice(0, 5); // Review top 5
                 log("Candidate Review", `Reviewing ${candidatesToReview.length} screened candidates for the new role.`);
 
@@ -202,7 +227,7 @@ export function AstraHirePage() {
                 log("Candidate Review Complete", `Matched ${matchedCandidates.length} candidates to '${newRole.title}' and moved to 'Interview'.`);
                 
                 // 4. Simulated Hiring & Learning Event
-                setLoadingText("Phase 4/5: Simulating final hire...");
+                setLoadingText("Phase 5/6: Simulating final hire...");
                 const candidateToHire = currentCandidates.find(c => c.status === 'Interview');
                 if (candidateToHire) {
                     candidateToHire.status = 'Hired';
@@ -212,7 +237,7 @@ export function AstraHirePage() {
                     log("Hiring Decision", `Autonomously hired ${candidateToHire.name} for the role of ${candidateToHire.role}.`);
                     
                     // 5. Self-Correction Analysis
-                    setLoadingText("Phase 5/5: Performing self-correction analysis...");
+                    setLoadingText("Phase 6/6: Performing self-correction analysis...");
                     const rubricAnalysis = await analyzeHiringOverride({
                         candidateProfile: {
                             name: candidateToHire.name,
