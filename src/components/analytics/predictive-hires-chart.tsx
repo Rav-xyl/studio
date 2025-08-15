@@ -1,10 +1,18 @@
+
 'use client';
 
 import { Line, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from '../ui/chart';
+import { generatePredictiveAnalysis } from '@/ai/flows/predictive-analytics';
+import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-const data: any[] = [
-  // Data will be populated dynamically
+const historicalData = [
+  { quarter: 'Q1', actual: 45 },
+  { quarter: 'Q2', actual: 55 },
+  { quarter: 'Q3', actual: 70 },
+  { quarter: 'Q4', actual: 80 },
 ];
 
 const chartConfig = {
@@ -18,18 +26,57 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-
 export function PredictiveHiresChart() {
+    const [chartData, setChartData] = useState<any[]>(historicalData);
+    const [isLoading, setIsLoading] = useState(true);
+    const { toast } = useToast();
+
+    useEffect(() => {
+        const fetchPredictions = async () => {
+            setIsLoading(true);
+            try {
+                const result = await generatePredictiveAnalysis({
+                    historicalData: {
+                        hiresPerMonth: [20, 25, 30, 35, 40, 45],
+                        avgTimeToHire: 32,
+                        roleDistribution: { 'Engineering': 15, 'Product': 5, 'Design': 3 }
+                    }
+                });
+                
+                const predictedQuarters = [
+                    { quarter: 'Q1 (Pred)', predicted: result.predictedHiresNextQuarter[0], actual: null },
+                    { quarter: 'Q2 (Pred)', predicted: result.predictedHiresNextQuarter[1], actual: null },
+                    { quarter: 'Q3 (Pred)', predicted: result.predictedHiresNextQuarter[2], actual: null },
+                ];
+                
+                setChartData([...historicalData, ...predictedQuarters]);
+
+                toast({
+                    title: "AI Insight Generated",
+                    description: result.insight,
+                });
+
+            } catch (error) {
+                console.error("Failed to fetch predictions:", error);
+                toast({ title: 'Error', description: 'Could not fetch hiring predictions.', variant: 'destructive'});
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchPredictions();
+    }, [toast]);
+
+
   return (
     <div className="h-[350px]">
-       {data.length === 0 ? (
+       {isLoading ? (
         <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-          No data available to display chart.
+          <Loader2 className="animate-spin h-8 w-8 text-primary"/>
         </div>
       ) : (
       <ChartContainer config={chartConfig} className="w-full h-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
+          <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               dataKey="quarter"
@@ -54,6 +101,7 @@ export function PredictiveHiresChart() {
               stroke="var(--color-actual)"
               strokeWidth={2}
               dot={false}
+              connectNulls
             />
             <Line
               type="monotone"
@@ -61,6 +109,7 @@ export function PredictiveHiresChart() {
               stroke="var(--color-predicted)"
               strokeWidth={2}
               strokeDasharray="5 5"
+              connectNulls
             />
           </LineChart>
         </ResponsiveContainer>

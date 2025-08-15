@@ -3,12 +3,15 @@
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../ui/card";
 import { HiringVelocityChart } from "./hiring-velocity-chart";
-import { BarChart2, Check, TrendingUp, Users } from "lucide-react";
+import { BarChart2, Check, TrendingUp, Users, Map, Loader2 } from "lucide-react";
 import { PredictiveHiresChart } from "./predictive-hires-chart";
 import { RoleDistributionChart } from "./role-distribution-chart";
 import { RubricRefinement } from "../settings/rubric-refinement";
 import { Button } from "../ui/button";
-import type { Candidate, JobRole, RubricChange } from "@/lib/types";
+import type { Candidate, JobRole, RubricChange, TalentHotspot } from "@/lib/types";
+import { generateTalentMap } from "@/ai/flows/talent-mapping";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 interface AnalyticsTabProps {
     candidates: Candidate[];
@@ -18,8 +21,27 @@ interface AnalyticsTabProps {
 }
 
 export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggestedChanges }: AnalyticsTabProps) {
+    const [isMapping, setIsMapping] = useState(false);
+    const [talentMap, setTalentMap] = useState<{ hotspots: TalentHotspot[], recommendation: string} | null>(null);
+    const { toast } = useToast();
 
     const hiredCount = candidates.filter(c => c.status === 'Hired').length;
+
+    const handleGenerateMap = async () => {
+        setIsMapping(true);
+        try {
+            const result = await generateTalentMap({
+                openRoles: roles,
+                internalHiringData: "We have offices in Bangalore and Pune, with most hires in the tech department."
+            });
+            setTalentMap({ hotspots: result.hotspots, recommendation: result.strategicRecommendation });
+        } catch (error) {
+            console.error(error);
+            toast({ title: 'Error', description: 'Could not generate talent map.', variant: 'destructive' });
+        } finally {
+            setIsMapping(false);
+        }
+    }
 
     return (
         <div className="fade-in space-y-6">
@@ -91,13 +113,41 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                        <PredictiveHiresChart />
                     </CardContent>
                 </Card>
-                 <div className="flex items-center justify-center glass-card p-6 rounded-lg">
-                    <div>
-                        <h3 className="text-xl font-semibold mb-2">Global Talent Mapping</h3>
-                        <p className="text-muted-foreground mb-4">Feature coming soon. AI will analyze market data to highlight talent hotspots and emerging skill trends in the Indian job market.</p>
-                        <Button disabled>View Talent Map</Button>
-                    </div>
-                </div>
+                 <Card className="glass-card flex flex-col">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                           <Map className="h-5 w-5 text-primary"/> Global Talent Mapping
+                        </CardTitle>
+                        <CardDescription>AI-analyzed market data to highlight talent hotspots.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-grow">
+                        {isMapping && <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin h-8 w-8 text-primary"/></div>}
+                        {talentMap ? (
+                            <div className="space-y-4">
+                                <div>
+                                    <h4 className="font-semibold">Strategic Recommendation</h4>
+                                    <p className="text-xs text-muted-foreground">{talentMap.recommendation}</p>
+                                </div>
+                                <div>
+                                    <h4 className="font-semibold">Talent Hotspots</h4>
+                                    <ul className="text-xs space-y-1 text-muted-foreground">
+                                        {talentMap.hotspots.map(h => (
+                                            <li key={h.location}><strong>{h.location}:</strong> ~{h.talentCount.toLocaleString()} candidates ({h.topSkills.join(', ')})</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        ) : !isMapping && (
+                            <div className="text-center text-muted-foreground">Click the button to generate a talent map.</div>
+                        )}
+                    </CardContent>
+                     <CardContent>
+                         <Button onClick={handleGenerateMap} disabled={isMapping || roles.length === 0} className="w-full">
+                            {isMapping ? 'Analyzing...' : 'Generate Talent Map'}
+                        </Button>
+                        {roles.length === 0 && <p className="text-xs text-center text-muted-foreground mt-2">Create a role to enable talent mapping.</p>}
+                     </CardContent>
+                </Card>
             </div>
 
             <RubricRefinement suggestedChanges={suggestedChanges} setSuggestedChanges={setSuggestedChanges} />
