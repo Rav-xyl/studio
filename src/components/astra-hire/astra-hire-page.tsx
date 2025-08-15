@@ -13,6 +13,9 @@ import { SaarthiReportModal } from './saarthi-report-modal';
 import { useToast } from '@/hooks/use-toast';
 import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
 import { nanoid } from 'nanoid';
+import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
+import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
+import { analyzeHiringOverride } from '@/ai/flows/self-correcting-rubric';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -120,53 +123,128 @@ export function AstraHirePage() {
   const handleStimulateFullPipeline = async () => {
         setIsLoading(true);
         const currentSimulationLog: any[] = [];
+        let currentCandidates = [...candidates];
+        let currentRoles = [...roles];
+
         const log = (step: string, description: string) => {
+            console.log(`[SAARTHI LOG] ${step}: ${description}`);
             currentSimulationLog.push({ step, description });
         };
 
         try {
             log("Start Simulation", "Beginning autonomous pipeline simulation.");
-
-            setLoadingText("Phase 1/3: Analyzing Sourcing Pool...");
-            let currentCandidates = [...candidates];
-            let candidatesToProcess = currentCandidates.filter(c => c.status === 'Sourcing');
-
-            if (candidatesToProcess.length > 0) {
-                log("Screening", `Found ${candidatesToProcess.length} candidates in Sourcing to be screened.`);
-                // This logic is now part of handleBulkUpload but we simulate it here too
-                const screenedCandidates = candidatesToProcess.map(c => ({...c, status: "Screening" as KanbanStatus, aiInitialScore: (Math.random() * 40 + 60)}));
-                currentCandidates = currentCandidates.map(c => screenedCandidates.find(s => s.id === c.id) || c);
-                setCandidates(currentCandidates);
-                log("Screening Complete", `All Sourcing candidates moved to Screening.`);
-            } else {
-                log("Screening", "No candidates in Sourcing. Skipped.");
-            }
-
-            setLoadingText("Phase 2/3: Autonomous Role Creation & Matching...");
-            let candidatesToMatch = currentCandidates.filter(c => c.status === 'Screening');
-            if (roles.length > 0 && candidatesToMatch.length > 0) {
-                const targetRole = roles[0]; // Match to the first available role
-                const matchedCandidates = candidatesToMatch.map(c => ({...c, status: "Interview" as KanbanStatus, role: targetRole.title }));
-                currentCandidates = currentCandidates.map(c => matchedCandidates.find(m => m.id === c.id) || c);
-                setCandidates(currentCandidates);
-                log("Role Matching", `Matched ${matchedCandidates.length} candidates to role: '${targetRole.title}'.`);
-            } else {
-                log("Role Matching", "No roles or no candidates in Screening to match. Skipped.");
-            }
-
-            setLoadingText("Phase 3/3: Simulating Final Hires...");
-            let candidatesToHire = currentCandidates.filter(c => c.status === 'Interview');
-             if (candidatesToHire.length > 0) {
-                const hiredCandidates = candidatesToHire.slice(0, 1).map(c => ({...c, status: "Hired" as KanbanStatus})); // Hire the first one
-                currentCandidates = currentCandidates.map(c => hiredCandidates.find(h => h.id === c.id) || c);
-                setCandidates(currentCandidates);
-                log("Hiring", `Simulated hiring of ${hiredCandidates.length} candidate(s).`);
-            } else {
-                 log("Hiring", "No candidates in Interview to hire. Skipped.");
-            }
             
+            // 1. Genuine AI Screening
+            setLoadingText("Phase 1/5: Screening candidates...");
+            const candidatesToScreen = currentCandidates.filter(c => c.status === 'Sourcing');
+            if (candidatesToScreen.length > 0) {
+                log("Screening", `Found ${candidatesToScreen.length} candidates in Sourcing. Invoking screening AI...`);
+                const screeningPromises = candidatesToScreen.map(async (c) => {
+                    const file = uploadedFiles.get(c.name);
+                    if (!file) return c;
+                    const resumeDataUri = await convertFileToDataUri(file);
+                    const result = await automatedResumeScreening({ resumeDataUri });
+                    return { ...c, ...result.extractedInformation, status: 'Screening' as KanbanStatus, aiInitialScore: result.candidateScore };
+                });
+                const screenedCandidates = await Promise.all(screeningPromises);
+                currentCandidates = currentCandidates.map(c => screenedCandidates.find(sc => sc.id === c.id) || c);
+                setCandidates(currentCandidates);
+                log("Screening Complete", `Screened ${screenedCandidates.length} candidates. Moved to 'Screening' column.`);
+            } else {
+                log("Screening", "No candidates in Sourcing to screen. Skipping phase.");
+            }
+
+            // 2. Autonomous Role Creation
+            setLoadingText("Phase 2/5: Analyzing talent pool to create role...");
+            const topCandidatesForRoleGen = currentCandidates.filter(c => c.status === 'Screening').sort((a,b) => (b.aiInitialScore || 0) - (a.aiInitialScore || 0)).slice(0, 3);
+            if(topCandidatesForRoleGen.length > 0) {
+                const roleSuggestionInput = topCandidatesForRoleGen[0];
+                const roleSuggestions = await suggestRoleMatches({
+                    candidateName: roleSuggestionInput.name,
+                    candidateSkills: roleSuggestionInput.skills.join(', '),
+                    candidateNarrative: roleSuggestionInput.narrative,
+                    candidateInferredSkills: roleSuggestionInput.inferredSkills.join(', '),
+                });
+
+                const targetRoleTitle = roleSuggestions.roles[0]?.roleTitle || "Lead Software Engineer";
+                log("Role Synthesis", `Identified top talent cluster. Synthesizing role for: '${targetRoleTitle}'`);
+
+                const jdResult = await synthesizeJobDescription({
+                    jobTitle: targetRoleTitle,
+                    companyInformation: "A fast-growing tech startup in the AI space, focused on innovation and agile development."
+                });
+
+                const newRole: JobRole = {
+                    id: `role-${nanoid(10)}`,
+                    title: targetRoleTitle,
+                    description: jdResult.jobDescription,
+                    department: "Engineering",
+                    openings: 1
+                };
+                currentRoles = [...currentRoles, newRole];
+                setRoles(currentRoles);
+                log("Role Synthesis Complete", `Successfully created new role: '${newRole.title}'.`);
+
+                // 3. Intelligent Candidate Matching
+                setLoadingText("Phase 3/5: Matching candidates to new role...");
+                const candidatesToReview = currentCandidates.filter(c => c.status === 'Screening').slice(0, 5); // Review top 5
+                log("Candidate Review", `Reviewing ${candidatesToReview.length} screened candidates for the new role.`);
+
+                const reviewPromises = candidatesToReview.map(async (c) => {
+                    const review = await reviewCandidate({ candidateData: c.narrative, jobDescription: newRole.description });
+                    return { ...c, review };
+                });
+                const reviewedCandidates = await Promise.all(reviewPromises);
+
+                const matchedCandidates = reviewedCandidates.filter(c => c.review.recommendation === 'Hire' || c.review.recommendation === 'Maybe').map(c => ({...c, status: 'Interview' as KanbanStatus, role: newRole.title }));
+                currentCandidates = currentCandidates.map(c => matchedCandidates.find(mc => mc.id === c.id) || c);
+                setCandidates(currentCandidates);
+                log("Candidate Review Complete", `Matched ${matchedCandidates.length} candidates to '${newRole.title}' and moved to 'Interview'.`);
+                
+                // 4. Simulated Hiring & Learning Event
+                setLoadingText("Phase 4/5: Simulating final hire...");
+                const candidateToHire = currentCandidates.find(c => c.status === 'Interview');
+                if (candidateToHire) {
+                    candidateToHire.status = 'Hired';
+                    candidateToHire.humanFinalDecision = 'Hired';
+                    currentCandidates = currentCandidates.map(c => c.id === candidateToHire.id ? candidateToHire : c);
+                    setCandidates(currentCandidates);
+                    log("Hiring Decision", `Autonomously hired ${candidateToHire.name} for the role of ${candidateToHire.role}.`);
+                    
+                    // 5. Self-Correction Analysis
+                    setLoadingText("Phase 5/5: Performing self-correction analysis...");
+                    const rubricAnalysis = await analyzeHiringOverride({
+                        candidateProfile: {
+                            name: candidateToHire.name,
+                            skills: candidateToHire.skills,
+                            narrative: candidateToHire.narrative,
+                            aiInitialScore: candidateToHire.aiInitialScore || 75,
+                            aiInitialDecision: 'Maybe',
+                            humanFinalDecision: 'Hired'
+                        },
+                        roleTitle: candidateToHire.role,
+                        currentRubricWeights: "Standard tech rubric with high weight on React, Next.js"
+                    });
+                    log("Rubric Refinement", `AI suggests refining the rubric: "${rubricAnalysis.suggestedChange}" based on analysis: "${rubricAnalysis.analysis}"`);
+                    
+                    const newChange: RubricChange = {
+                        id: Date.now(),
+                        criteria: "AI Scoring Rubric",
+                        change: rubricAnalysis.suggestedChange,
+                        reason: rubricAnalysis.analysis,
+                        status: 'Pending'
+                    };
+                    setSuggestedChanges(prev => [newChange, ...prev]);
+
+                } else {
+                    log("Hiring Decision", "No candidates made it to the interview stage. No hire was made.");
+                }
+            } else {
+                log("Role Synthesis", "Not enough qualified candidates to synthesize a new role. Ending simulation.");
+            }
+
             setLastSaarthiReport({
-                simulationSummary: `The end-to-end simulation autonomously processed the pipeline. It moved candidates from Sourcing to Screening, matched them to existing roles, and simulated final hires.`,
+                simulationSummary: `The end-to-end simulation autonomously processed the pipeline. It screened candidates, created a new role based on the talent pool, matched candidates, hired one, and performed a self-correction analysis.`,
                 detailedProcessLog: currentSimulationLog,
             });
             setIsSaarthiReportOpen(true);
@@ -208,11 +286,11 @@ export function AstraHirePage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-10 min-h-screen">
+    <div className="p-4 sm:p-6 lg:p-10 min-h-screen bg-background text-foreground">
        {isLoading && (
             <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
                 <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="animate-spin h-10 w-10 text-foreground" />
+                    <Loader2 className="animate-spin h-10 w-10 text-primary" />
                     <p className="text-muted-foreground">{loadingText}</p>
                 </div>
             </div>
@@ -257,7 +335,9 @@ export function AstraHirePage() {
             </button>
           </nav>
         </div>
-        <div id="tab-content">{renderActiveTabView()}</div>
+        <div id="tab-content" className="fade-in">
+            {renderActiveTabView()}
+        </div>
       </main>
     </div>
   );
