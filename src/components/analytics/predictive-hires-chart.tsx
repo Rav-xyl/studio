@@ -7,10 +7,7 @@ import { generatePredictiveAnalysis } from '@/ai/flows/predictive-analytics';
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-
-const historicalData: any[] = [
-  // Data will be populated dynamically in a real application
-];
+import type { Candidate } from '@/lib/types';
 
 const chartConfig = {
   actual: {
@@ -23,8 +20,12 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export function PredictiveHiresChart() {
-    const [chartData, setChartData] = useState<any[]>(historicalData);
+interface PredictiveHiresChartProps {
+  candidates: Candidate[];
+}
+
+export function PredictiveHiresChart({ candidates }: PredictiveHiresChartProps) {
+    const [chartData, setChartData] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { toast } = useToast();
 
@@ -32,21 +33,34 @@ export function PredictiveHiresChart() {
         const fetchPredictions = async () => {
             setIsLoading(true);
             try {
+                // In a real app, this historical data would come from a database.
+                // We simulate 6 months of hires for the AI to analyze.
+                const hiresPerMonth = [20, 25, 30, 35, 40, 45]; 
+                const roleDistribution = candidates.filter(c => c.status === 'Hired').reduce((acc, c) => {
+                    acc[c.role] = (acc[c.role] || 0) + 1;
+                    return acc;
+                }, {} as Record<string, number>);
+
                 const result = await generatePredictiveAnalysis({
                     historicalData: {
-                        hiresPerMonth: [20, 25, 30, 35, 40, 45],
-                        avgTimeToHire: 32,
-                        roleDistribution: { 'Engineering': 15, 'Product': 5, 'Design': 3 }
+                        hiresPerMonth: hiresPerMonth,
+                        avgTimeToHire: 32, // static for now
+                        roleDistribution: roleDistribution
                     }
                 });
                 
-                const predictedQuarters = [
-                    { quarter: 'Q1 (Pred)', predicted: result.predictedHiresNextQuarter[0], actual: null },
-                    { quarter: 'Q2 (Pred)', predicted: result.predictedHiresNextQuarter[1], actual: null },
-                    { quarter: 'Q3 (Pred)', predicted: result.predictedHiresNextQuarter[2], actual: null },
+                const historicalMonths = hiresPerMonth.map((hires, index) => ({
+                    month: `M-${6 - index}`,
+                    actual: hires,
+                }));
+
+                const predictedMonths = [
+                    { month: 'M+1', predicted: result.predictedHiresNextQuarter[0], actual: null },
+                    { month: 'M+2', predicted: result.predictedHiresNextQuarter[1], actual: null },
+                    { month: 'M+3', predicted: result.predictedHiresNextQuarter[2], actual: null },
                 ];
                 
-                setChartData([...historicalData, ...predictedQuarters]);
+                setChartData([...historicalMonths, ...predictedMonths]);
 
                 toast({
                     title: "AI Insight Generated",
@@ -61,18 +75,18 @@ export function PredictiveHiresChart() {
             }
         };
         fetchPredictions();
-    }, [toast]);
+    }, [toast, candidates]);
 
 
   return (
     <div className="h-[350px]">
-       {isLoading && chartData.length === 0 ? (
+       {isLoading ? (
         <div className="flex h-full w-full items-center justify-center text-muted-foreground">
           <Loader2 className="animate-spin h-8 w-8 text-primary"/>
         </div>
       ) : chartData.length === 0 ? (
         <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-          No data available to display chart.
+          Not enough data to generate predictions.
         </div>
       ) : (
       <ChartContainer config={chartConfig} className="w-full h-full">
@@ -80,7 +94,7 @@ export function PredictiveHiresChart() {
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
-              dataKey="quarter"
+              dataKey="month"
               stroke="hsl(var(--muted-foreground))"
               fontSize={12}
               tickLine={false}
@@ -103,6 +117,7 @@ export function PredictiveHiresChart() {
               strokeWidth={2}
               dot={false}
               connectNulls
+              name="Actual Hires"
             />
             <Line
               type="monotone"
@@ -111,6 +126,7 @@ export function PredictiveHiresChart() {
               strokeWidth={2}
               strokeDasharray="5 5"
               connectNulls
+              name="Predicted Hires"
             />
           </LineChart>
         </ResponsiveContainer>

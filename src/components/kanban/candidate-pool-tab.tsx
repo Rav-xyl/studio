@@ -83,7 +83,6 @@ export function CandidatePoolTab({
     if (!filteredRole) {
       return candidates;
     }
-    // Simple filter: Check if candidate role matches the filtered role title.
     return candidates.filter(c => c.role === filteredRole.title);
   }, [candidates, filteredRole]);
 

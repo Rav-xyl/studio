@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mic, Video, Download, Brain } from 'lucide-react';
+import { Loader2, Mic, Video, Download, Brain, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
 import { evaluateInterviewResponse } from '@/ai/flows/evaluate-interview-response';
@@ -31,10 +31,12 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     const [candidate, setCandidate] = useState<Candidate | null>(null);
     const [hasCameraPermission, setHasCameraPermission] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [isProcessing, setIsProcessing] = useState(false);
     const [questions, setQuestions] = useState<string[]>([]);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [conversation, setConversation] = useState<ConversationEntry[]>([]);
     const [isFinished, setIsFinished] = useState(false);
+    const [finalReview, setFinalReview] = useState<any>(null);
     
 
     useEffect(() => {
@@ -109,11 +111,12 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
         
         const placeholderResponse = "Based on my experience, I would approach this by first analyzing the requirements, then creating a plan and executing it with my team, ensuring clear communication and milestone tracking throughout the project lifecycle.";
         
-        // Add candidate response to transcript
         const candidateEntry: ConversationEntry = { speaker: 'Candidate', text: placeholderResponse };
-        setConversation(prev => [...prev, candidateEntry]);
         
-        setIsLoading(true);
+        setIsProcessing(true);
+        // Add candidate response to transcript immediately for better UX
+        setConversation(prev => [...prev, candidateEntry]);
+
         try {
             const result = await evaluateInterviewResponse({
                 question: questions[currentQuestionIndex],
@@ -121,11 +124,11 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                 jobDescription: DUMMY_JOB_DESCRIPTION
             });
 
-            // Update conversation with evaluation
+            // Update the last ARYA message with the evaluation
             setConversation(prev => {
                 const newConversation = [...prev];
-                const lastAryaMessageIndex = newConversation.findLastIndex(c => c.speaker === 'ARYA');
-                if(lastAryaMessageIndex !== -1) {
+                const lastAryaMessageIndex = newConversation.map((c,i) => ({...c, i})).filter(c => c.speaker === 'ARYA').pop()?.i;
+                if(lastAryaMessageIndex !== undefined) {
                     newConversation[lastAryaMessageIndex] = { ...newConversation[lastAryaMessageIndex], evaluation: result };
                 }
                 return newConversation;
@@ -143,12 +146,12 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
              console.error("Failed to evaluate response", error);
             toast({ title: 'Error', description: 'Could not evaluate the interview response.', variant: 'destructive'});
         } finally {
-            setIsLoading(false);
+            setIsProcessing(false);
         }
     };
 
-    const generateReport = () => {
-        if (!candidate) return;
+    const getReportContent = () => {
+        if (!candidate) return "";
 
         let reportContent = `INTERVIEW REPORT\n\n`;
         reportContent += `Candidate: ${candidate.name}\n`;
@@ -174,17 +177,37 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
         });
         
         reportContent += `--- END OF REPORT ---`;
-        
+        return reportContent;
+    }
+
+    const generateReportFile = () => {
+        const reportContent = getReportContent();
         const blob = new Blob([reportContent], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `interview_report_${candidate.name.replace(' ', '_')}.txt`;
+        a.download = `interview_report_${candidate?.name.replace(' ', '_')}.txt`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     };
+
+    const runFinalReview = async () => {
+        const reportContent = getReportContent();
+        if (!reportContent) return;
+        setIsProcessing(true);
+        try {
+            const result = await finalInterviewReview({ interviewReport: reportContent });
+            setFinalReview(result);
+            toast({ title: "Final Review Complete", description: "The 'BOSS' AI has provided its final assessment." });
+        } catch (error) {
+            console.error("Final review failed", error);
+            toast({ title: "Error", description: "Could not run final AI review.", variant: "destructive" });
+        } finally {
+            setIsProcessing(false);
+        }
+    }
 
     if (isLoading) {
          return (
@@ -232,21 +255,37 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                         <div className="pt-4">
                              {isFinished ? (
                                 <div className='text-center p-6 bg-secondary rounded-lg'>
-                                    <h3 className='text-2xl font-bold text-green-400'>Interview Complete!</h3>
-                                    <p className='text-muted-foreground mt-2'>The initial evaluation is finished. Generate the report for final review.</p>
-                                    <div className="flex gap-4 justify-center">
-                                        <Button onClick={generateReport} className="mt-6">
-                                            <Download className="mr-2 h-4 w-4" />
-                                            Generate Interview Report
-                                        </Button>
-                                        <Button onClick={() => router.push('/')} className="mt-6" variant="outline">
-                                            Return to Dashboard
-                                        </Button>
-                                    </div>
+                                    <h3 className='text-2xl font-bold text-green-400 mb-2'>Interview Complete!</h3>
+                                     {finalReview ? (
+                                        <div className="mt-4 p-4 rounded-lg bg-background/50 space-y-3 text-left">
+                                            <h4 className="font-bold text-lg text-primary">Final Recommendation: {finalReview.finalRecommendation}</h4>
+                                            <div>
+                                                <h5 className="font-semibold">Overall Assessment</h5>
+                                                <p className="text-sm text-muted-foreground">{finalReview.overallAssessment}</p>
+                                            </div>
+                                            <Button onClick={() => router.push('/')} className="w-full mt-4" variant="outline">
+                                                Return to Dashboard
+                                            </Button>
+                                        </div>
+                                     ) : (
+                                        <>
+                                            <p className='text-muted-foreground mt-2'>The initial evaluation is finished. You can now download the report or run the final "BOSS" AI review.</p>
+                                            <div className="flex gap-4 justify-center mt-6">
+                                                <Button onClick={generateReportFile}>
+                                                    <Download className="mr-2 h-4 w-4" />
+                                                    Download Report
+                                                </Button>
+                                                <Button onClick={runFinalReview} disabled={isProcessing}>
+                                                    {isProcessing ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Zap className="mr-2 h-4 w-4" />}
+                                                    Run Final "BOSS" Review
+                                                </Button>
+                                            </div>
+                                        </>
+                                     )}
                                 </div>
                             ) : (
-                                <Button onClick={handleNextQuestion} disabled={isLoading || !hasCameraPermission || questions.length === 0} className="w-full h-12 text-lg">
-                                    {isLoading ? <Loader2 className="animate-spin" /> : <Mic className="mr-2 h-5 w-5" />}
+                                <Button onClick={handleNextQuestion} disabled={isProcessing || !hasCameraPermission || questions.length === 0} className="w-full h-12 text-lg">
+                                    {isProcessing ? <Loader2 className="animate-spin" /> : <Mic className="mr-2 h-5 w-5" />}
                                     {currentQuestionIndex === questions.length - 1 ? 'Submit Final Answer' : 'Submit Answer & Next Question'}
                                 </Button>
                             )}
@@ -276,7 +315,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                                     </div>
                                 </div>
                             ))}
-                             {isLoading && conversation.length > 0 && (
+                             {isProcessing && conversation.length > 0 && (
                                 <div className="flex items-start gap-3">
                                     <Avatar><AvatarFallback className='bg-primary'>AI</AvatarFallback></Avatar>
                                     <div className="p-3 rounded-lg max-w-md bg-secondary animate-pulse">
@@ -291,5 +330,3 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
         </div>
     );
 }
-
-    

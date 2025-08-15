@@ -110,7 +110,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                         <CardDescription>Forecasts based on historical data and current pipeline trends.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                       <PredictiveHiresChart />
+                       <PredictiveHiresChart candidates={candidates} />
                     </CardContent>
                 </Card>
                  <Card className="glass-card flex flex-col">
