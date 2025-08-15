@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mic, Video, Download, Brain, Zap, Square } from 'lucide-react';
+import { Loader2, Mic, Video, Download, Brain, Zap, Square, Lightbulb, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
 import { evaluateInterviewResponse } from '@/ai/flows/evaluate-interview-response';
@@ -14,6 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 import type { Candidate } from '@/lib/types';
+import { generateSystemDesignQuestion } from '@/ai/flows/generate-system-design-question';
 
 const DUMMY_JOB_DESCRIPTION = "Seeking a Senior Frontend Developer with expertise in React, Next.js, and TypeScript. The ideal candidate will have experience building and deploying complex, high-performance web applications. Strong communication and problem-solving skills are a must.";
 
@@ -21,7 +22,10 @@ type ConversationEntry = {
     speaker: 'ARYA' | 'Candidate';
     text: string;
     evaluation?: any;
+    phase: 'Technical' | 'System Design';
 };
+
+type InterviewPhase = 'Technical' | 'System Design' | 'Finished';
 
 // Speech Recognition setup
 const SpeechRecognition =
@@ -46,12 +50,13 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     
+    const [phase, setPhase] = useState<InterviewPhase>('Technical');
     const [questions, setQuestions] = useState<string[]>([]);
+    const [systemDesignQuestion, setSystemDesignQuestion] = useState<string>('');
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [conversation, setConversation] = useState<ConversationEntry[]>([]);
     const [transcript, setTranscript] = useState('');
 
-    const [isFinished, setIsFinished] = useState(false);
     const [finalReview, setFinalReview] = useState<any>(null);
     const [interviewReport, setInterviewReport] = useState("");
     
@@ -95,7 +100,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
             setIsLoading(false);
             return;
         }
-        const fetchQuestions = async () => {
+        const fetchInitialQuestions = async () => {
             setIsLoading(true);
             try {
                 const result = await generateInterviewQuestions({
@@ -105,7 +110,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                 });
                 setQuestions(result.questions);
                 if (result.questions.length > 0) {
-                    setConversation([{ speaker: 'ARYA', text: result.questions[0] }]);
+                    setConversation([{ speaker: 'ARYA', text: result.questions[0], phase: 'Technical' }]);
                 }
             } catch (error) {
                 console.error("Failed to generate questions", error);
@@ -114,7 +119,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                 setIsLoading(false);
             }
         };
-        fetchQuestions();
+        fetchInitialQuestions();
     }, [candidate, toast]);
 
     useEffect(() => {
@@ -161,19 +166,20 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
             return;
         };
         
-        const candidateEntry: ConversationEntry = { speaker: 'Candidate', text: transcript };
+        const currentPhase = phase as 'Technical' | 'System Design';
+        const candidateEntry: ConversationEntry = { speaker: 'Candidate', text: transcript, phase: currentPhase };
         
         setIsProcessing(true);
         setConversation(prev => [...prev, candidateEntry]);
 
         try {
+            const currentQuestion = phase === 'Technical' ? questions[currentQuestionIndex] : systemDesignQuestion;
             const result = await evaluateInterviewResponse({
-                question: questions[currentQuestionIndex],
+                question: currentQuestion,
                 candidateResponse: transcript,
                 jobDescription: DUMMY_JOB_DESCRIPTION
             });
 
-            // Update the last ARYA message with the evaluation
             setConversation(prev => {
                 const newConversation = [...prev];
                 const lastAryaMessageIndex = newConversation.map((c,i) => ({...c, i})).filter(c => c.speaker === 'ARYA').pop()?.i;
@@ -183,18 +189,30 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                 return newConversation;
             });
 
-            if (currentQuestionIndex < questions.length - 1) {
-                const nextQuestionIndex = currentQuestionIndex + 1;
-                setCurrentQuestionIndex(nextQuestionIndex);
-                setConversation(prev => [...prev, { speaker: 'ARYA', text: questions[nextQuestionIndex] }]);
-            } else {
-                setIsFinished(true);
+            if (phase === 'Technical') {
+                if (currentQuestionIndex < questions.length - 1) {
+                    const nextQuestionIndex = currentQuestionIndex + 1;
+                    setCurrentQuestionIndex(nextQuestionIndex);
+                    setConversation(prev => [...prev, { speaker: 'ARYA', text: questions[nextQuestionIndex], phase: 'Technical' }]);
+                } else {
+                    // Transition to System Design phase
+                    setPhase('System Design');
+                    setIsProcessing(true);
+                    toast({ title: "Phase 1 Complete", description: "Proceeding to System Design Challenge." });
+                    const designQuestionResult = await generateSystemDesignQuestion({ jobTitle: candidate.role });
+                    setSystemDesignQuestion(designQuestionResult.question);
+                    setConversation(prev => [...prev, { speaker: 'ARYA', text: designQuestionResult.question, phase: 'System Design' }]);
+                    setIsProcessing(false);
+                }
+            } else if (phase === 'System Design') {
+                // End of interview
+                setPhase('Finished');
                 const finalReport = getReportContent(true);
                 setInterviewReport(finalReport);
             }
         } catch (error) {
-             console.error("Failed to evaluate response", error);
-            toast({ title: 'Error', description: 'Could not evaluate the interview response.', variant: 'destructive'});
+             console.error("Failed to process response", error);
+            toast({ title: 'Error', description: 'Could not process the interview response.', variant: 'destructive'});
         } finally {
             setIsProcessing(false);
             setTranscript('');
@@ -204,28 +222,34 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     const getReportContent = (isFinal: boolean = false) => {
         if (!candidate) return "";
 
-        // Use the latest conversation state for final report
-        const currentConversation = isFinal ? 
-            [...conversation, { speaker: 'Candidate' as const, text: transcript }] 
-            : conversation;
+        const currentConversation = conversation;
 
         let reportContent = `INTERVIEW REPORT\n\n`;
         reportContent += `Candidate: ${candidate.name}\n`;
         reportContent += `Role: ${candidate.role}\n`;
         reportContent += `Date: ${new Date().toLocaleDateString()}\n\n`;
-        reportContent += `--- TRANSCRIPT & EVALUATION ---\n\n`;
+        
+        const technicalPhase = currentConversation.filter(e => e.phase === 'Technical');
+        const systemDesignPhase = currentConversation.filter(e => e.phase === 'System Design');
 
-        currentConversation.forEach(entry => {
+        reportContent += `--- PHASE 1: TECHNICAL Q&A ---\n\n`;
+        technicalPhase.forEach(entry => {
             if (entry.speaker === 'ARYA') {
                 reportContent += `ARYA:\n${entry.text}\n\n`;
                 if(entry.evaluation) {
-                    reportContent += `EVALUATION:\n`;
-                    reportContent += `  - Score: ${entry.evaluation.score}/10\n`;
-                    reportContent += `  - Feedback: ${entry.evaluation.evaluation}\n`;
-                    if (entry.evaluation.followUpQuestion) {
-                        reportContent += `  - Suggested Follow-up: ${entry.evaluation.followUpQuestion}\n`;
-                    }
-                    reportContent += `\n`;
+                    reportContent += `EVALUATION: Score: ${entry.evaluation.score}/10 - ${entry.evaluation.evaluation}\n\n`;
+                }
+            } else {
+                reportContent += `CANDIDATE:\n${entry.text}\n\n`;
+            }
+        });
+
+        reportContent += `--- PHASE 2: SYSTEM DESIGN CHALLENGE ---\n\n`;
+        systemDesignPhase.forEach(entry => {
+            if (entry.speaker === 'ARYA') {
+                reportContent += `ARYA:\n${entry.text}\n\n`;
+                if(entry.evaluation) {
+                    reportContent += `EVALUATION: Score: ${entry.evaluation.score}/10 - ${entry.evaluation.evaluation}\n\n`;
                 }
             } else {
                 reportContent += `CANDIDATE:\n${entry.text}\n\n`;
@@ -264,7 +288,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
         }
     }
 
-    if (isLoading) {
+    if (isLoading && questions.length === 0) {
          return (
             <div className="flex items-center justify-center h-screen bg-background text-foreground">
                 <Loader2 className="animate-spin h-10 w-10 text-primary" />
@@ -276,7 +300,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     if (!candidate) {
         return (
             <div className="flex items-center justify-center h-screen bg-background text-foreground">
-                <Card className="glass-card text-center p-8">
+                <Card className="text-center p-8">
                     <CardHeader>
                         <CardTitle>Candidate Not Found</CardTitle>
                     </CardHeader>
@@ -291,10 +315,18 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
 
     return (
         <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
-            <Card className="w-full max-w-6xl glass-card grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <CardHeader className="lg:col-span-2">
-                    <CardTitle className="text-3xl text-primary flex items-center gap-3"><Brain /> DPDG-Compliant AI Video Interview</CardTitle>
+                    <CardTitle className="text-3xl text-primary flex items-center gap-3"><Brain /> AI Interview Gauntlet</CardTitle>
                     <p className="text-muted-foreground">with {candidate.name} for the role of {candidate.role}</p>
+                    <div className="flex items-center gap-4 text-sm pt-2">
+                        <span className={`flex items-center gap-2 ${phase === 'Technical' ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
+                           {phase !== 'Technical' ? <CheckCircle className='h-4 w-4 text-green-500'/> : <Loader2 className={`h-4 w-4 ${isProcessing ? '' : 'animate-spin'}`}/>} Phase 1: Technical Q&A
+                        </span>
+                         <span className={`flex items-center gap-2 ${phase === 'System Design' ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
+                           {phase === 'Finished' ? <CheckCircle className='h-4 w-4 text-green-500'/> : <Lightbulb className='h-4 w-4'/>} Phase 2: System Design
+                        </span>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <div className="space-y-4">
@@ -310,9 +342,9 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                             </Alert>
                         )}
                         <div className="pt-4">
-                             {isFinished ? (
+                             {phase === 'Finished' ? (
                                 <div className='text-center p-6 bg-secondary rounded-lg'>
-                                    <h3 className='text-2xl font-bold text-green-400 mb-2'>Interview Complete!</h3>
+                                    <h3 className='text-2xl font-bold text-green-400 mb-2'>Interview Gauntlet Complete!</h3>
                                      {finalReview ? (
                                         <div className="mt-4 p-4 rounded-lg bg-background/50 space-y-3 text-left">
                                             <h4 className="font-bold text-lg text-primary">Final Recommendation: {finalReview.finalRecommendation}</h4>
@@ -326,7 +358,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                                         </div>
                                      ) : (
                                         <>
-                                            <p className='text-muted-foreground mt-2'>The initial evaluation is finished. You can now download the report or run the final "BOSS" AI review.</p>
+                                            <p className='text-muted-foreground mt-2'>The interview is finished. You can now download the report or run the final "BOSS" AI review.</p>
                                             <div className="flex gap-4 justify-center mt-6">
                                                 <Button onClick={generateReportFile}>
                                                     <Download className="mr-2 h-4 w-4" />
@@ -341,9 +373,9 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                                      )}
                                 </div>
                             ) : (
-                                <Button onClick={handleToggleRecording} disabled={isProcessing || !hasCameraPermission || questions.length === 0} className={`w-full h-12 text-lg ${isRecording ? 'bg-red-600 hover:bg-red-700' : ''}`}>
+                                <Button onClick={handleToggleRecording} disabled={isProcessing || !hasCameraPermission || (phase === 'Technical' && questions.length === 0)} className={`w-full h-12 text-lg ${isRecording ? 'bg-red-600 hover:bg-red-700' : ''}`}>
                                     {isProcessing ? <Loader2 className="animate-spin" /> : (isRecording ? <Square className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />)}
-                                    {isRecording ? 'Stop & Submit Answer' : (currentQuestionIndex === 0 ? 'Start Answering' : 'Answer Next Question')}
+                                    {isRecording ? 'Stop & Submit Answer' : `Answer ${phase} Question`}
                                 </Button>
                             )}
                         </div>
@@ -361,6 +393,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className={`p-3 rounded-lg max-w-md ${entry.speaker === 'ARYA' ? 'bg-secondary' : 'bg-primary/80'}`}>
+                                        <p className="font-bold text-xs uppercase tracking-wider mb-1 opacity-70">{entry.phase}</p>
                                         <p className="text-sm">{entry.text}</p>
                                         {entry.evaluation && (
                                             <div className="mt-2 pt-2 border-t border-t-slate-500/50">
@@ -384,7 +417,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                                 <div className="flex items-start gap-3">
                                     <Avatar><AvatarFallback className='bg-primary'>AI</AvatarFallback></Avatar>
                                     <div className="p-3 rounded-lg max-w-md bg-secondary animate-pulse">
-                                        <p className="text-sm">Evaluating response and preparing next question...</p>
+                                        <p className="text-sm">Evaluating response and preparing next phase...</p>
                                     </div>
                                 </div>
                             )}
@@ -395,5 +428,3 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
         </div>
     );
 }
-
-    
