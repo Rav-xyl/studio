@@ -24,8 +24,11 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
     const [isMapping, setIsMapping] = useState(false);
     const [talentMap, setTalentMap] = useState<{ hotspots: TalentHotspot[], recommendation: string} | null>(null);
     const { toast } = useToast();
+    
+    // Defensive check to prevent crash if candidates is null or undefined
+    const validCandidates = Array.isArray(candidates) ? candidates : [];
 
-    const hiredCount = candidates.filter(c => c.status === 'Hired').length;
+    const hiredCount = validCandidates.filter(c => c.status === 'Hired').length;
 
     const handleGenerateMap = async () => {
         setIsMapping(true);
@@ -54,7 +57,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{candidates.length}</div>
+                        <div className="text-2xl font-bold">{validCandidates.length}</div>
                         <p className="text-xs text-muted-foreground">resumes in the pool</p>
                     </CardContent>
                 </Card>
@@ -87,7 +90,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                         <CardDescription>Candidate progression through the pipeline over time.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <HiringVelocityChart candidates={candidates} />
+                        <HiringVelocityChart candidates={validCandidates} />
                     </CardContent>
                 </Card>
                 <Card className="bg-white lg:col-span-2">
@@ -96,7 +99,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                          <CardDescription>Breakdown of roles filled this quarter.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <RoleDistributionChart candidates={candidates} />
+                        <RoleDistributionChart candidates={validCandidates} />
                     </CardContent>
                 </Card>
             </div>
@@ -110,7 +113,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                         <CardDescription>Forecasts based on historical data and current pipeline trends.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                       <PredictiveHiresChart candidates={candidates} />
+                       <PredictiveHiresChart candidates={validCandidates} />
                     </CardContent>
                 </Card>
                  <Card className="bg-white flex flex-col">
