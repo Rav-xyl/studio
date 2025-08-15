@@ -13,15 +13,7 @@ import { evaluateInterviewResponse } from '@/ai/flows/evaluate-interview-respons
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
-
-const mockCandidateData = {
-    'cand-123': {
-        name: 'Aisha Sharma',
-        role: 'Senior Frontend Developer',
-        narrative: 'Experienced frontend developer with 8 years of experience in React, Next.js, and building scalable web applications. Passionate about user experience and performance.',
-        analysis: 'A promising candidate with strong skills in their domain.'
-    }
-}
+import type { Candidate } from '@/lib/types';
 
 const DUMMY_JOB_DESCRIPTION = "Seeking a Senior Frontend Developer with expertise in React, Next.js, and TypeScript. The ideal candidate will have experience building and deploying complex, high-performance web applications. Strong communication and problem-solving skills are a must.";
 
@@ -36,6 +28,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     const router = useRouter();
     const { toast } = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
+    const [candidate, setCandidate] = useState<Candidate | null>(null);
     const [hasCameraPermission, setHasCameraPermission] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [questions, setQuestions] = useState<string[]>([]);
@@ -43,7 +36,23 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     const [conversation, setConversation] = useState<ConversationEntry[]>([]);
     const [isFinished, setIsFinished] = useState(false);
     
-    const candidate = (mockCandidateData as any)[candidateId]; 
+
+    useEffect(() => {
+        // In a real production app, you might fetch this data from an API,
+        // but for this client-side prototype, we'll use localStorage.
+        const candidateDataString = localStorage.getItem('interviewCandidate');
+        if (candidateDataString) {
+            const storedCandidate = JSON.parse(candidateDataString);
+            if (storedCandidate.id === candidateId) {
+                setCandidate(storedCandidate);
+            } else {
+                setCandidate(null);
+            }
+        } else {
+            setCandidate(null);
+        }
+    }, [candidateId]);
+
 
     useEffect(() => {
         const getCameraPermission = async () => {
@@ -69,14 +78,17 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
       }, [toast]);
 
     useEffect(() => {
-        if (!candidate) return;
+        if (!candidate) {
+            setIsLoading(false);
+            return;
+        }
         const fetchQuestions = async () => {
             setIsLoading(true);
             try {
                 const result = await generateInterviewQuestions({
                     resumeText: candidate.narrative,
                     jobDescription: DUMMY_JOB_DESCRIPTION,
-                    candidateAnalysis: candidate.analysis,
+                    candidateAnalysis: 'A promising candidate with strong skills in their domain.', // This could be dynamic in a real app
                 });
                 setQuestions(result.questions);
                 if (result.questions.length > 0) {
@@ -93,6 +105,8 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     }, [candidate, toast]);
 
     const handleNextQuestion = async () => {
+        if (!candidate) return;
+        
         const placeholderResponse = "Based on my experience, I would approach this by first analyzing the requirements, then creating a plan and executing it with my team, ensuring clear communication and milestone tracking throughout the project lifecycle.";
         
         // Add candidate response to transcript
@@ -134,6 +148,8 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     };
 
     const generateReport = () => {
+        if (!candidate) return;
+
         let reportContent = `INTERVIEW REPORT\n\n`;
         reportContent += `Candidate: ${candidate.name}\n`;
         reportContent += `Role: ${candidate.role}\n`;
@@ -170,13 +186,25 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
         URL.revokeObjectURL(url);
     };
 
+    if (isLoading) {
+         return (
+            <div className="flex items-center justify-center h-screen bg-background text-foreground">
+                <Loader2 className="animate-spin h-10 w-10 text-primary" />
+            </div>
+        )
+    }
+
     if (!candidate) {
         return (
             <div className="flex items-center justify-center h-screen bg-background text-foreground">
                 <Card className="glass-card text-center p-8">
-                    <AlertTitle>Candidate Not Found</AlertTitle>
-                    <AlertDescription>The candidate you are trying to interview does not exist.</AlertDescription>
-                    <Button onClick={() => router.push('/')} className="mt-4">Return to Dashboard</Button>
+                    <CardHeader>
+                        <CardTitle>Candidate Not Found</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <AlertDescription>The candidate data could not be loaded. This might happen if you navigated here directly.</AlertDescription>
+                        <Button onClick={() => router.push('/')} className="mt-4">Return to Dashboard</Button>
+                    </CardContent>
                 </Card>
             </div>
         )
@@ -217,7 +245,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                                     </div>
                                 </div>
                             ) : (
-                                <Button onClick={handleNextQuestion} disabled={isLoading || !hasCameraPermission} className="w-full h-12 text-lg">
+                                <Button onClick={handleNextQuestion} disabled={isLoading || !hasCameraPermission || questions.length === 0} className="w-full h-12 text-lg">
                                     {isLoading ? <Loader2 className="animate-spin" /> : <Mic className="mr-2 h-5 w-5" />}
                                     {currentQuestionIndex === questions.length - 1 ? 'Submit Final Answer' : 'Submit Answer & Next Question'}
                                 </Button>
@@ -233,7 +261,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
                                 <div key={index} className={`flex items-start gap-3 ${entry.speaker === 'Candidate' ? 'flex-row-reverse' : ''}`}>
                                      <Avatar>
                                         <AvatarFallback className={entry.speaker === 'ARYA' ? 'bg-primary' : 'bg-slate-600'}>
-                                            {entry.speaker === 'ARYA' ? 'AI' : 'C'}
+                                            {entry.speaker === 'ARYA' ? 'AI' : candidate.name.charAt(0)}
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className={`p-3 rounded-lg max-w-md ${entry.speaker === 'ARYA' ? 'bg-secondary' : 'bg-primary/80'}`}>
@@ -263,3 +291,5 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
         </div>
     );
 }
+
+    
