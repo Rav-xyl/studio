@@ -54,7 +54,7 @@ const prompt = ai.definePrompt({
 1.  **Analyze the Discrepancy:** Compare the candidate's profile to your initial decision. Identify the most likely attribute or skill that you undervalued, which the human recruiter valued highly. For instance, did you penalize a non-traditional career path that the recruiter saw as a sign of adaptability? Did you undervalue a specific skill that is critical for this role?
 2.  **Suggest a Rubric Change:** Based on your analysis, propose a specific, actionable change to the rubric weights to improve future accuracy for this type of role. The suggestion should be clear and concise.
 
-Return your analysis and suggestion in the specified JSON format.`,
+IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
 
 const analyzeHiringOverrideFlow = ai.defineFlow(

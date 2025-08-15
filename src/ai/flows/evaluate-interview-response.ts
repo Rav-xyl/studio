@@ -48,7 +48,7 @@ Task:
 2.  Provide a score from 1 to 10.
 3.  Suggest a relevant follow-up question to probe deeper into their response.
 
-Provide your output in the specified JSON format.`,
+IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
 
 const evaluateInterviewResponseFlow = ai.defineFlow(

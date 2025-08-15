@@ -46,7 +46,7 @@ Candidate Inferred Skills: {{{candidateInferredSkills}}}
 
 For each role, provide a rationale for why the role is a good fit for the candidate.
 
-Format your response as a JSON object with a 'roles' field. Each role should have a 'roleTitle' and a 'rationale'.`,
+IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
 
 const suggestRoleMatchesFlow = ai.defineFlow(

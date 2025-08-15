@@ -48,7 +48,7 @@ const finalReviewPrompt = ai.definePrompt({
   4.  **Formulate Overall Assessment:** Write a concise, executive-level summary of the candidate's overall profile and fit for a demanding, high-performance environment.
   5.  **Make the Final Call:** Provide a clear, final recommendation: "Strong Hire", "Proceed with Caution", or "Do Not Hire".
 
-  Return your complete analysis in the specified JSON format.`,
+  IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
 
 const finalInterviewReviewFlow = ai.defineFlow(

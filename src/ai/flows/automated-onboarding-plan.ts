@@ -52,7 +52,7 @@ Company Culture: {{{companyCulture}}}
     -   **Next 30 Days (60 Days):** Focus on transitioning from learning to contributing. Goals should involve taking ownership of small tasks and starting to apply their skills.
     -   **Final 30 Days (90 Days):** Focus on full autonomy and strategic contribution. Goals should reflect independent work and proactive improvements.
 
-Return your complete analysis in the specified JSON format.`,
+IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
 
 const generateOnboardingPlanFlow = ai.defineFlow(

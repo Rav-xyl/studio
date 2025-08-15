@@ -50,7 +50,7 @@ const prompt = ai.definePrompt({
 3.  **Summarize:** Write a concise qualitative summary of your findings.
 4.  **Breakdown:** For each company value, provide specific evidence from the candidate's profile that supports (or contradicts) their alignment with that value.
 
-Return your complete analysis in the specified JSON format.`,
+IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
 
 const cultureFitSynthesisFlow = ai.defineFlow(

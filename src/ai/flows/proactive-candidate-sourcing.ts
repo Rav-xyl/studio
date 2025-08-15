@@ -49,7 +49,7 @@ Open Roles:
 
 For each generated candidate, create a plausible name, assign them to one of the roles, and generate a relevant set of skills, a brief narrative summary, and some inferred skills. The profiles should be diverse and reflect the talent pool in India.
 
-Return the generated profiles in the specified JSON format.`,
+IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
 
 const proactiveCandidateSourcingFlow = ai.defineFlow(

@@ -51,7 +51,7 @@ Analyze the following information:
 2.  **Suggest Benefits:** Provide a standard, attractive benefits package.
 3.  **Draft Offer Letter:** Write a compelling offer letter. It should congratulate the candidate, clearly state the role, salary, and benefits, and include a persuasive closing statement about why they are a great fit for {{{companyName}}}.
 
-Return the complete offer package in the specified JSON format.`,
+IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
 
 const draftOfferLetterFlow = ai.defineFlow(

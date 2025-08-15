@@ -42,7 +42,10 @@ const synthesizeJobDescriptionPrompt = ai.definePrompt({
   Job Title: {{{jobTitle}}}
   Company Information: {{{companyInformation}}}
 
-  Job Description: `,
+  Job Description:
+  
+  IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.
+  `,
 });
 
 const synthesizeJobDescriptionFlow = ai.defineFlow(

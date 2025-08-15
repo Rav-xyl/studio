@@ -46,7 +46,7 @@ const prompt = ai.definePrompt({
 2.  **Forecast Time-to-Hire:** Predict the average time-to-hire for the next quarter, considering recent trends.
 3.  **Provide Insight:** Generate a single, actionable insight for the HR team based on your analysis. For example, identify a potential bottleneck or a positive trend.
 
-Return your complete forecast and insight in the specified JSON format.`,
+IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
 
 const generatePredictiveAnalysisFlow = ai.defineFlow(

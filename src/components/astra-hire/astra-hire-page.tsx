@@ -15,7 +15,7 @@ import { SaarthiReportModal } from './saarthi-report-modal';
 import { useToast } from '@/hooks/use-toast';
 import { proactiveCandidateSourcing } from '@/ai/flows/proactive-candidate-sourcing';
 import { analyzeHiringOverride } from '@/ai/flows/self-correcting-rubric';
-import { reEngageCandidate, ReEngageCandidateOutput } from '@/ai/flows/re-engage-candidate';
+import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -33,7 +33,6 @@ export function AstraHirePage() {
   // --- State Management ---
   const [roles, setRoles] = useState<JobRole[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [simulationLog, setSimulationLog] = useState<any[]>([]);
   const [lastSaarthiReport, setLastSaarthiReport] = useState<any>(null);
   const [filteredRole, setFilteredRole] = useState<JobRole | null>(null);
   const [suggestedChanges, setSuggestedChanges] = useState<RubricChange[]>([]);
@@ -133,7 +132,6 @@ export function AstraHirePage() {
 
     setIsLoading(true);
     setLoadingText(`Screening ${candidatesToProcess.length} resumes...`);
-    setSimulationLog(prev => [...prev, { step: 'Resume Screening', description: `Starting screening for ${candidatesToProcess.length} resumes.` }]);
 
     const screeningPromises = candidatesToProcess.map(async (candidate) => {
       const file = uploadedFiles.get(candidate.name);
@@ -170,7 +168,6 @@ export function AstraHirePage() {
 
     setIsLoading(false);
     toast({ title: 'Screening Complete', description: `Processed ${updatedCandidates.length} resumes.` });
-    setSimulationLog(prev => [...prev, { step: 'Resume Screening', description: `Finished screening. See candidate statuses for results.` }]);
   };
   
   const handleAryaReviewAll = async () => {
@@ -182,7 +179,6 @@ export function AstraHirePage() {
 
         setIsLoading(true);
         setLoadingText(`Arya is reviewing ${candidatesToReview.length} candidates...`);
-        setSimulationLog(prev => [...prev, { step: 'AI Deep Review', description: `Starting deep review for ${candidatesToReview.length} candidates.` }]);
 
         const reviewPromises = candidatesToReview.map(async (candidate) => {
             try {
@@ -212,7 +208,6 @@ export function AstraHirePage() {
         
         setIsLoading(false);
         toast({ title: 'AI Review Complete', description: `Finished deep review of ${reviewedCandidates.length} candidates.` });
-        setSimulationLog(prev => [...prev, { step: 'AI Deep Review', description: `Finished deep review.` }]);
     };
 
     const handleSuggestRoleMatches = async () => {

@@ -52,7 +52,9 @@ const prompt = ai.definePrompt({
 2.  **Score Confidence:** Provide a confidence score from 0-100 indicating how strong the match is. A score above 75 indicates a strong match.
 3.  **Draft Re-engagement Email:** If it is a strong match (score > 75), draft a personalized, encouraging, and professional email to {{{candidateName}}} from "The {{{companyName}}} Hiring Team". The email should acknowledge their previous application, state that a new, more suitable role has opened up, and invite them to re-apply or express their interest.
 
-Return your complete analysis in the specified JSON format. If the candidate is not a match, set isMatch to false and omit the email fields.`,
+Return your complete analysis in the specified JSON format. If the candidate is not a match, set isMatch to false and omit the email fields.
+
+IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
 
 const reEngageCandidateFlow = ai.defineFlow(

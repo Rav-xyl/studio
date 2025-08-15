@@ -86,6 +86,7 @@ const prompt = ai.definePrompt({
   We look forward to welcoming you to our team!
 
   Sincerely,
+al,
   {{{recruiterName}}}
 
   Stage: Rejected
@@ -101,7 +102,9 @@ const prompt = ai.definePrompt({
   {{{recruiterName}}}
 
   Based on the details and examples above, please generate the email subject and body.
-  `, // added a space here
+  
+  IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.
+  `,
 });
 
 const aiDrivenCandidateEngagementFlow = ai.defineFlow(

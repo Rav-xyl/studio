@@ -45,7 +45,7 @@ Job Description:
 Task:
 Identify the top 2-3 most critical skills the candidate is missing or could improve upon to better fit this role. For each identified gap, provide a specific, actionable suggestion for upskilling, such as an online course, a certification, or a type of project to build.
 
-Return your analysis in the specified JSON format.`,
+IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
 
 const skillGapAnalysisFlow = ai.defineFlow(
