@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { Clock, AlertCircle, CheckCircle, Clock4, FileQuestion, Loader2, UserCheck, UserX, Star } from 'lucide-react';
+import { useDrag } from 'react-dnd';
 
 interface KanbanCardProps {
   candidate: Candidate;
@@ -34,11 +35,23 @@ const StatusInfo = ({ status, candidate }: { status: string, candidate: Candidat
 };
 
 export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: 'candidate',
+    item: { candidate },
+    collect: (monitor) => ({
+      isDragging: !!monitor.isDragging(),
+    }),
+  }));
   
   return (
     <Card
+      ref={drag}
       onClick={onClick}
-      className={cn('glass-card cursor-pointer hover:border-primary/80 transition-all', className)}
+      className={cn(
+        'glass-card cursor-pointer hover:border-primary/80 transition-all',
+        isDragging ? 'opacity-50' : 'opacity-100',
+        className
+        )}
     >
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
