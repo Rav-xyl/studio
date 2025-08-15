@@ -87,7 +87,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                         <CardDescription>Candidate progression through the pipeline over time.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <HiringVelocityChart />
+                        <HiringVelocityChart candidates={candidates} />
                     </CardContent>
                 </Card>
                 <Card className="glass-card lg:col-span-2">
@@ -96,7 +96,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                          <CardDescription>Breakdown of roles filled this quarter.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <RoleDistributionChart />
+                        <RoleDistributionChart candidates={candidates} />
                     </CardContent>
                 </Card>
             </div>

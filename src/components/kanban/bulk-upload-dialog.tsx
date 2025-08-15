@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -12,13 +13,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { UploadCloud } from 'lucide-react';
+import { useRef } from 'react';
 
 interface BulkUploadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onUpload: (files: FileList | null) => void;
 }
 
-export function BulkUploadDialog({ open, onOpenChange }: BulkUploadDialogProps) {
+export function BulkUploadDialog({ open, onOpenChange, onUpload }: BulkUploadDialogProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSubmit = () => {
+    onUpload(fileInputRef.current?.files || null);
+    onOpenChange(false);
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px] glass-card">
@@ -38,14 +48,14 @@ export function BulkUploadDialog({ open, onOpenChange }: BulkUploadDialogProps) 
                       <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag and drop</p>
                       <p className="text-xs text-muted-foreground">PDF, DOCX, etc. (MAX. 5MB each)</p>
                   </div>
-                  <Input id="dropzone-file" type="file" className="hidden" multiple />
+                  <Input id="dropzone-file" ref={fileInputRef} type="file" className="hidden" multiple />
               </label>
             </div>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="submit">Upload & Screen</Button>
+          <Button onClick={handleSubmit}>Upload & Add to Pool</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

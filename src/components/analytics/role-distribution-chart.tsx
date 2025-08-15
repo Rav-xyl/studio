@@ -3,45 +3,48 @@
 
 import { Pie, PieChart, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from '../ui/chart';
-
-
-const data: any[] = [
-  // Data will be populated dynamically in a real application
-];
+import type { Candidate } from '@/lib/types';
+import { useMemo } from 'react';
 
 const chartConfig = {
   value: {
     label: 'Hires',
   },
-  engineering: {
-    label: 'Engineering',
-    color: 'hsl(var(--chart-1))',
-  },
-  product: {
-    label: 'Product',
-    color: 'hsl(var(--chart-2))',
-  },
-  design: {
-    label: 'Design',
-    color: 'hsl(var(--chart-3))',
-  },
-  data: {
-    label: 'Data',
-    color: 'hsl(var(--chart-4))',
-  },
-  marketing: {
-    label: 'Marketing',
-    color: 'hsl(var(--chart-5))',
-  },
+  // Colors will be assigned dynamically
 } satisfies ChartConfig;
 
+const COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
-export function RoleDistributionChart() {
+
+interface RoleDistributionChartProps {
+    candidates: Candidate[];
+}
+
+export function RoleDistributionChart({ candidates }: RoleDistributionChartProps) {
+    const data = useMemo(() => {
+        const hiredCandidates = candidates.filter(c => c.status === 'Hired');
+        if (hiredCandidates.length === 0) return [];
+        
+        const roleCounts = hiredCandidates.reduce((acc, candidate) => {
+            const role = candidate.role || 'Unassigned';
+            acc[role] = (acc[role] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        return Object.entries(roleCounts).map(([name, value], index) => ({
+            name,
+            value,
+            fill: COLORS[index % COLORS.length],
+        }));
+
+    }, [candidates]);
+
+
   return (
     <div className="h-[350px]">
       {data.length === 0 ? (
         <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-          No data available to display chart.
+          Hire candidates to see role distribution.
         </div>
       ) : (
       <ChartContainer config={chartConfig} className="w-full h-full">
