@@ -14,12 +14,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2, FileSignature, Award, ShieldCheck, Upload, Briefcase, GitMerge } from 'lucide-react';
+import { Linkedin, Zap, Brain, Video, Send, Star, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
 import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
@@ -29,8 +28,6 @@ import { useRouter } from 'next/navigation';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
-import { finalInterviewReview } from '@/ai/flows/final-interview-review';
-import { Input } from '../ui/input';
 import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
 
 
@@ -51,22 +48,42 @@ export function CandidateDetailSheet({
   candidate,
   onUpdateCandidate,
 }: CandidateDetailSheetProps) {
-  const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
-  const [generatedData, setGeneratedData] = useState<Record<string, any>>({});
-  const [reportFile, setReportFile] = useState<File | null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
+  const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
+  const [generatedData, setGeneratedData] = useState<Record<string, any>>({});
+  
+  // This useEffect will run when the candidate prop changes (i.e., a new candidate is selected).
+  // It automatically fetches the potential role matches.
+  useEffect(() => {
+    const autoFetchRoleMatches = async () => {
+      if (candidate && candidate.status === 'Screening' && !generatedData.roleMatches) {
+        setIsGenerating(prev => ({ ...prev, roleMatches: true }));
+        try {
+          const result = await suggestRoleMatches({
+            candidateName: candidate.name,
+            candidateSkills: candidate.skills.join(', '),
+            candidateNarrative: candidate.narrative,
+            candidateInferredSkills: candidate.inferredSkills.join(', '),
+          });
+          setGeneratedData(prev => ({ ...prev, roleMatches: result }));
+        } catch (error) {
+          console.error(`Failed to generate role matches`, error);
+          toast({ title: `Error generating role matches`, description: "Please check the console for details.", variant: 'destructive'})
+        } finally {
+          setIsGenerating(prev => ({ ...prev, roleMatches: false }));
+        }
+      }
+    };
+    autoFetchRoleMatches();
+  }, [candidate, generatedData.roleMatches, toast]);
+
   if (!candidate) return null;
 
-  const handleGenerateClick = async (type: 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'finalReview' | 'roleMatches') => {
+  const handleGenerateClick = async (type: 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit') => {
     if (!candidate) return;
 
-    if (type === 'finalReview' && !reportFile) {
-      toast({ title: 'Please upload the interview report first.', variant: 'destructive' });
-      return;
-    }
-    
     setIsGenerating(prev => ({ ...prev, [type]: true }));
     try {
         let result;
@@ -79,7 +96,7 @@ export function CandidateDetailSheet({
             result = await generateInterviewQuestions({
                 resumeText: candidate.narrative,
                 jobDescription: candidate.role,
-                candidateAnalysis: 'An promising candidate with strong skills in their domain.'
+                candidateAnalysis: 'A promising candidate with strong skills in their domain.'
             });
         } else if (type === 'email') {
             result = await aiDrivenCandidateEngagement({
@@ -117,33 +134,8 @@ export function CandidateDetailSheet({
             result = await cultureFitSynthesis({
                 candidateNarrative: candidate.narrative,
                 inferredSoftSkills: candidate.inferredSkills,
-                companyValues: "Innovation, Collaboration, Customer-Centricity, Fast-Paced Growth", // This could be dynamic in a real app
+                companyValues: "Innovation, Collaboration, Customer-Centricity, Fast-Paced Growth",
             });
-        } else if (type === 'roleMatches') {
-            result = await suggestRoleMatches({
-                candidateName: candidate.name,
-                candidateSkills: candidate.skills.join(', '),
-                candidateNarrative: candidate.narrative,
-                candidateInferredSkills: candidate.inferredSkills.join(', '),
-            });
-        } else if (type === 'finalReview' && reportFile) {
-          const reader = new FileReader();
-          reader.readAsText(reportFile);
-          reader.onload = async (e) => {
-            const reportContent = e.target?.result as string;
-             try {
-                const finalResult = await finalInterviewReview({interviewReport: reportContent});
-                setGeneratedData(prev => ({...prev, [type]: finalResult }));
-                toast({ title: `AI ${type} generated successfully!`})
-              } catch(e) {
-                console.error(`Failed to generate ${type}`, e);
-                toast({ title: `Error generating ${type}`, description: "Please check the console for details.", variant: 'destructive'})
-              } finally {
-                setIsGenerating(prev => ({ ...prev, [type]: false }));
-              }
-          };
-          // Since FileReader is async, we return here and let the callback handle state updates.
-          return;
         }
         setGeneratedData(prev => ({...prev, [type]: result }));
         toast({ title: `AI ${type} generated successfully!`})
@@ -151,45 +143,25 @@ export function CandidateDetailSheet({
         console.error(`Failed to generate ${type}`, error);
         toast({ title: `Error generating ${type}`, description: "Please check the console for details.", variant: 'destructive'})
     } finally {
-        if (type !== 'finalReview') {
-            setIsGenerating(prev => ({ ...prev, [type]: false }));
-        }
+        setIsGenerating(prev => ({ ...prev, [type]: false }));
     }
   };
 
-  const handleMoveToNextStage = () => {
-    if (!candidate) return;
-
-    let nextStatus: any = candidate.status;
-    switch(candidate.status) {
-        case 'Uploaded': nextStatus = 'Screening'; break;
-        case 'Screening': nextStatus = 'Manual Review'; break;
-        case 'Manual Review': nextStatus = 'Interview'; break;
-        case 'Interview': nextStatus = 'Offer'; break;
-        case 'Offer': nextStatus = 'Hired'; break;
-    }
-
-    if (nextStatus !== candidate.status) {
-        const updatedCandidate = { ...candidate, status: nextStatus };
-        onUpdateCandidate(updatedCandidate);
-        toast({ title: 'Candidate Updated', description: `${candidate.name} moved to ${nextStatus}`});
-        onOpenChange(false);
-    } else {
-        toast({ title: 'No action taken', description: `Candidate is already in the final stage or cannot be moved.`});
-    }
+  const handleArchive = () => {
+      if (!candidate) return;
+      const updatedCandidate = { ...candidate, archived: true };
+      onUpdateCandidate(updatedCandidate);
+      toast({ title: 'Candidate Archived', description: `${candidate.name} has been removed from the active pipeline.`});
+      onOpenChange(false);
   }
 
   const handleSendInterviewInvite = () => {
     if (!candidate) return;
-
-    // Save the candidate data to localStorage so the interview page can access it.
     localStorage.setItem('interviewCandidate', JSON.stringify(candidate));
-    
     toast({
         title: "Navigating to Interview Room...",
         description: `Preparing the AI video interview for ${candidate.name}.`
     });
-
     router.push(`/interview/${candidate.id}`);
   }
 
@@ -200,9 +172,7 @@ export function CandidateDetailSheet({
   const offer = generatedData.offer;
   const onboardingPlan = generatedData.onboarding;
   const cultureFit = generatedData.cultureFit;
-  const finalReview = generatedData.finalReview;
   const roleMatches = generatedData.roleMatches?.roles || [];
-
 
   const renderOnboardingPlan = () => {
     if (!onboardingPlan) return null;
@@ -236,7 +206,7 @@ export function CandidateDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-[600px] flex flex-col p-0 glass-card border-l border-slate-700/80">
+      <SheetContent className="w-full sm:max-w-[600px] flex flex-col p-0 bg-background/95 backdrop-blur-sm border-l">
         <ScrollArea className='h-full'>
           <div className='p-6'>
             <SheetHeader className="flex flex-row items-start gap-4 space-y-0">
@@ -246,8 +216,8 @@ export function CandidateDetailSheet({
               </Avatar>
               <div>
                 <SheetTitle className="text-2xl font-bold">{candidate.name}</SheetTitle>
-                <SheetDescription className="text-base text-muted-foreground flex items-center gap-2">
-                  <Briefcase className='h-4 w-4'/> {candidate.role}
+                <SheetDescription className="text-base text-muted-foreground">
+                  {candidate.role}
                 </SheetDescription>
                 <div className='mt-2'>
                     <Button variant="ghost" size="icon">
@@ -259,16 +229,14 @@ export function CandidateDetailSheet({
             <Separator className="my-4" />
             
             <Tabs defaultValue="profile" className="w-full">
-              <TabsList className="grid w-full grid-cols-5 bg-secondary/50">
+              <TabsList className="grid w-full grid-cols-3 bg-secondary">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
                 <TabsTrigger value="ai-analysis">AI Analysis</TabsTrigger>
-                <TabsTrigger value="interview">Interview</TabsTrigger>
-                <TabsTrigger value="offer">Offer</TabsTrigger>
-                <TabsTrigger value="post-hire">Post-Hire</TabsTrigger>
+                <TabsTrigger value="actions">Actions</TabsTrigger>
               </TabsList>
               
               <TabsContent value="profile" className="mt-4">
-                <Card className='glass-card'>
+                <Card>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><FileText className='h-5 w-5 text-primary'/> Candidate Profile</CardTitle>
                   </CardHeader>
@@ -288,51 +256,28 @@ export function CandidateDetailSheet({
               </TabsContent>
 
               <TabsContent value="ai-analysis" className="mt-4 space-y-4">
-                <Card className='glass-card'>
+                <Card>
                     <CardHeader>
                         <CardTitle className='flex items-center gap-2 text-xl'><GitMerge className='h-5 w-5 text-primary' /> Potential Role Matches</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className='text-sm text-muted-foreground mb-4'>Discover other roles this candidate might be a great fit for, highlighting their versatility.</p>
-                        {roleMatches.length > 0 ? (
+                        <p className='text-sm text-muted-foreground mb-4'>AI analysis of other roles this candidate might be a great fit for.</p>
+                        {isGenerating.roleMatches ? <div className='flex justify-center p-4'><Loader2 className="animate-spin text-primary" /></div> :
+                          roleMatches.length > 0 ? (
                             <div className='space-y-3'>
                                 {roleMatches.map((match: any, index: number) => (
-                                    <div key={index} className="p-3 rounded-md border border-dashed border-accent">
-                                        <p className="font-semibold text-accent">{match.roleTitle}</p>
+                                    <div key={index} className="p-3 rounded-md border border-dashed border-border">
+                                        <p className="font-semibold text-primary">{match.roleTitle}</p>
                                         <p className="text-xs text-muted-foreground">{match.rationale}</p>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <p className='text-sm text-muted-foreground text-center p-4'>Click the button to generate potential role matches.</p>
+                            <p className='text-sm text-muted-foreground text-center p-4'>No other role matches found.</p>
                         )}
-                        <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('roleMatches')} disabled={isGenerating.roleMatches}>
-                            {isGenerating.roleMatches ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                            Suggest Potential Roles
-                        </Button>
                     </CardContent>
                 </Card>
-                <Card className='glass-card'>
-                  <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><Scan className='h-5 w-5 text-primary' /> AI-Assisted Review</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className='text-sm text-muted-foreground mb-2'>For candidates requiring manual review, AI provides the following analysis.</p>
-                     {review ? (
-                        <div className="rounded-md border border-dashed border-accent p-4 text-center">
-                          <p className="font-semibold text-accent mb-1">Recommendation: {review.recommendation}</p>
-                          <p className="text-sm text-muted-foreground">Justification: {review.justification}</p>
-                        </div>
-                     ) : (
-                        <p className='text-sm text-muted-foreground text-center p-4'>Click the button to generate a review.</p>
-                     )}
-                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('review')} disabled={isGenerating.review}>
-                       {isGenerating.review ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                      Run Deep Review
-                    </Button>
-                  </CardContent>
-                </Card>
-                <Card className='glass-card'>
+                <Card>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><ShieldCheck className='h-5 w-5 text-primary' /> Culture Fit Synthesis</CardTitle>
                   </CardHeader>
@@ -341,14 +286,6 @@ export function CandidateDetailSheet({
                         <div className="space-y-2">
                            <p className='font-semibold'>Alignment Score: <span className='text-primary'>{cultureFit.alignmentScore}/100</span></p>
                            <p className='text-sm'><strong className='text-primary'>Summary:</strong> <span className='text-muted-foreground'>{cultureFit.summary}</span></p>
-                           <div>
-                               <h5 className='font-semibold mt-2'>Alignment Breakdown:</h5>
-                               <ul className='list-disc list-inside text-sm text-muted-foreground'>
-                                   {cultureFit.alignmentBreakdown.map((item: any) => (
-                                       <li key={item.value}><strong>{item.value}:</strong> {item.evidence}</li>
-                                   ))}
-                               </ul>
-                           </div>
                         </div>
                     ) : (
                          <p className='text-sm text-muted-foreground mb-4'>Let AI analyze the candidate's narrative and soft skills to generate a "Cultural Alignment Profile."</p>
@@ -359,7 +296,7 @@ export function CandidateDetailSheet({
                     </Button>
                   </CardContent>
                 </Card>
-                <Card className='glass-card'>
+                 <Card>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><Star className='h-5 w-5 text-primary' /> Skill Gap Analysis</CardTitle>
                   </CardHeader>
@@ -381,131 +318,57 @@ export function CandidateDetailSheet({
                 </Card>
               </TabsContent>
 
-              <TabsContent value="interview" className="mt-4">
-                <Card className='glass-card'>
-                  <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> Dynamic Interview Questions</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                     {questions.length > 0 ? (
-                        <ol className='list-decimal list-inside space-y-2 text-sm bg-secondary/50 p-4 rounded-md'>
-                          {questions.map((q: string) => <li key={q}>"{q}"</li>)}
-                        </ol>
-                     ) : (
-                       <p className='text-sm text-muted-foreground mb-4'>Generate AI-powered questions tailored to this candidate and role.</p>
-                     )}
-                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('questions')} disabled={isGenerating.questions}>
-                      {isGenerating.questions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                      Generate New Questions
-                    </Button>
-                  </CardContent>
-                </Card>
-                <Card className='glass-card mt-4'>
-                  <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><Video className='h-5 w-5 text-primary' /> AI Video Interview</CardTitle>
-                  </CardHeader>
-                  <CardContent className='text-center'>
-                    <p className='text-sm text-muted-foreground mb-4'>Invite the candidate to an automated AI-powered video interview.</p>
-                    <Button onClick={handleSendInterviewInvite}>
-                      <Send className="mr-2 h-4 w-4" />
-                      Send Interview Invite
-                    </Button>
-                  </CardContent>
-                </Card>
-                <Card className='glass-card mt-4'>
-                  <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> The "BOSS" Final Review</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className='text-sm text-muted-foreground mb-4'>Upload the generated interview report to get the final, holistic analysis and hiring recommendation from the advanced AI supervisor.</p>
-                     <div className="flex items-center gap-2">
-                        <Input type="file" accept=".txt" onChange={(e) => setReportFile(e.target.files ? e.target.files[0] : null)} className="flex-1" />
-                        <Button onClick={() => handleGenerateClick('finalReview')} disabled={isGenerating.finalReview || !reportFile}>
-                            {isGenerating.finalReview ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                            Run Final Review
+              <TabsContent value="actions" className="mt-4 space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> Interview Prep</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className='text-sm text-muted-foreground mb-4'>Generate AI-powered questions and invite the candidate to an automated AI video interview.</p>
+                       {questions.length > 0 && (
+                          <ol className='list-decimal list-inside space-y-2 text-sm bg-secondary p-4 rounded-md mb-4'>
+                            {questions.map((q: string) => <li key={q}>"{q}"</li>)}
+                          </ol>
+                       )}
+                      <div className='flex gap-2'>
+                        <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('questions')} disabled={isGenerating.questions}>
+                          {isGenerating.questions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                          Generate Questions
                         </Button>
-                     </div>
-
-                    {finalReview && (
-                        <div className="mt-4 p-4 rounded-lg bg-secondary/50 space-y-3">
-                            <h4 className="font-bold text-lg text-primary">Final Recommendation: {finalReview.finalRecommendation}</h4>
-                            <div>
-                                <h5 className="font-semibold">Overall Assessment</h5>
-                                <p className="text-sm text-muted-foreground">{finalReview.overallAssessment}</p>
-                            </div>
-                             <div>
-                                <h5 className="font-semibold">Key Strengths</h5>
-                                <ul className="list-disc list-inside text-sm text-muted-foreground">
-                                    {finalReview.keyStrengths.map((s: string, i:number) => <li key={i}>{s}</li>)}
-                                </ul>
-                            </div>
-                            <div>
-                                <h5 className="font-semibold">Potential Concerns</h5>
-                                <ul className="list-disc list-inside text-sm text-muted-foreground">
-                                    {finalReview.potentialConcerns.map((c: string, i:number) => <li key={i}>{c}</li>)}
-                                </ul>
-                            </div>
-                        </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="offer" className="mt-4">
-                 <Card className='glass-card'>
+                        <Button onClick={handleSendInterviewInvite} className="w-full" disabled={candidate.status !== 'Interview'}>
+                          <Video className="mr-2 h-4 w-4" />
+                          Start Interview
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                 <Card>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><Send className='h-5 w-5 text-primary' /> AI-Driven Engagement</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-xl'><FileSignature className='h-5 w-5 text-primary' /> Offer & Onboarding</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className='text-sm text-muted-foreground mb-4'>Let AI draft a personalized email based on the candidate's current stage.</p>
-                    <Textarea
-                        readOnly
-                        className="h-48 font-mono bg-secondary/50 text-sm"
-                        value={email ? `Subject: ${email.emailSubject}\n\n${email.emailBody}` : "Click button to generate email..."}
-                    />
-                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('email')} disabled={isGenerating.email}>
+                    <p className='text-sm text-muted-foreground mb-4'>Generate a competitive offer letter or a 30-60-90 day onboarding plan.</p>
+                    <div className='flex gap-2'>
+                      <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('offer')} disabled={isGenerating.offer || candidate.status !== 'Interview'}>
+                        {isGenerating.offer ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                        Draft Offer
+                      </Button>
+                      <Button className="w-full" onClick={() => handleGenerateClick('onboarding')} disabled={isGenerating.onboarding || candidate.status !== 'Hired'}>
+                        <Award className="mr-2 h-4 w-4" />
+                        Generate Onboarding Plan
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className='flex items-center gap-2 text-xl'><Send className='h-5 w-5 text-primary' /> Candidate Communication</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                     <p className='text-sm text-muted-foreground mb-4'>Let AI draft a personalized email based on the candidate's current stage.</p>
+                     <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('email')} disabled={isGenerating.email}>
                       {isGenerating.email ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                      Generate New Draft
-                    </Button>
-                  </CardContent>
-                </Card>
-                 <Card className='glass-card mt-4'>
-                  <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><FileSignature className='h-5 w-5 text-primary' /> Autonomous Offer Drafting</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {offer ? (
-                        <div>
-                            <p className='font-semibold'>Suggested Salary: <span className='text-primary'>{offer.suggestedSalary}</span></p>
-                            <p className='font-semibold mt-2'>Benefits:</p>
-                            <ul className='list-disc list-inside text-sm text-muted-foreground'>
-                                {offer.benefitsPackage.map((b: string) => <li key={b}>{b}</li>)}
-                            </ul>
-                            <Textarea readOnly className='h-48 mt-4 font-mono bg-secondary/50' value={offer.offerLetterBody} />
-                        </div>
-                    ) : (
-                         <p className='text-sm text-muted-foreground mb-4'>Let AI analyze market data and draft a competitive offer. (Only available for candidates in 'Offer' stage)</p>
-                    )}
-                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('offer')} disabled={isGenerating.offer || candidate.status !== 'Offer'}>
-                      {isGenerating.offer ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                      Draft Offer Letter
-                    </Button>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="post-hire" className="mt-4">
-                 <Card className='glass-card'>
-                  <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><Award className='h-5 w-5 text-primary' /> Onboarding & Success Plan</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {onboardingPlan ? renderOnboardingPlan() : (
-                         <p className='text-sm text-muted-foreground mb-4'>Generate a personalized 30-60-90 day plan and success forecast. (Only available for 'Hired' candidates)</p>
-                    )}
-                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('onboarding')} disabled={isGenerating.onboarding || candidate.status !== 'Hired'}>
-                      {isGenerating.onboarding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                      Generate Onboarding Plan
+                      Draft Email
                     </Button>
                   </CardContent>
                 </Card>
@@ -515,10 +378,9 @@ export function CandidateDetailSheet({
           </div>
         </ScrollArea>
         <SheetFooter className="p-6 pt-0 bg-background/95 backdrop-blur-sm border-t">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
+          <Button variant="destructive" onClick={handleArchive}>
+            <Archive className="mr-2 h-4 w-4"/> Archive Candidate
           </Button>
-          <Button onClick={handleMoveToNextStage}>Move to Next Stage</Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>

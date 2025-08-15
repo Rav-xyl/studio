@@ -11,11 +11,10 @@ interface RolesTabProps {
     roles: JobRole[];
     setRoles: React.Dispatch<React.SetStateAction<JobRole[]>>;
     onViewCandidates: (role: JobRole) => void;
-    onReEngage: (role: JobRole) => void;
 }
 
 
-export function RolesTab({ roles, setRoles, onViewCandidates, onReEngage }: RolesTabProps) {
+export function RolesTab({ roles, setRoles, onViewCandidates }: RolesTabProps) {
     const [isJdDialogOpen, setIsJdDialogOpen] = useState(false);
 
     const handleAddRole = (newRole: Omit<JobRole, 'id' | 'openings'>) => {
@@ -31,7 +30,7 @@ export function RolesTab({ roles, setRoles, onViewCandidates, onReEngage }: Role
         <div className="fade-in-slide-up">
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tighter">Client Roles & Job Descriptions</h2>
+                    <h2 className="text-3xl font-bold tracking-tighter">Client Roles</h2>
                     <p className="text-muted-foreground mt-1">Manage and create new job roles for your clients.</p>
                 </div>
                 <Button onClick={() => setIsJdDialogOpen(true)} className='bg-primary text-primary-foreground hover:bg-primary/90'>
@@ -47,7 +46,6 @@ export function RolesTab({ roles, setRoles, onViewCandidates, onReEngage }: Role
                             key={role.id} 
                             role={role} 
                             onViewCandidates={onViewCandidates} 
-                            onReEngage={onReEngage}
                             style={{ '--stagger-index': index } as React.CSSProperties}
                         />
                     ))}

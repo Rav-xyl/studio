@@ -26,7 +26,7 @@ export function KanbanColumn({ title, candidates, onCardClick, onUpdateCandidate
 
   return (
     <div ref={drop} className={`flex flex-col rounded-lg flex-shrink-0 w-[300px] transition-colors ${isOver ? 'bg-secondary' : 'bg-secondary/30'}`}>
-      <div className="p-3 sticky top-0 bg-secondary/30 backdrop-blur-sm z-10">
+      <div className="p-3 sticky top-0 bg-background/80 backdrop-blur-sm z-10 border-b">
         <h3 className="font-semibold text-foreground tracking-tight">
           {title} <span className="text-sm font-normal text-muted-foreground">{candidates.length}</span>
         </h3>
@@ -38,13 +38,14 @@ export function KanbanColumn({ title, candidates, onCardClick, onUpdateCandidate
                 key={candidate.id}
                 candidate={candidate}
                 onClick={() => onCardClick(candidate)}
+                className={`stagger-in-item`}
                 style={{ '--stagger-index': index } as React.CSSProperties}
             />
             )) : (
                 <div className='flex flex-col items-center justify-center h-40 text-center text-muted-foreground p-4'>
                     <FileQuestion className="w-10 h-10 mb-2" />
                     <p className='text-sm font-semibold'>Empty Column</p>
-                    <p className='text-xs'>Drag candidates here or process them from a previous stage.</p>
+                    <p className='text-xs'>Drag candidates here to change their status.</p>
                 </div>
             )}
         </div>

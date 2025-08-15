@@ -1,5 +1,5 @@
 
-export type KanbanStatus = 'Uploaded' | 'Processing' | 'Screening' | 'Manual Review' | 'Interview' | 'Offer' | 'Hired' | 'Rejected' | 'Error';
+export type KanbanStatus = 'Sourcing' | 'Screening' | 'Interview' | 'Hired';
 
 export interface Candidate {
   id: string;
@@ -11,6 +11,7 @@ export interface Candidate {
   narrative: string;
   inferredSkills: string[];
   lastUpdated: string;
+  archived?: boolean;
   // Optional fields from AI processing
   [key: string]: any; 
   // For rubric refinement
@@ -51,5 +52,3 @@ export interface RubricChange {
   reason: string;
   status: 'Pending' | 'Approved' | 'Rejected';
 }
-
-    
