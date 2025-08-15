@@ -9,7 +9,8 @@ import {
   Upload,
   Zap,
   FilterX,
-  PlusCircle
+  PlusCircle,
+  ChevronDown
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -19,6 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useState, useRef, useMemo } from 'react';
 import type { Candidate, KanbanStatus, JobRole } from '@/lib/types';
 import { KanbanColumn } from './kanban-column';
@@ -135,30 +143,27 @@ export function CandidatePoolTab({
                 onChange={(e) => onUpload(e.target.files)}
             />
             <Button onClick={() => fileInputRef.current?.click()} variant="secondary">
-            <Upload className="w-4 h-4" /> Upload Resumes
+              <Upload className="w-4 h-4" /> Upload Resumes
             </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="btn-primary">
+                  <Zap className="w-4 h-4" /> AI Actions <ChevronDown className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-slate-800 border-slate-700 text-white">
+                <DropdownMenuItem onClick={onScreenAll}><Scan className="w-4 h-4 mr-2" />Screen All New Resumes</DropdownMenuItem>
+                <DropdownMenuItem onClick={onAryaReviewAll}><ScanFace className="w-4 h-4 mr-2" />Arya, Review All</DropdownMenuItem>
+                <DropdownMenuItem onClick={onProactiveSourcing}><PlusCircle className="w-4 h-4 mr-2" />Proactive Sourcing</DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-slate-600"/>
+                <DropdownMenuItem onClick={onSuggestRoleMatches}><GitMerge className="w-4 h-4 mr-2" />Suggest Role Matches</DropdownMenuItem>
+                <DropdownMenuItem onClick={onFindPotentialRoles}><Lightbulb className="w-4 h-4 mr-2" />Find Potential Roles</DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-slate-600"/>
+                 <DropdownMenuItem onClick={onStimulateFullPipeline}><Zap className="w-4 h-4 mr-2 text-yellow-400" />Stimulate Full Pipeline</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-            <Button className="btn-primary" onClick={onScreenAll}>
-            <Scan className="w-4 h-4" /> Screen All
-            </Button>
-            <Button className="btn-primary" onClick={onAryaReviewAll}>
-            <ScanFace className="w-4 h-4" /> Arya, Review All
-            </Button>
-            <Button variant="secondary" onClick={onProactiveSourcing}>
-                <PlusCircle className="w-4 h-4" /> Proactive Sourcing
-            </Button>
-
-            <div className="flex-grow"></div>
-
-            <Button variant="outline" onClick={onSuggestRoleMatches}>
-            <GitMerge className="w-4 h-4" /> Suggest Role Matches
-            </Button>
-            <Button variant="outline" onClick={onFindPotentialRoles}>
-            <Lightbulb className="w-4 h-4" /> Find Potential Roles
-            </Button>
-            <Button className="btn-primary" onClick={onStimulateFullPipeline}>
-            <Zap className="w-4 h-4" /> Stimulate Full Pipeline
-            </Button>
         </div>
         <div className="flex gap-6 overflow-x-auto pb-4">
             {columns.map((col) => (

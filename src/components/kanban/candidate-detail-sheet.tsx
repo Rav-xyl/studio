@@ -14,13 +14,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Lightbulb, Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2, FileSignature, Award, ShieldCheck, Upload } from 'lucide-react';
+import { Linkedin, Zap, Brain, Video, Send, Scan, Star, FileText, Loader2, FileSignature, Award, ShieldCheck, Upload, Briefcase } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
 import { useState } from 'react';
-import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
 import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
 import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
@@ -59,7 +58,7 @@ export function CandidateDetailSheet({
 
   if (!candidate) return null;
 
-  const handleGenerateClick = async (type: 'suggestions' | 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'finalReview') => {
+  const handleGenerateClick = async (type: 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'finalReview') => {
     if (!candidate) return;
 
     if (type === 'finalReview' && !reportFile) {
@@ -70,14 +69,7 @@ export function CandidateDetailSheet({
     setIsGenerating(prev => ({ ...prev, [type]: true }));
     try {
         let result;
-        if (type === 'suggestions') {
-            result = await suggestRoleMatches({
-                candidateName: candidate.name,
-                candidateSkills: candidate.skills.join(', '),
-                candidateNarrative: candidate.narrative,
-                candidateInferredSkills: candidate.inferredSkills.join(', '),
-            });
-        } else if (type === 'review') {
+        if (type === 'review') {
             result = await reviewCandidate({
                 candidateData: candidate.narrative,
                 jobDescription: candidate.role
@@ -193,8 +185,6 @@ export function CandidateDetailSheet({
     router.push(`/interview/${candidate.id}`);
   }
 
-
-  const suggestions = generatedData.suggestions?.roles || [];
   const review = generatedData.review;
   const questions = generatedData.questions?.questions || [];
   const email = generatedData.email;
@@ -247,8 +237,8 @@ export function CandidateDetailSheet({
               </Avatar>
               <div>
                 <SheetTitle className="text-2xl font-bold">{candidate.name}</SheetTitle>
-                <SheetDescription className="text-base text-muted-foreground">
-                  {candidate.role}
+                <SheetDescription className="text-base text-muted-foreground flex items-center gap-2">
+                  <Briefcase className='h-4 w-4'/> {candidate.role}
                 </SheetDescription>
                 <div className='mt-2'>
                     <Button variant="ghost" size="icon">
@@ -260,12 +250,11 @@ export function CandidateDetailSheet({
             <Separator className="my-4" />
             
             <Tabs defaultValue="profile" className="w-full">
-              <TabsList className="grid w-full grid-cols-6 bg-secondary/50">
+              <TabsList className="grid w-full grid-cols-5 bg-secondary/50">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
-                <TabsTrigger value="review">AI Review</TabsTrigger>
+                <TabsTrigger value="ai-analysis">AI Analysis</TabsTrigger>
                 <TabsTrigger value="interview">Interview</TabsTrigger>
-                <TabsTrigger value="final-review">Final Review</TabsTrigger>
-                <TabsTrigger value="engage">Engage</TabsTrigger>
+                <TabsTrigger value="offer">Offer</TabsTrigger>
                 <TabsTrigger value="post-hire">Post-Hire</TabsTrigger>
               </TabsList>
               
@@ -287,31 +276,9 @@ export function CandidateDetailSheet({
                     </div>
                   </CardContent>
                 </Card>
-                <Card className='glass-card mt-4'>
-                  <CardHeader>
-                     <CardTitle className='flex items-center gap-2 text-xl'><Lightbulb className='h-5 w-5 text-primary'/> AI Role Suggestions</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                     {suggestions.length > 0 ? (
-                        suggestions.map((s: any) => (
-                          <div key={s.roleTitle}>
-                            <h5 className="font-semibold">{s.roleTitle}</h5>
-                            <p className="text-sm text-muted-foreground">Rationale: {s.rationale}</p>
-                          </div>
-                        ))
-                     ) : (
-                       <p className='text-sm text-muted-foreground'>Click the button below to generate AI role suggestions.</p>
-                     )}
-                     
-                     <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('suggestions')} disabled={isGenerating.suggestions}>
-                      {isGenerating.suggestions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                      Generate New Suggestions
-                    </Button>
-                  </CardContent>
-                </Card>
               </TabsContent>
 
-              <TabsContent value="review" className="mt-4">
+              <TabsContent value="ai-analysis" className="mt-4">
                 <Card className='glass-card'>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><Scan className='h-5 w-5 text-primary' /> AI-Assisted Review</CardTitle>
@@ -328,7 +295,7 @@ export function CandidateDetailSheet({
                      )}
                     <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('review')} disabled={isGenerating.review}>
                        {isGenerating.review ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                      Run Full Review
+                      Run Deep Review
                     </Button>
                   </CardContent>
                 </Card>
@@ -361,7 +328,7 @@ export function CandidateDetailSheet({
                 </Card>
                 <Card className='glass-card mt-4'>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><Star className='h-5 w-5 text-primary' /> Skill Gap & Training</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-xl'><Star className='h-5 w-5 text-primary' /> Skill Gap Analysis</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {skillGaps.length > 0 ? (
@@ -392,7 +359,7 @@ export function CandidateDetailSheet({
                           {questions.map((q: string) => <li key={q}>"{q}"</li>)}
                         </ol>
                      ) : (
-                       <p className='text-sm text-muted-foreground mb-4'>Click the button to generate AI-powered questions tailored to this candidate and role.</p>
+                       <p className='text-sm text-muted-foreground mb-4'>Generate AI-powered questions tailored to this candidate and role.</p>
                      )}
                     <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('questions')} disabled={isGenerating.questions}>
                       {isGenerating.questions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
@@ -412,10 +379,7 @@ export function CandidateDetailSheet({
                     </Button>
                   </CardContent>
                 </Card>
-              </TabsContent>
-
-               <TabsContent value="final-review" className="mt-4">
-                 <Card className='glass-card'>
+                <Card className='glass-card mt-4'>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> The "BOSS" Final Review</CardTitle>
                   </CardHeader>
@@ -454,7 +418,7 @@ export function CandidateDetailSheet({
                 </Card>
               </TabsContent>
 
-              <TabsContent value="engage" className="mt-4">
+              <TabsContent value="offer" className="mt-4">
                  <Card className='glass-card'>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><Send className='h-5 w-5 text-primary' /> AI-Driven Engagement</CardTitle>
@@ -472,10 +436,7 @@ export function CandidateDetailSheet({
                     </Button>
                   </CardContent>
                 </Card>
-              </TabsContent>
-
-              <TabsContent value="post-hire" className="mt-4">
-                 <Card className='glass-card'>
+                 <Card className='glass-card mt-4'>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><FileSignature className='h-5 w-5 text-primary' /> Autonomous Offer Drafting</CardTitle>
                   </CardHeader>
@@ -498,7 +459,10 @@ export function CandidateDetailSheet({
                     </Button>
                   </CardContent>
                 </Card>
-                 <Card className='glass-card mt-4'>
+              </TabsContent>
+
+              <TabsContent value="post-hire" className="mt-4">
+                 <Card className='glass-card'>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><Award className='h-5 w-5 text-primary' /> Onboarding & Success Plan</CardTitle>
                   </CardHeader>
@@ -527,5 +491,3 @@ export function CandidateDetailSheet({
     </Sheet>
   );
 }
-
-    
