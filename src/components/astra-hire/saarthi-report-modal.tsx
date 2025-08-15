@@ -23,36 +23,46 @@ export function SaarthiReportModal({ isOpen, onClose, reportData }: SaarthiRepor
                     </DialogTitle>
                 </DialogHeader>
                 <div className="max-h-[80vh] overflow-y-auto pr-4 space-y-6">
-                    <div className="glass-card p-6 rounded-lg">
-                        <h4 className="text-xl font-semibold text-slate-100 mb-3">Summary of Simulation</h4>
-                        <p className="text-slate-300">{reportData.simulationSummary}</p>
-                    </div>
+                    {reportData.simulationSummary && (
+                        <div className="glass-card p-6 rounded-lg">
+                            <h4 className="text-xl font-semibold text-slate-100 mb-3">Summary of Simulation</h4>
+                            <p className="text-slate-300">{reportData.simulationSummary}</p>
+                        </div>
+                    )}
 
-                    <div className="glass-card p-6 rounded-lg">
-                        <h4 className="text-xl font-semibold text-slate-100 mb-3">Detailed Process Log</h4>
-                        <ul className="list-disc list-inside space-y-3 text-slate-300">
-                            {reportData.detailedProcessLog.map((log: any, index: number) => <li key={index}><strong>{log.step}:</strong> {log.description}</li>)}
-                        </ul>
-                    </div>
+                    {reportData.detailedProcessLog && reportData.detailedProcessLog.length > 0 && (
+                        <div className="glass-card p-6 rounded-lg">
+                            <h4 className="text-xl font-semibold text-slate-100 mb-3">Detailed Process Log</h4>
+                            <ul className="list-disc list-inside space-y-3 text-slate-300">
+                                {reportData.detailedProcessLog.map((log: any, index: number) => <li key={index}><strong>{log.step}:</strong> {log.description}</li>)}
+                            </ul>
+                        </div>
+                    )}
 
-                    <div className="glass-card p-6 rounded-lg">
-                        <h4 className="text-xl font-semibold text-slate-100 mb-3">Candidate Outcomes Analysis</h4>
-                        <ul className="list-disc list-inside space-y-3 text-slate-300">
-                            {reportData.candidateOutcomesAnalysis.map((analysis: any, index: number) => <li key={index}><strong>{analysis.candidateName || 'Unnamed Candidate'}:</strong> {analysis.outcomeDetails}</li>)}
-                        </ul>
-                    </div>
+                    {reportData.candidateOutcomesAnalysis && reportData.candidateOutcomesAnalysis.length > 0 && (
+                        <div className="glass-card p-6 rounded-lg">
+                            <h4 className="text-xl font-semibold text-slate-100 mb-3">Candidate Outcomes Analysis</h4>
+                            <ul className="list-disc list-inside space-y-3 text-slate-300">
+                                {reportData.candidateOutcomesAnalysis.map((analysis: any, index: number) => <li key={index}><strong>{analysis.candidateName || 'Unnamed Candidate'}:</strong> {analysis.outcomeDetails}</li>)}
+                            </ul>
+                        </div>
+                    )}
 
-                    <div className="glass-card p-6 rounded-lg">
-                        <h4 className="text-xl font-semibold text-slate-100 mb-3">Role Management Insights</h4>
-                        <ul className="list-disc list-inside space-y-3 text-slate-300">
-                             {reportData.roleManagementInsights.map((insight: string, index: number) => <li key={index}>{insight}</li>)}
-                        </ul>
-                    </div>
+                    {reportData.roleManagementInsights && reportData.roleManagementInsights.length > 0 && (
+                        <div className="glass-card p-6 rounded-lg">
+                            <h4 className="text-xl font-semibold text-slate-100 mb-3">Role Management Insights</h4>
+                            <ul className="list-disc list-inside space-y-3 text-slate-300">
+                                 {reportData.roleManagementInsights.map((insight: string, index: number) => <li key={index}>{insight}</li>)}
+                            </ul>
+                        </div>
+                    )}
 
-                    <div className="glass-card p-6 rounded-lg">
-                        <h4 className="text-xl font-semibold text-slate-100 mb-3">System Learning & Future Improvements</h4>
-                        <p className="text-slate-300">{reportData.systemLearningAndFutureImprovements}</p>
-                    </div>
+                    {reportData.systemLearningAndFutureImprovements && (
+                        <div className="glass-card p-6 rounded-lg">
+                            <h4 className="text-xl font-semibold text-slate-100 mb-3">System Learning & Future Improvements</h4>
+                            <p className="text-slate-300">{reportData.systemLearningAndFutureImprovements}</p>
+                        </div>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>
