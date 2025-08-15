@@ -8,12 +8,13 @@ interface RoleCardProps {
     role: JobRole
     onViewCandidates: (role: JobRole) => void;
     onReEngage: (role: JobRole) => void;
+    style?: React.CSSProperties;
 }
 
-export function RoleCard({ role, onViewCandidates, onReEngage }: RoleCardProps) {
+export function RoleCard({ role, onViewCandidates, onReEngage, style }: RoleCardProps) {
 
     return (
-        <Card className="bg-secondary/30 flex flex-col border-transparent hover:border-foreground/20 transition-colors">
+        <Card style={style} className="bg-white flex flex-col border-border/50 hover:border-primary/50 transition-colors">
             <CardHeader>
                 <CardTitle className='tracking-tight'>{role.title}</CardTitle>
                 <CardDescription className='flex items-center gap-2 pt-1 text-muted-foreground'>
@@ -29,7 +30,7 @@ export function RoleCard({ role, onViewCandidates, onReEngage }: RoleCardProps) 
                  <p className='text-sm text-muted-foreground mt-4 line-clamp-3'>{role.description}</p>
             </CardContent>
             <CardFooter className='flex flex-col gap-2'>
-                <Button variant="outline" className='w-full bg-transparent hover:bg-secondary' onClick={() => onViewCandidates(role)}>
+                <Button variant="outline" className='w-full bg-background hover:bg-secondary' onClick={() => onViewCandidates(role)}>
                     <Eye className="mr-2 h-4 w-4" /> View Candidates
                 </Button>
                 <Button variant="secondary" className='w-full' onClick={() => onReEngage(role)}>

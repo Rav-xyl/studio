@@ -28,22 +28,28 @@ export function RolesTab({ roles, setRoles, onViewCandidates, onReEngage }: Role
     }
 
     return (
-        <div className="fade-in">
+        <div className="fade-in-slide-up">
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tighter">Client Roles & Job Descriptions</h2>
                     <p className="text-muted-foreground mt-1">Manage and create new job roles for your clients.</p>
                 </div>
-                <Button onClick={() => setIsJdDialogOpen(true)} className='bg-foreground text-background hover:bg-foreground/90'>
+                <Button onClick={() => setIsJdDialogOpen(true)} className='bg-primary text-primary-foreground hover:bg-primary/90'>
                     <PlusCircle className="mr-2 h-5 w-5" />
                     Synthesize New JD
                 </Button>
             </div>
 
             {roles.length > 0 ? (
-                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {roles.map(role => (
-                        <RoleCard key={role.id} role={role} onViewCandidates={onViewCandidates} onReEngage={onReEngage} />
+                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 stagger-in">
+                    {roles.map((role, index) => (
+                        <RoleCard 
+                            key={role.id} 
+                            role={role} 
+                            onViewCandidates={onViewCandidates} 
+                            onReEngage={onReEngage}
+                            style={{ '--stagger-index': index } as React.CSSProperties}
+                        />
                     ))}
                 </div>
             ) : (

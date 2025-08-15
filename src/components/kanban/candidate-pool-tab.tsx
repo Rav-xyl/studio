@@ -20,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useState, useRef, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import type { Candidate, KanbanStatus, JobRole } from '@/lib/types';
 import { KanbanColumn } from './kanban-column';
 import { CandidateDetailSheet } from './candidate-detail-sheet';
@@ -88,7 +88,7 @@ export function CandidatePoolTab({
 
   return (
     <DndProvider backend={HTML5Backend}>
-        <div className="fade-in">
+        <div className="fade-in-slide-up">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
             <div className='flex flex-col'>
             <h2 className="text-3xl font-bold tracking-tighter">
@@ -108,13 +108,13 @@ export function CandidatePoolTab({
             </div>
             
             <div className="flex items-center gap-2">
-                <Button onClick={() => setUploadDialogOpen(true)} variant="outline" className='bg-transparent hover:bg-secondary'>
+                <Button onClick={() => setUploadDialogOpen(true)} variant="outline" className='bg-background hover:bg-secondary'>
                   <Upload className="w-4 h-4 mr-2" /> Upload Resumes
                 </Button>
                 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button className="bg-foreground text-background hover:bg-foreground/90">
+                    <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
                       <Zap className="w-4 h-4 mr-2" /> AI Actions <ChevronDown className="w-4 h-4 ml-2" />
                     </Button>
                   </DropdownMenuTrigger>

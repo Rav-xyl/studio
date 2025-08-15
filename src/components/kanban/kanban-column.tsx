@@ -32,12 +32,13 @@ export function KanbanColumn({ title, candidates, onCardClick, onUpdateCandidate
         </h3>
       </div>
       <ScrollArea className="h-[calc(100vh-25rem)]">
-        <div className="flex flex-1 flex-col gap-3 p-3 pt-0">
-            {candidates.length > 0 ? candidates.map((candidate) => (
+        <div className="flex flex-1 flex-col gap-3 p-3 pt-0 stagger-in">
+            {candidates.length > 0 ? candidates.map((candidate, index) => (
             <KanbanCard
                 key={candidate.id}
                 candidate={candidate}
                 onClick={() => onCardClick(candidate)}
+                style={{ '--stagger-index': index } as React.CSSProperties}
             />
             )) : (
                 <div className='flex flex-col items-center justify-center h-40 text-center text-muted-foreground p-4'>

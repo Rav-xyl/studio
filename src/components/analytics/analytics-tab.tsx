@@ -44,11 +44,11 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
     }
 
     return (
-        <div className="fade-in space-y-6">
-            <h2 className="text-3xl font-bold text-slate-100">Performance & Analytics</h2>
+        <div className="fade-in-slide-up space-y-6">
+            <h2 className="text-3xl font-bold text-slate-800">Performance & Analytics</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="glass-card">
+                <Card className="bg-white">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Resumes Uploaded</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
@@ -58,7 +58,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                         <p className="text-xs text-muted-foreground">resumes in the pool</p>
                     </CardContent>
                 </Card>
-                <Card className="glass-card">
+                <Card className="bg-white">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Successful Hires</CardTitle>
                         <Check className="h-4 w-4 text-muted-foreground" />
@@ -68,7 +68,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                         <p className="text-xs text-muted-foreground">candidates hired</p>
                     </CardContent>
                 </Card>
-                 <Card className="glass-card">
+                 <Card className="bg-white">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Open Roles</CardTitle>
                         <BarChart2 className="h-4 w-4 text-muted-foreground" />
@@ -81,7 +81,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <Card className="glass-card lg:col-span-3">
+                <Card className="bg-white lg:col-span-3">
                     <CardHeader>
                         <CardTitle>Hiring Velocity</CardTitle>
                         <CardDescription>Candidate progression through the pipeline over time.</CardDescription>
@@ -90,7 +90,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                         <HiringVelocityChart candidates={candidates} />
                     </CardContent>
                 </Card>
-                <Card className="glass-card lg:col-span-2">
+                <Card className="bg-white lg:col-span-2">
                     <CardHeader>
                         <CardTitle>Role Distribution</CardTitle>
                          <CardDescription>Breakdown of roles filled this quarter.</CardDescription>
@@ -102,7 +102,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="glass-card">
+                <Card className="bg-white">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                            <TrendingUp className="h-5 w-5 text-primary"/> Predictive Hiring Analytics
@@ -113,7 +113,7 @@ export function AnalyticsTab({ candidates, roles, suggestedChanges, setSuggested
                        <PredictiveHiresChart candidates={candidates} />
                     </CardContent>
                 </Card>
-                 <Card className="glass-card flex flex-col">
+                 <Card className="bg-white flex flex-col">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                            <Map className="h-5 w-5 text-primary"/> Global Talent Mapping
