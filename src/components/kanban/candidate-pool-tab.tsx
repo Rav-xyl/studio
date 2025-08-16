@@ -103,7 +103,7 @@ export function CandidatePoolTab({
         </div>
         
         <div className="flex gap-6 overflow-x-auto pb-4 -mx-10 px-10">
-            {columns.map((col, i) => (
+            {columns.map((col) => (
             <KanbanColumn
                 key={col.title}
                 title={col.title}

@@ -18,7 +18,7 @@ import { Linkedin, Zap, Brain, Video, Send, Star, FileText, Loader2, FileSignatu
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
 import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
@@ -54,34 +54,9 @@ export function CandidateDetailSheet({
   const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
   const [generatedData, setGeneratedData] = useState<Record<string, any>>({});
   
-  // This useEffect will run when the candidate prop changes (i.e., a new candidate is selected).
-  // It automatically fetches the potential role matches.
-  useEffect(() => {
-    const autoFetchRoleMatches = async () => {
-      if (candidate && candidate.status === 'Screening' && !generatedData.roleMatches) {
-        setIsGenerating(prev => ({ ...prev, roleMatches: true }));
-        try {
-          const result = await suggestRoleMatches({
-            candidateName: candidate.name,
-            candidateSkills: candidate.skills.join(', '),
-            candidateNarrative: candidate.narrative,
-            candidateInferredSkills: candidate.inferredSkills.join(', '),
-          });
-          setGeneratedData(prev => ({ ...prev, roleMatches: result }));
-        } catch (error) {
-          console.error(`Failed to generate role matches`, error);
-          toast({ title: `Error generating role matches`, description: "Please check the console for details.", variant: 'destructive'})
-        } finally {
-          setIsGenerating(prev => ({ ...prev, roleMatches: false }));
-        }
-      }
-    };
-    autoFetchRoleMatches();
-  }, [candidate, generatedData.roleMatches, toast]);
-
   if (!candidate) return null;
 
-  const handleGenerateClick = async (type: 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit') => {
+  const handleGenerateClick = async (type: 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'roleMatches') => {
     if (!candidate) return;
 
     setIsGenerating(prev => ({ ...prev, [type]: true }));
@@ -136,6 +111,13 @@ export function CandidateDetailSheet({
                 inferredSoftSkills: candidate.inferredSkills,
                 companyValues: "Innovation, Collaboration, Customer-Centricity, Fast-Paced Growth",
             });
+        } else if (type === 'roleMatches') {
+            result = await suggestRoleMatches({
+              candidateName: candidate.name,
+              candidateSkills: candidate.skills.join(', '),
+              candidateNarrative: candidate.narrative,
+              candidateInferredSkills: candidate.inferredSkills.join(', '),
+            });
         }
         setGeneratedData(prev => ({...prev, [type]: result }));
         toast({ title: `AI ${type} generated successfully!`})
@@ -174,36 +156,6 @@ export function CandidateDetailSheet({
   const cultureFit = generatedData.cultureFit;
   const roleMatches = generatedData.roleMatches?.roles || [];
 
-  const renderOnboardingPlan = () => {
-    if (!onboardingPlan) return null;
-    return (
-        <div className='space-y-4'>
-            <div>
-                <h5 className="font-semibold text-primary">Performance Forecast</h5>
-                <p className='text-sm text-muted-foreground'>{onboardingPlan.performanceForecast}</p>
-            </div>
-            <div>
-                <h5 className="font-semibold">First 30 Days</h5>
-                <ul className='list-disc list-inside text-sm text-muted-foreground'>
-                    {onboardingPlan.onboardingPlan.days30.map((item: string, i: number) => <li key={i}>{item}</li>)}
-                </ul>
-            </div>
-             <div>
-                <h5 className="font-semibold">Days 31-60</h5>
-                <ul className='list-disc list-inside text-sm text-muted-foreground'>
-                    {onboardingPlan.onboardingPlan.days60.map((item: string, i: number) => <li key={i}>{item}</li>)}
-                </ul>
-            </div>
-             <div>
-                <h5 className="font-semibold">Days 61-90</h5>
-                <ul className='list-disc list-inside text-sm text-muted-foreground'>
-                    {onboardingPlan.onboardingPlan.days90.map((item: string, i: number) => <li key={i}>{item}</li>)}
-                </ul>
-            </div>
-        </div>
-    )
-  }
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-[600px] flex flex-col p-0 bg-background/95 backdrop-blur-sm border-l">
@@ -231,8 +183,8 @@ export function CandidateDetailSheet({
             <Tabs defaultValue="profile" className="w-full">
               <TabsList className="grid w-full grid-cols-3 bg-secondary">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
-                <TabsTrigger value="ai-analysis">AI Analysis</TabsTrigger>
-                <TabsTrigger value="actions">Actions</TabsTrigger>
+                <TabsTrigger value="ai-analysis">AI Actions</TabsTrigger>
+                <TabsTrigger value="comms">Communication</TabsTrigger>
               </TabsList>
               
               <TabsContent value="profile" className="mt-4">
@@ -258,12 +210,11 @@ export function CandidateDetailSheet({
               <TabsContent value="ai-analysis" className="mt-4 space-y-4">
                 <Card>
                     <CardHeader>
-                        <CardTitle className='flex items-center gap-2 text-xl'><GitMerge className='h-5 w-5 text-primary' /> Potential Role Matches</CardTitle>
+                        <CardTitle className='flex items-center gap-2 text-xl'><GitMerge className='h-5 w-5 text-primary' /> Mode 1: Exploratory Screening</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className='text-sm text-muted-foreground mb-4'>AI analysis of other roles this candidate might be a great fit for.</p>
-                        {isGenerating.roleMatches ? <div className='flex justify-center p-4'><Loader2 className="animate-spin text-primary" /></div> :
-                          roleMatches.length > 0 ? (
+                        <p className='text-sm text-muted-foreground mb-4'>Use AI to discover potential roles this candidate is a strong fit for, regardless of current openings.</p>
+                         {roleMatches.length > 0 ? (
                             <div className='space-y-3'>
                                 {roleMatches.map((match: any, index: number) => (
                                     <div key={index} className="p-3 rounded-md border border-dashed border-border">
@@ -273,27 +224,30 @@ export function CandidateDetailSheet({
                                 ))}
                             </div>
                         ) : (
-                            <p className='text-sm text-muted-foreground text-center p-4'>No other role matches found.</p>
+                           <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('roleMatches')} disabled={isGenerating.roleMatches}>
+                              {isGenerating.roleMatches ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                              Find Potential Roles
+                            </Button>
                         )}
                     </CardContent>
                 </Card>
                 <Card>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><ShieldCheck className='h-5 w-5 text-primary' /> Culture Fit Synthesis</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-xl'><ShieldCheck className='h-5 w-5 text-primary' /> Mode 2: Targeted Review</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {cultureFit ? (
-                        <div className="space-y-2">
-                           <p className='font-semibold'>Alignment Score: <span className='text-primary'>{cultureFit.alignmentScore}/100</span></p>
-                           <p className='text-sm'><strong className='text-primary'>Summary:</strong> <span className='text-muted-foreground'>{cultureFit.summary}</span></p>
+                    <p className='text-sm text-muted-foreground mb-4'>Validate this candidate's fit for the specific role of **{candidate.role}**.</p>
+                     {review ? (
+                        <div className="space-y-2 text-sm">
+                           <p><strong>Recommendation:</strong> <Badge variant={review.recommendation === 'Hire' ? 'default' : review.recommendation === 'Maybe' ? 'secondary' : 'destructive'} className={review.recommendation === 'Hire' ? 'bg-green-600/80' : ''}>{review.recommendation}</Badge></p>
+                           <p className='text-muted-foreground'><strong>Justification:</strong> {review.justification}</p>
                         </div>
                     ) : (
-                         <p className='text-sm text-muted-foreground mb-4'>Let AI analyze the candidate's narrative and soft skills to generate a "Cultural Alignment Profile."</p>
+                        <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('review')} disabled={isGenerating.review}>
+                          {isGenerating.review ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                          Review for this Role
+                        </Button>
                     )}
-                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('cultureFit')} disabled={isGenerating.cultureFit}>
-                      {isGenerating.cultureFit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                      Synthesize Culture Fit
-                    </Button>
                   </CardContent>
                 </Card>
                  <Card>
@@ -318,10 +272,10 @@ export function CandidateDetailSheet({
                 </Card>
               </TabsContent>
 
-              <TabsContent value="actions" className="mt-4 space-y-4">
+              <TabsContent value="comms" className="mt-4 space-y-4">
                   <Card>
                     <CardHeader>
-                      <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> Interview Prep</CardTitle>
+                      <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> AI Interview</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <p className='text-sm text-muted-foreground mb-4'>Generate AI-powered questions and invite the candidate to an automated AI video interview.</p>
