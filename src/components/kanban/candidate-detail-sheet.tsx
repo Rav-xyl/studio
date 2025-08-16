@@ -208,6 +208,10 @@ export function CandidateDetailSheet({
               </TabsContent>
 
               <TabsContent value="ai-analysis" className="mt-4 space-y-4">
+                <div className="text-center">
+                    <h3 className="text-lg font-semibold">AI Assessment Modes</h3>
+                    <p className="text-sm text-muted-foreground">Choose how you want the AI to analyze this candidate.</p>
+                </div>
                 <Card>
                     <CardHeader>
                         <CardTitle className='flex items-center gap-2 text-xl'><GitMerge className='h-5 w-5 text-primary' /> Mode 1: Exploratory Screening</CardTitle>
