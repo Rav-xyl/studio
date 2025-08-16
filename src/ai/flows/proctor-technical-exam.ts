@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A Genkit flow for proctoring and evaluating a written technical exam.
@@ -51,8 +52,8 @@ const prompt = ai.definePrompt({
 
 **Your Task:**
 1.  **Evaluate Answer Quality:** Critically assess the candidate's written answer. Look for correctness, efficiency, clarity of thought, and handling of edge cases.
-2.  **Analyze Proctoring Data:** Review the event log and audio transcript for any signs of cheating. Switching tabs is a major red flag. Hearing other voices in the audio is a major red flag. The presence of another person is an immediate failure.
-3.  **Generate a Score:** Based on both the answer quality and the proctoring analysis, provide a score from 0 to 100. Penalize heavily for any proctoring violations. A score below 70 is a failure.
+2.  **Analyze Proctoring Data:** Review the event log and audio transcript for any signs of cheating. Hearing other voices in the audio is a major red flag. The presence of another person is an immediate failure. Switching tabs is a potential red flag but should be considered in context; it is not an automatic failure but should be noted in the summary.
+3.  **Generate a Score:** Based on both the answer quality and the proctoring analysis, provide a score from 0 to 100. Penalize heavily for major proctoring violations like hearing other voices.
 4.  **Determine Pass/Fail:** Set the isPass field to true if the score is 70 or above, otherwise false.
 5.  **Write Summaries:** Provide a concise evaluation of the technical answer and a separate summary of the proctoring findings.
 
