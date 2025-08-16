@@ -19,23 +19,30 @@ interface GauntletMonitorTableProps {
 }
 
 const getGrandReport = (candidate: Candidate) => {
-    if (!candidate.gauntletState) return "No gauntlet data available.";
-    const { gauntletState } = candidate;
     let report = `GRAND REPORT FOR CANDIDATE: ${candidate?.name}\n\n`;
+    if (!candidate.gauntletState) return report + "No gauntlet data available.";
+    
+    const { gauntletState } = candidate;
+    
     report += `--- PHASE 1: TECHNICAL GAUNTLET ---\n`;
     report += gauntletState.technicalReport || "No data.";
-    report += `\n\n--- BOSS AI VALIDATION ---\n`;
-    if (gauntletState.bossValidation) {
-        report += `Recommendation: ${gauntletState.bossValidation.finalRecommendation}\n`;
-        report += `Assessment: ${gauntletState.bossValidation.overallAssessment}\n`;
-    } else {
-        report += "No validation data.";
-    }
+    report += `\n\n--- BOSS AI VALIDATION (TECHNICAL) ---\n`;
+    report += gauntletState.techReview ? `Recommendation: ${gauntletState.techReview.finalRecommendation}\nAssessment: ${gauntletState.techReview.overallAssessment}` : "No validation data.";
+    
     report += `\n\n--- PHASE 2: SYSTEM DESIGN CHALLENGE ---\n`;
-    report += gauntletState.systemDesignReport || "Phase not completed or data unavailable.";
+    report += gauntletState.systemDesignReport || "Phase not completed.";
+    report += `\n\n--- BOSS AI VALIDATION (SYSTEM DESIGN) ---\n`;
+    report += gauntletState.designReview ? `Recommendation: ${gauntletState.designReview.finalRecommendation}\nAssessment: ${gauntletState.designReview.overallAssessment}` : "Phase not completed.";
+    
+    report += `\n\n--- PHASE 3: FINAL AI INTERVIEW ---\n`;
+    report += gauntletState.finalInterviewReport || "Phase not completed.";
+    report += `\n\n--- BOSS AI FINAL REVIEW ---\n`;
+    report += gauntletState.finalReview ? `Recommendation: ${gauntletState.finalReview.finalRecommendation}\nAssessment: ${gauntletState.finalReview.overallAssessment}` : "Phase not completed.";
+
     report += `\n\n--- END OF REPORT ---`;
     return report;
 }
+
 
 const downloadReport = (candidate: Candidate) => {
     const report = getGrandReport(candidate);
@@ -93,9 +100,10 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
         if (!candidate.gauntletState) return { text: 'Not Started', value: 0 };
         const { phase } = candidate.gauntletState;
         if (phase === 'Complete') return { text: 'Complete', value: 100 };
-        if (phase === 'SystemDesign') return { text: 'Phase 2: System Design', value: 66 };
-        if (phase === 'PendingReview') return { text: 'Phase 1: Under BOSS Review', value: 33 };
-        if (phase === 'Technical') return { text: 'Phase 1: In Progress', value: 10 };
+        if (phase === 'Failed') return { text: 'Failed', value: 0 };
+        if (phase === 'FinalInterview' || phase === 'PendingFinalReview') return { text: 'Phase 3: Final Interview', value: 66 };
+        if (phase === 'SystemDesign' || phase === 'PendingDesignReview') return { text: 'Phase 2: System Design', value: 33 };
+        if (phase === 'Technical' || phase === 'PendingTechReview') return { text: 'Phase 1: Technical', value: 10 };
         return { text: 'Not Started', value: 0 };
     };
 
@@ -139,8 +147,8 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
                                     gauntletCandidates.map(candidate => {
                                         const status = getGauntletStatus(candidate);
                                         const deadline = getDaysRemaining(candidate);
-                                        const isComplete = status.value === 100;
-                                        const recommendation = candidate.gauntletState?.bossValidation?.finalRecommendation;
+                                        const isCompleteOrFailed = candidate.gauntletState?.phase === 'Complete' || candidate.gauntletState?.phase === 'Failed';
+                                        const recommendation = candidate.gauntletState?.finalReview?.finalRecommendation;
 
                                         return (
                                             <TableRow key={candidate.id}>
@@ -161,7 +169,7 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-center">
-                                                    <RecommendationBadge recommendation={isComplete ? recommendation : undefined} />
+                                                    <RecommendationBadge recommendation={isCompleteOrFailed ? recommendation : undefined} />
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <DropdownMenu>
@@ -174,7 +182,7 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
                                                             <DropdownMenuItem onClick={() => handleViewLog(candidate)}>
                                                                 <FileText className="mr-2 h-4 w-4" /> View Full Log
                                                             </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => downloadReport(candidate)} disabled={!isComplete}>
+                                                            <DropdownMenuItem onClick={() => downloadReport(candidate)} disabled={!isCompleteOrFailed}>
                                                                 <Download className="mr-2 h-4 w-4" /> Download Report
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => handleArchiveCandidate(candidate.id)}>

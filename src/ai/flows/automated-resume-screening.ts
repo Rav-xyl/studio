@@ -54,10 +54,10 @@ const prompt = ai.definePrompt({
 
   **Evaluation Criteria:**
   {{#if companyType.startup}}
-  - **Startup Context:** Prioritize adaptability, a broad range of skills, and signs of a proactive, "all-rounder" mindset. Be more lenient on formal education or linear career paths. Look for evidence of self-starting and wearing multiple hats.
+  - **Startup Context:** Prioritize adaptability, a broad range of skills, and signs of a proactive, "all-rounder" mindset. Be more lenient on formal education or linear career paths. Look for evidence of self-starting and wearing multiple hats. Use normal strictness.
   {{/if}}
   {{#if companyType.enterprise}}
-  - **Enterprise Context:** Prioritize deep, role-specific experience, stability in previous roles, and strong formal qualifications (e.g., specific degrees, certifications). Value specialized expertise over broad, general skills.
+  - **Enterprise Context:** Prioritize deep, role-specific experience, stability in previous roles, and strong formal qualifications (e.g., specific degrees, certifications). Value specialized expertise over broad, general skills. Use hard strictness as this is role-specific.
   {{/if}}
 
   Analyze the provided resume and extract key information. Then, score the candidate based on their suitability for a generic role within the specified company context.

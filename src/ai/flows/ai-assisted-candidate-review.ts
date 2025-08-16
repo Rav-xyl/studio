@@ -41,10 +41,10 @@ const reviewCandidatePrompt = ai.definePrompt({
 
   **Evaluation Criteria:**
   {{#if companyType.startup}}
-  - **Startup Context:** Look for adaptability, potential to grow, and a fit for a fast-paced environment where roles are not rigidly defined. The justification should reflect this.
+  - **Startup Context:** Look for adaptability, potential to grow, and a fit for a fast-paced environment where roles are not rigidly defined. The justification should reflect this. Use normal strictness.
   {{/if}}
   {{#if companyType.enterprise}}
-  - **Enterprise Context:** Focus strictly on the alignment of skills and experience with the job description. The justification should be based on proven expertise and qualifications.
+  - **Enterprise Context:** Focus strictly on the alignment of skills and experience with the job description. The justification should be based on proven expertise and qualifications. Use hard strictness as this is role-specific.
   {{/if}}
 
   Based on the following candidate data:

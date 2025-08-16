@@ -16,7 +16,7 @@ export default function AdminDashboardPage() {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(true);
     const [candidates, setCandidates] = useState<Candidate[]>([]);
-    const [isSendingReminders, setIsSendingReminders] = useState(false);
+    const [isSendingCommunications, setIsSendingCommunications] = useState(false);
 
     useEffect(() => {
         const isAdmin = sessionStorage.getItem('admin-auth');
@@ -48,49 +48,50 @@ export default function AdminDashboardPage() {
 
     }, [router, toast]);
 
-    const handleSendReminders = async () => {
-        setIsSendingReminders(true);
-        toast({ title: 'Initiating Reminders', description: 'AI is identifying candidates with expiring deadlines...' });
+    const handleSendCommunications = async () => {
+        setIsSendingCommunications(true);
+        toast({ title: 'Initiating Communications', description: 'AI is processing candidates who have completed the Gauntlet...' });
 
-        const now = new Date();
-        const candidatesToRemind = candidates.filter(c => {
-            if (!c.gauntletStartDate) return false;
-            const startDate = new Date(c.gauntletStartDate);
-            const deadline = new Date(startDate.setDate(startDate.getDate() + 7));
-            const daysRemaining = (deadline.getTime() - now.getTime()) / (1000 * 3600 * 24);
-            return daysRemaining > 0 && daysRemaining <= 3 && c.gauntletState?.phase !== 'Complete';
-        });
-
-        if (candidatesToRemind.length === 0) {
-            toast({ title: 'No Reminders Needed', description: 'No candidates have deadlines expiring in the next 3 days.' });
-            setIsSendingReminders(false);
+        const completedCandidates = candidates.filter(c => c.gauntletState?.phase === 'Complete' && !c.communicationSent);
+        
+        if (completedCandidates.length === 0) {
+            toast({ title: 'No New Communications Needed', description: 'No candidates have recently completed the Gauntlet.' });
+            setIsSendingCommunications(false);
             return;
         }
 
+        let hiredCount = 0;
+        let rejectedCount = 0;
+
         try {
-            const reminderPromises = candidatesToRemind.map(c => 
-                aiDrivenCandidateEngagement({
+            const communicationPromises = completedCandidates.map(c => {
+                const isHired = c.gauntletState?.finalReview?.finalRecommendation === 'Strong Hire';
+                const stage = isHired ? 'Offer Extended' : 'Rejected';
+                if (isHired) hiredCount++; else rejectedCount++;
+
+                return aiDrivenCandidateEngagement({
                     candidateName: c.name,
-                    candidateStage: 'Gauntlet Deadline Approaching',
+                    candidateStage: stage,
                     jobTitle: c.role,
                     companyName: 'AstraHire',
                     recruiterName: 'The Hiring Team',
                     candidateSkills: c.skills.join(', '),
-                })
-            );
+                    rejectionReason: 'After careful consideration of the final interview, we have decided to move forward with other candidates.'
+                });
+            });
             
-            await Promise.all(reminderPromises);
+            await Promise.all(communicationPromises);
 
             toast({
-                title: 'Reminders Sent Successfully!',
-                description: `AI has sent personalized reminders to ${candidatesToRemind.length} candidate(s).`
+                title: 'Communications Sent!',
+                description: `AI has sent ${hiredCount} offer emails and ${rejectedCount} rejection notices.`
             });
 
         } catch (error) {
-            console.error('Failed to send reminders:', error);
-            toast({ variant: 'destructive', title: 'Reminder Failed', description: 'Could not send reminders. Check console for details.' });
+            console.error('Failed to send communications:', error);
+            toast({ variant: 'destructive', title: 'Communication Failed', description: 'Could not send emails. Check console for details.' });
         } finally {
-            setIsSendingReminders(false);
+            setIsSendingCommunications(false);
         }
     };
 
@@ -117,9 +118,9 @@ export default function AdminDashboardPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button onClick={handleSendReminders} disabled={isSendingReminders}>
-                        {isSendingReminders ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
-                        Send Deadline Reminders
+                    <Button onClick={handleSendCommunications} disabled={isSendingCommunications}>
+                        {isSendingCommunications ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
+                        Send Final Communications
                     </Button>
                 </div>
             </header>
