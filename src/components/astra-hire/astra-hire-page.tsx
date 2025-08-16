@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -44,6 +45,8 @@ const addLog = async (candidateId: string, logEntry: Omit<LogEntry, 'timestamp'>
         })
     });
 };
+
+const KANBAN_STAGES: KanbanStatus[] = ['Sourcing', 'Screening', 'Interview', 'Hired'];
 
 export function AstraHirePage() {
   const [activeTab, setActiveTab] = useState('pool');
@@ -103,16 +106,17 @@ export function AstraHirePage() {
     if (!originalCandidate) return;
 
     // --- Gauntlet Failure Check ---
-    if (updatedCandidate.status === 'Interview') {
-        const hasFailedGauntlet = originalCandidate.gauntletState?.bossValidation?.finalRecommendation === 'Do Not Hire';
-        if (hasFailedGauntlet) {
-            toast({
-                variant: 'destructive',
-                title: 'Action Blocked',
-                description: 'This candidate has failed the Gauntlet and cannot proceed to the Interview stage.'
-            });
-            return; // Halt the update
-        }
+    const hasFailedGauntlet = originalCandidate.gauntletState?.bossValidation?.finalRecommendation === 'Do Not Hire';
+    const originalStageIndex = KANBAN_STAGES.indexOf(originalCandidate.status);
+    const newStageIndex = KANBAN_STAGES.indexOf(updatedCandidate.status);
+
+    if (hasFailedGauntlet && newStageIndex > originalStageIndex) {
+        toast({
+            variant: 'destructive',
+            title: 'Action Blocked',
+            description: 'This candidate has failed the Gauntlet and cannot be moved to a subsequent stage.'
+        });
+        return; // Halt the update
     }
 
     if (originalCandidate.status !== updatedCandidate.status) {
