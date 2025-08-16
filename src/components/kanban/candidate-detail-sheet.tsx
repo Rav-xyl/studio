@@ -155,6 +155,7 @@ export function CandidateDetailSheet({
   const onboardingPlan = generatedData.onboarding;
   const cultureFit = generatedData.cultureFit;
   const roleMatches = generatedData.roleMatches?.roles || [];
+  const isNewUpload = candidate.role === 'New Upload';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -240,17 +241,25 @@ export function CandidateDetailSheet({
                     <CardTitle className='flex items-center gap-2 text-xl'><ShieldCheck className='h-5 w-5 text-primary' /> Mode 2: Targeted Review</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className='text-sm text-muted-foreground mb-4'>Validate this candidate's fit for the specific role of **{candidate.role}**.</p>
-                     {review ? (
-                        <div className="space-y-2 text-sm">
-                           <p><strong>Recommendation:</strong> <Badge variant={review.recommendation === 'Hire' ? 'default' : review.recommendation === 'Maybe' ? 'secondary' : 'destructive'} className={review.recommendation === 'Hire' ? 'bg-green-600/80' : ''}>{review.recommendation}</Badge></p>
-                           <p className='text-muted-foreground'><strong>Justification:</strong> {review.justification}</p>
-                        </div>
+                    {isNewUpload ? (
+                      <p className='text-sm text-muted-foreground text-center p-4 bg-secondary/50 rounded-md'>
+                        Assign a specific role to this candidate on the Kanban board to enable a targeted review.
+                      </p>
                     ) : (
-                        <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('review')} disabled={isGenerating.review}>
-                          {isGenerating.review ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                          Review for this Role
-                        </Button>
+                      <>
+                        <p className='text-sm text-muted-foreground mb-4'>Validate this candidate's fit for the specific role of **{candidate.role}**.</p>
+                        {review ? (
+                            <div className="space-y-2 text-sm">
+                              <p><strong>Recommendation:</strong> <Badge variant={review.recommendation === 'Hire' ? 'default' : review.recommendation === 'Maybe' ? 'secondary' : 'destructive'} className={review.recommendation === 'Hire' ? 'bg-green-600/80' : ''}>{review.recommendation}</Badge></p>
+                              <p className='text-muted-foreground'><strong>Justification:</strong> {review.justification}</p>
+                            </div>
+                        ) : (
+                            <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('review')} disabled={isGenerating.review}>
+                              {isGenerating.review ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                              Review for this Role
+                            </Button>
+                        )}
+                      </>
                     )}
                   </CardContent>
                 </Card>
@@ -344,3 +353,5 @@ export function CandidateDetailSheet({
     </Sheet>
   );
 }
+
+    

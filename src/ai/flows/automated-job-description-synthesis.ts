@@ -1,3 +1,4 @@
+
 // use server'
 
 /**
@@ -35,16 +36,22 @@ const synthesizeJobDescriptionPrompt = ai.definePrompt({
   name: 'synthesizeJobDescriptionPrompt',
   input: {schema: SynthesizeJobDescriptionInputSchema},
   output: {schema: SynthesizeJobDescriptionOutputSchema},
-  prompt: `You are an expert recruiter who specializes in writing job descriptions.
+  prompt: `You are an expert recruiter and copywriter at a top-tier technology firm. Your task is to write a clear, concise, and compelling job description for the role of {{{jobTitle}}}.
 
-  Using the job title and company information provided, write a detailed job description that is tailored to the company.
+The job description must be structured, professional, and focus on attracting highly qualified candidates. It should not contain fluff or generic corporate jargon.
 
-  Job Title: {{{jobTitle}}}
-  Company Information: {{{companyInformation}}}
+Based on the provided job title and company information, generate a job description that includes the following sections:
+1.  **About the Role:** A brief, 1-2 sentence overview of the position's impact and purpose.
+2.  **Key Responsibilities:** A bulleted list of 4-6 primary duties and tasks the candidate will be expected to perform.
+3.  **Required Skills & Qualifications:** A bulleted list of 5-7 essential, non-negotiable skills and qualifications (e.g., '5+ years of experience with React', 'Expertise in data structures and algorithms').
+4.  **Preferred Qualifications:** A bulleted list of 2-3 "nice-to-have" skills that would make a candidate stand out (e.g., 'Experience with GraphQL', 'Contributions to open-source projects').
 
-  Job Description:
-  
-  IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.
+Job Title: {{{jobTitle}}}
+Company Information: {{{companyInformation}}}
+
+Generate the full job description text.
+
+IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.
   `,
 });
 
@@ -59,3 +66,5 @@ const synthesizeJobDescriptionFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    
