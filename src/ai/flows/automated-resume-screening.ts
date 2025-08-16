@@ -28,6 +28,7 @@ const AutomatedResumeScreeningOutputSchema = z.object({
     name: z.string().describe("The candidate's full name, or the filename if a name cannot be found."),
     email: z.string().optional().describe("The candidate's email address."),
     phone: z.string().optional().describe("The candidate's phone number."),
+    socialUrl: z.string().optional().describe("A social profile URL (e.g., LinkedIn, GitHub) found in the resume."),
     skills: z.array(z.string()).describe('A list of skills extracted from the resume.'),
     experience: z.string().describe("A summary of the candidate's experience."),
     narrative: z.string().describe("A 2-3 sentence narrative summary of the candidate's profile."),
@@ -67,6 +68,7 @@ const prompt = ai.definePrompt({
   Provide a candidate score and reasoning for the score.
   - Extract the candidate's full name. If not found, use the filename.
   - Extract email and phone if available.
+  - Find one social media or portfolio URL (LinkedIn, GitHub, Personal Website etc.) if available.
   - Skills should be listed in order of relevance.
   - Experience should be summarized in a succinct paragraph.
   - Create a 2-3 sentence narrative summary.

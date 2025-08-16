@@ -58,6 +58,14 @@ export function AstraHirePage() {
         const candidatesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Candidate[];
         setCandidates(candidatesData);
         setIsLoading(false);
+    }, (error) => {
+        console.error("Firestore connection error:", error);
+        toast({
+            title: "Connection Error",
+            description: "Could not connect to the database. Please check your connection and refresh.",
+            variant: "destructive"
+        });
+        setIsLoading(false);
     });
 
     const rolesUnsub = onSnapshot(collection(db, "roles"), (snapshot) => {
@@ -70,7 +78,7 @@ export function AstraHirePage() {
         candidatesUnsub();
         rolesUnsub();
     };
-  }, []);
+  }, [toast]);
 
 
   // --- Core Logic ---
@@ -95,7 +103,7 @@ export function AstraHirePage() {
           id: `cand-${nanoid(10)}`,
           name: file.name,
           avatarUrl: '',
-          role: 'New Upload',
+          role: 'Unassigned', // Start as unassigned
           skills: [],
           status: 'Sourcing', 
           narrative: `Resume file: ${file.name}`,
@@ -122,7 +130,7 @@ export function AstraHirePage() {
           return {
             ...candidate,
             ...result.extractedInformation,
-            status: 'Screening' as KanbanStatus,
+            status: 'Screening' as KanbanStatus, // Move directly to screening
             aiInitialScore: result.candidateScore,
             lastUpdated: new Date().toISOString()
           };

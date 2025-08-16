@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link } from 'lucide-react';
+import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link, Github, Goal } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
@@ -38,6 +38,23 @@ interface CandidateDetailSheetProps {
 
 const getInitials = (name: string) => {
     return name ? name.split(' ').map(n => n[0]).join('') : '';
+}
+
+const SocialLink = ({ url }: { url: string }) => {
+    let icon = <Link className="h-5 w-5 text-muted-foreground hover:text-primary" />;
+    if (url.includes('linkedin.com')) {
+        icon = <Linkedin className="h-5 w-5 text-muted-foreground hover:text-primary" />;
+    } else if (url.includes('github.com')) {
+        icon = <Github className="h-5 w-5 text-muted-foreground hover:text-primary" />;
+    }
+
+    return (
+        <a href={url} target="_blank" rel="noopener noreferrer">
+            <Button variant="ghost" size="icon">
+                {icon}
+            </Button>
+        </a>
+    )
 }
 
 export function CandidateDetailSheet({
@@ -145,7 +162,7 @@ export function CandidateDetailSheet({
   const onboardingPlan = generatedData.onboarding;
   const cultureFit = generatedData.cultureFit;
   const roleMatches = generatedData.roleMatches?.roles || [];
-  const isNewUpload = candidate.role === 'New Upload';
+  const isUnassigned = candidate.role === 'Unassigned';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -163,9 +180,7 @@ export function CandidateDetailSheet({
                   {candidate.role}
                 </SheetDescription>
                 <div className='mt-2'>
-                    <Button variant="ghost" size="icon">
-                        <Linkedin className="h-5 w-5 text-muted-foreground hover:text-primary" />
-                    </Button>
+                    {candidate.socialUrl && <SocialLink url={candidate.socialUrl} />}
                 </div>
               </div>
             </SheetHeader>
@@ -231,7 +246,7 @@ export function CandidateDetailSheet({
                     <CardTitle className='flex items-center gap-2 text-xl'><ShieldCheck className='h-5 w-5 text-primary' /> Mode 2: Targeted Review</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {isNewUpload ? (
+                    {isUnassigned ? (
                       <div className='text-sm text-muted-foreground text-center p-4 bg-secondary/50 rounded-md'>
                         Assign a specific role to this candidate on the Kanban board to enable a targeted review.
                       </div>
@@ -251,6 +266,27 @@ export function CandidateDetailSheet({
                         )}
                       </>
                     )}
+                  </CardContent>
+                </Card>
+                 <Card>
+                  <CardHeader>
+                    <CardTitle className='flex items-center gap-2 text-xl'><Goal className='h-5 w-5 text-primary' /> Skill & Culture Analysis</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                     <div>
+                        <p className='text-sm text-muted-foreground mb-2'>Analyze the gap between the candidate's skills and the ideal profile for the role.</p>
+                        <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('skillGap')} disabled={isGenerating.skillGap}>
+                           {isGenerating.skillGap ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                           Analyze Skill Gap
+                        </Button>
+                     </div>
+                     <div>
+                        <p className='text-sm text-muted-foreground mb-2'>Generate a 'Cultural Alignment Profile' by analyzing their resume's narrative and inferred soft skills.</p>
+                         <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('cultureFit')} disabled={isGenerating.cultureFit}>
+                           {isGenerating.cultureFit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                           Synthesize Culture Fit
+                        </Button>
+                     </div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -284,6 +320,7 @@ export function CandidateDetailSheet({
                         Generate Onboarding Plan
                       </Button>
                     </div>
+                     {candidate.status !== 'Hired' && <p className="text-xs text-center text-muted-foreground mt-2">Candidate must be in 'Hired' column to enable these actions.</p>}
                   </CardContent>
                 </Card>
                 <Card>

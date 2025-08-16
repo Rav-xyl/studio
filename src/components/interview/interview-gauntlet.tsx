@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mic, Video, Download, Brain, Zap, Square, Lightbulb } from 'lucide-react';
+import { Loader2, Mic, Video, Square, Lightbulb, Brain } from 'lucide-react';
 import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
 import { evaluateInterviewResponse } from '@/ai/flows/evaluate-interview-response';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -25,17 +25,6 @@ type ConversationEntry = {
 
 type InterviewPhase = 'Technical' | 'System Design';
 
-// Speech Recognition setup
-const SpeechRecognition =
-  (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-let recognition: any;
-if (SpeechRecognition) {
-  recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = 'en-US';
-}
-
 interface InterviewGauntletProps {
     candidate: Candidate;
     initialPhase: InterviewPhase;
@@ -46,6 +35,7 @@ interface InterviewGauntletProps {
 export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete, onSystemDesignComplete }: InterviewGauntletProps) {
     const { toast } = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
+    const recognitionRef = useRef<any>(null);
     
     const [hasCameraPermission, setHasCameraPermission] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +50,36 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
     const [transcript, setTranscript] = useState('');
 
     useEffect(() => {
+        const setupSpeechRecognition = () => {
+            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                const recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+
+                recognition.onresult = (event: any) => {
+                    let finalTranscript = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) {
+                            finalTranscript += event.results[i][0].transcript;
+                        }
+                    }
+                    if (finalTranscript) {
+                        setTranscript(prev => prev + finalTranscript + '. ');
+                    }
+                };
+
+                recognition.onerror = (event: any) => {
+                    console.error('Speech recognition error:', event.error);
+                    toast({ title: 'Speech Recognition Error', description: 'There was an issue with the speech recognition.', variant: 'destructive' });
+                    setIsRecording(false);
+                };
+                
+                recognitionRef.current = recognition;
+            }
+        };
+
         const getCameraAndMicPermission = async () => {
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -68,6 +88,9 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
             if (videoRef.current) {
               videoRef.current.srcObject = stream;
             }
+            // Setup speech recognition only after getting permissions and on the client.
+            setupSpeechRecognition();
+
           } catch (error) {
             console.error('Error accessing media devices:', error);
             setHasCameraPermission(false);
@@ -111,29 +134,8 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
         fetchQuestionsForPhase();
     }, [candidate, initialPhase, toast]);
 
-    useEffect(() => {
-        if (!recognition) return;
-
-        recognition.onresult = (event: any) => {
-            let finalTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript;
-                }
-            }
-            if (finalTranscript) {
-                setTranscript(prev => prev + finalTranscript + '. ');
-            }
-        };
-
-        recognition.onerror = (event: any) => {
-            console.error('Speech recognition error:', event.error);
-            toast({ title: 'Speech Recognition Error', description: 'There was an issue with the speech recognition.', variant: 'destructive' });
-            setIsRecording(false);
-        };
-    }, [toast]);
-
     const handleToggleRecording = () => {
+        const recognition = recognitionRef.current;
         if (!recognition) {
             toast({ title: 'Not Supported', description: 'Speech recognition is not supported in your browser.', variant: 'destructive' });
             return;
@@ -266,16 +268,16 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                             {conversation.map((entry, index) => (
                                 <div key={index} className={`flex items-start gap-3 ${entry.speaker === 'Candidate' ? 'flex-row-reverse' : ''}`}>
                                      <Avatar>
-                                        <AvatarFallback className={entry.speaker === 'ARYA' ? 'bg-primary' : 'bg-slate-600'}>
+                                        <AvatarFallback className={entry.speaker === 'ARYA' ? 'bg-primary text-primary-foreground' : 'bg-slate-600 text-slate-100'}>
                                             {entry.speaker === 'ARYA' ? 'AI' : candidate.name.charAt(0)}
                                         </AvatarFallback>
                                     </Avatar>
-                                    <div className={`p-3 rounded-lg max-w-md ${entry.speaker === 'ARYA' ? 'bg-secondary' : 'bg-primary/80'}`}>
+                                    <div className={`p-3 rounded-lg max-w-md ${entry.speaker === 'ARYA' ? 'bg-secondary' : 'bg-primary/80 text-primary-foreground'}`}>
                                         <p className="font-bold text-xs uppercase tracking-wider mb-1 opacity-70">{entry.phase}</p>
                                         <p className="text-sm">{entry.text}</p>
                                         {entry.evaluation && (
                                             <div className="mt-2 pt-2 border-t border-t-slate-500/50">
-                                                <p className="text-xs text-slate-300">
+                                                <p className="text-xs">
                                                     <strong>Evaluation: </strong>{entry.evaluation.evaluation} (Score: {entry.evaluation.score}/10)
                                                 </p>
                                             </div>
@@ -285,15 +287,15 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                             ))}
                             {isRecording && (
                                 <div className="flex items-start gap-3 flex-row-reverse">
-                                    <Avatar><AvatarFallback className='bg-slate-600'>{candidate.name.charAt(0)}</AvatarFallback></Avatar>
+                                    <Avatar><AvatarFallback className='bg-slate-600 text-slate-100'>{candidate.name.charAt(0)}</AvatarFallback></Avatar>
                                     <div className="p-3 rounded-lg max-w-md bg-primary/50 border border-dashed border-primary">
-                                        <p className="text-sm italic text-slate-200">{transcript || 'Listening...'}</p>
+                                        <p className="text-sm italic">{transcript || 'Listening...'}</p>
                                     </div>
                                 </div>
                             )}
                              {isProcessing && (
                                 <div className="flex items-start gap-3">
-                                    <Avatar><AvatarFallback className='bg-primary'>AI</AvatarFallback></Avatar>
+                                    <Avatar><AvatarFallback className='bg-primary text-primary-foreground'>AI</AvatarFallback></Avatar>
                                     <div className="p-3 rounded-lg max-w-md bg-secondary animate-pulse">
                                         <p className="text-sm">Evaluating response and preparing next phase...</p>
                                     </div>
@@ -306,4 +308,3 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
         </div>
     );
 }
-
