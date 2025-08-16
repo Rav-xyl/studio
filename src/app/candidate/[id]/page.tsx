@@ -5,7 +5,7 @@ import { useState, useEffect, use } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Key } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Candidate } from '@/lib/types';
 import { finalInterviewReview, type FinalInterviewReviewOutput } from '@/ai/flows/final-interview-review';
@@ -30,7 +30,7 @@ interface GauntletState {
 }
 
 export default function CandidatePortalPage({ params }: { params: { id: string } }) {
-    const candidateId = params.id;
+    const candidateId = use(params).id;
     const router = useRouter();
     const { toast } = useToast();
     
@@ -280,5 +280,3 @@ const PhaseCard = ({ icon, title, description, status }: { icon: React.ReactNode
         </div>
     )
 }
-
-    
