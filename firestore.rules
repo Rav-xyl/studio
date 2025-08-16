@@ -3,13 +3,9 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow public read and write access to the candidates and roles collections for the prototype.
-    // In a production environment, these rules should be more restrictive.
-    match /candidates/{candidateId} {
-      allow read, write: if true;
-    }
-
-    match /roles/{roleId} {
+    // Allow read/write access to all documents for development purposes.
+    // In a production app, you would secure this with authentication rules.
+    match /{document=**} {
       allow read, write: if true;
     }
   }
