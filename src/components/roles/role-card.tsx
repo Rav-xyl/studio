@@ -1,6 +1,6 @@
 
 import type { JobRole } from '@/lib/types'
-import { Building, Users, Eye, RefreshCw } from 'lucide-react'
+import { Building, Users, Eye, RefreshCw, Search, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
 
@@ -8,10 +8,12 @@ interface RoleCardProps {
     role: JobRole
     onViewCandidates: (role: JobRole) => void;
     onReEngage: (role: JobRole) => void;
+    onFindTopCandidates: (role: JobRole) => void;
+    isMatching: boolean;
     style?: React.CSSProperties;
 }
 
-export function RoleCard({ role, onViewCandidates, onReEngage, style }: RoleCardProps) {
+export function RoleCard({ role, onViewCandidates, onReEngage, onFindTopCandidates, isMatching, style }: RoleCardProps) {
 
     return (
         <Card style={style} className="bg-white flex flex-col border-border/50 hover:border-primary/50 transition-colors">
@@ -29,12 +31,16 @@ export function RoleCard({ role, onViewCandidates, onReEngage, style }: RoleCard
                 </div>
                  <p className='text-sm text-muted-foreground mt-4 line-clamp-3'>{role.description}</p>
             </CardContent>
-            <CardFooter className='flex flex-col gap-2'>
-                <Button variant="outline" className='w-full bg-background hover:bg-secondary' onClick={() => onViewCandidates(role)}>
-                    <Eye className="mr-2 h-4 w-4" /> View Candidates
+            <CardFooter className='grid grid-cols-2 gap-2'>
+                <Button variant="outline" className='w-full bg-background hover:bg-secondary col-span-2' onClick={() => onViewCandidates(role)}>
+                    <Eye className="mr-2 h-4 w-4" /> View Assigned Candidates
                 </Button>
-                <Button variant="secondary" className='w-full' onClick={() => onReEngage(role)}>
-                    <RefreshCw className="mr-2 h-4 w-4" /> Re-engage Candidates
+                 <Button variant="secondary" className='w-full' onClick={() => onReEngage(role)}>
+                    <RefreshCw className="mr-2 h-4 w-4" /> Re-engage Archives
+                </Button>
+                <Button variant="default" className='w-full' onClick={() => onFindTopCandidates(role)} disabled={isMatching}>
+                    {isMatching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                     Find Candidates
                 </Button>
             </CardFooter>
         </Card>

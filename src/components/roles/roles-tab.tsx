@@ -1,5 +1,5 @@
 'use client'
-import type { JobRole } from '@/lib/types';
+import type { Candidate, JobRole } from '@/lib/types';
 import { PlusCircle, FolderSearch, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../ui/button';
@@ -7,18 +7,73 @@ import { GenerateJdDialog } from './generate-jd-dialog';
 import { RoleCard } from './role-card';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
+import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
+import { MatchedCandidatesDialog } from './matched-candidates-dialog';
 
 interface RolesTabProps {
     roles: JobRole[];
+    candidates: Candidate[];
     onViewCandidates: (role: JobRole) => void;
     onReEngage: (role: JobRole) => void;
     onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>) => void;
     onDeleteRole: (roleId: string, roleTitle: string) => void;
+    onUpdateCandidate: (candidate: Candidate) => void;
 }
 
 
-export function RolesTab({ roles, onViewCandidates, onReEngage, onAddRole, onDeleteRole }: RolesTabProps) {
+export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAddRole, onDeleteRole, onUpdateCandidate }: RolesTabProps) {
     const [isJdDialogOpen, setIsJdDialogOpen] = useState(false);
+    const [isMatching, setIsMatching] = useState(false);
+    const [isMatchesDialogOpen, setIsMatchesDialogOpen] = useState(false);
+    const [matchedCandidates, setMatchedCandidates] = useState<any[]>([]);
+    const [selectedRoleForMatching, setSelectedRoleForMatching] = useState<JobRole | null>(null);
+    const { toast } = useToast();
+
+    const handleFindTopCandidates = async (role: JobRole) => {
+        setIsMatching(true);
+        setSelectedRoleForMatching(role);
+        try {
+            const availableCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived);
+            if (availableCandidates.length === 0) {
+                toast({
+                    title: "No available candidates to match",
+                    description: "All candidates are currently assigned to a role. Unassign some to find matches.",
+                    variant: "destructive"
+                });
+                return;
+            }
+
+            const result = await findPotentialCandidates({
+                jobRole: role,
+                candidates: availableCandidates.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    skills: c.skills,
+                    narrative: c.narrative,
+                })),
+            });
+            
+            setMatchedCandidates(result.matches);
+            setIsMatchesDialogOpen(true);
+
+        } catch (error) {
+            console.error("Failed to find top candidates:", error);
+            toast({ title: 'Error', description: "Could not find potential candidates.", variant: 'destructive' });
+        } finally {
+            setIsMatching(false);
+        }
+    }
+
+    const handleAssignRole = (candidateId: string) => {
+        if (!selectedRoleForMatching) return;
+        const candidate = candidates.find(c => c.id === candidateId);
+        if (candidate) {
+            onUpdateCandidate({ ...candidate, role: selectedRoleForMatching.title });
+            toast({ title: "Role Assigned!", description: `${candidate.name} has been assigned to ${selectedRoleForMatching.title}.` });
+        }
+        // Also remove the assigned candidate from the dialog list
+        setMatchedCandidates(prev => prev.filter(m => m.candidateId !== candidateId));
+    };
     
     return (
         <div className="fade-in-slide-up">
@@ -41,6 +96,8 @@ export function RolesTab({ roles, onViewCandidates, onReEngage, onAddRole, onDel
                                 role={role} 
                                 onViewCandidates={onViewCandidates} 
                                 onReEngage={onReEngage}
+                                onFindTopCandidates={handleFindTopCandidates}
+                                isMatching={isMatching && selectedRoleForMatching?.id === role.id}
                                 style={{ '--stagger-index': index } as React.CSSProperties}
                             />
                             <AlertDialog>
@@ -73,6 +130,13 @@ export function RolesTab({ roles, onViewCandidates, onReEngage, onAddRole, onDel
                 </div>
             )}
             <GenerateJdDialog open={isJdDialogOpen} onOpenChange={setIsJdDialogOpen} onSave={onAddRole} />
+            <MatchedCandidatesDialog
+                isOpen={isMatchesDialogOpen}
+                onClose={() => setIsMatchesDialogOpen(false)}
+                matches={matchedCandidates}
+                roleTitle={selectedRoleForMatching?.title || ''}
+                onAssign={handleAssignRole}
+            />
         </div>
     )
 }

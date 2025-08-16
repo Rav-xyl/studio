@@ -112,7 +112,9 @@ export function AstraHirePage() {
                 title: 'Action Blocked',
                 description: 'This candidate has failed the Gauntlet and cannot be moved forward.'
             });
-            return; // Halt the update
+            // Revert UI optimistically
+            setCandidates(prev => [...prev]); 
+            return;
         }
         
         // Block move to 'Hired' from 'Screening' if gauntlet not complete for high-scorers
@@ -125,7 +127,9 @@ export function AstraHirePage() {
                     title: 'Action Blocked',
                     description: 'Candidate must complete the Gauntlet before being moved to Hired.'
                 });
-                return; // Halt the update
+                // Revert UI optimistically
+                setCandidates(prev => [...prev]); 
+                return; 
             }
         }
         
@@ -405,7 +409,7 @@ export function AstraHirePage() {
         } catch (error) {
             console.error("Full pipeline simulation failed:", error);
             toast({ title: "Simulation Error", description: "An error occurred. Check the console.", variant: "destructive"});
-            log("Error", `The simulation was interrupted by an error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            log("Error", `The simulation was interrupted by an error: ${error instanceof Error ? error.message : 'Unknown'}`);
         } finally {
             setIsLoading(false);
         }
@@ -588,7 +592,7 @@ export function AstraHirePage() {
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
-        return <RolesTab roles={roles} onViewCandidates={handleViewCandidatesForRole} onReEngage={handleReEngageForRole} onAddRole={handleAddRole} onDeleteRole={handleDeleteRole} />;
+        return <RolesTab roles={roles} candidates={candidates} onUpdateCandidate={handleUpdateCandidate} onViewCandidates={handleViewCandidatesForRole} onReEngage={handleReEngageForRole} onAddRole={handleAddRole} onDeleteRole={handleDeleteRole} />;
       case 'pool':
         return (
             <CandidatePoolTab 
