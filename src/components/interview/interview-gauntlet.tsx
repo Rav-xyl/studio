@@ -13,21 +13,14 @@ import { proctorTechnicalExam } from '@/ai/flows/proctor-technical-exam';
 import { generateSystemDesignQuestion } from '@/ai/flows/generate-system-design-question';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
-import { FinalInterviewPhase } from './final-interview-phase';
 
-
-type ProctoringLogEntry = {
-    timestamp: string;
-    event: string;
-};
-
-type InterviewPhase = 'Technical' | 'SystemDesign' | 'FinalInterview';
+type InterviewPhase = 'Technical' | 'SystemDesign' | 'FinalInterview'; // FinalInterview is legacy but kept for type safety
 type PreFlightStatus = 'Pending' | 'Success' | 'Error';
 
 interface InterviewGauntletProps {
     candidate: Candidate;
     initialPhase: InterviewPhase;
-    onPhaseComplete: (phase: InterviewPhase, report: string) => void;
+    onPhaseComplete: (phase: 'Technical' | 'SystemDesign', report: string) => void;
 }
 
 export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: InterviewGauntletProps) {
@@ -46,7 +39,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
     const [technicalQuestion, setTechnicalQuestion] = useState<string>('');
     const [systemDesignQuestion, setSystemDesignQuestion] = useState<string>('');
     const [writtenAnswer, setWrittenAnswer] = useState('');
-    const [proctoringLog, setProctoringLog] = useState<ProctoringLogEntry[]>([]);
+    const [proctoringLog, setProctoringLog] = useState<string[]>([]);
     const [ambientTranscript, setAmbientTranscript] = useState('');
 
     const answerSaveKey = `gauntlet_answer_${candidate.id}_${phase}`;
@@ -84,7 +77,6 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
     }, []);
     
     useEffect(() => {
-        // Load saved answer from local storage when phase changes
         const savedAnswer = localStorage.getItem(answerSaveKey);
         if (savedAnswer) {
             setWrittenAnswer(savedAnswer);
@@ -102,7 +94,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.hidden) {
-                const logEntry = { timestamp: new Date().toISOString(), event: 'Candidate switched tabs or minimized the window.' };
+                const logEntry = `[${new Date().toISOString()}] Candidate switched tabs or minimized the window.`;
                 setProctoringLog(prev => [...prev, logEntry]);
                 toast({
                     title: "Proctoring Alert",
@@ -123,7 +115,6 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
             setIsLoading(true);
             try {
                 if (phase === 'Technical') {
-                    // Using a static but relevant question for consistency
                     setTechnicalQuestion("Given a list of integers, write a function to find the first missing positive integer. For example, for [3, 4, -1, 1], the answer is 2. For [1, 2, 0], the answer is 3. Your solution should run in O(n) time and use constant extra space.");
                     recognitionRef.current?.start();
                 } else if (phase === 'SystemDesign') {
@@ -147,26 +138,25 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
         }
         setIsProcessing(true);
         recognitionRef.current?.stop();
-        localStorage.removeItem(answerSaveKey); // Clear saved answer on submit
+        localStorage.removeItem(answerSaveKey);
 
         try {
             if (phase === 'Technical') {
                 const result = await proctorTechnicalExam({
                     question: technicalQuestion,
                     candidateAnswer: writtenAnswer,
-                    proctoringLog: proctoringLog.map(log => log.event),
+                    proctoringLog: proctoringLog,
                     ambientAudioTranscript: ambientTranscript,
                 });
                 const report = generateProctoringReport(technicalQuestion, writtenAnswer, result);
                 onPhaseComplete('Technical', report);
             } else if (phase === 'SystemDesign') {
-                // For system design, we generate a simpler report as direct evaluation is more complex
                 const report = `SYSTEM DESIGN REPORT\n\nQuestion: ${systemDesignQuestion}\n\nCandidate Answer:\n${writtenAnswer}`;
                 onPhaseComplete('SystemDesign', report);
             }
         } catch (error) {
             toast({ title: 'Error', description: 'Could not process your answer.', variant: 'destructive'});
-            setIsProcessing(false); // Re-enable button on error
+            setIsProcessing(false);
         }
     };
     
@@ -179,7 +169,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
         reportContent += `PASS/FAIL: ${result.isPass ? 'Pass' : 'Fail'}\n\n`;
         reportContent += `EVALUATION:\n${result.evaluation}\n\n`;
         reportContent += `PROCTORING SUMMARY:\n${result.proctoringSummary}\n\n`;
-        reportContent += `FULL LOG:\n${proctoringLog.map(l => `- ${l.timestamp}: ${l.event}`).join('\n') || 'No events logged.'}\n`;
+        reportContent += `FULL LOG:\n${proctoringLog.map(l => `- ${l}`).join('\n') || 'No events logged.'}\n`;
         reportContent += `AMBIENT AUDIO TRANSCRIPT:\n${ambientTranscript || 'None detected.'}\n`;
         return reportContent;
     }
@@ -213,10 +203,6 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
         );
     }
     
-    if (phase === 'FinalInterview') {
-        return <FinalInterviewPhase candidate={candidate} onComplete={(report) => onPhaseComplete('FinalInterview', report)} />;
-    }
-
     const currentQuestionText = phase === 'Technical' ? technicalQuestion : systemDesignQuestion;
 
     if (isLoading && !currentQuestionText) {

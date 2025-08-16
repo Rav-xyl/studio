@@ -1,9 +1,10 @@
+
 import type { Candidate } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { Clock, Star, Users, Briefcase, CheckCircle, ShieldAlert } from 'lucide-react';
+import { Clock, Star, Users, Briefcase, CheckCircle, ShieldAlert, Video } from 'lucide-react';
 import { useDrag } from 'react-dnd';
 
 interface KanbanCardProps {
@@ -31,7 +32,7 @@ const StatusInfo = ({ status, candidate }: { status: string, candidate: Candidat
     switch (status) {
         case 'Sourcing': return <><Users className="h-3 w-3"/><span>New Candidate</span></>;
         case 'Screening': return <><CheckCircle className="h-3 w-3 text-green-500"/><span>Screening Passed</span></>;
-        case 'Interview': return <><Briefcase className="h-3 w-3 text-blue-500"/><span>Interview Stage</span></>;
+        case 'Interview': return <><Video className="h-3 w-3 text-blue-500"/><span>AI Video Interview</span></>;
         default: return <><Clock className='h-3 w-3'/><span>{new Date(candidate.lastUpdated).toLocaleDateString()}</span></>;
     }
 };
@@ -92,3 +93,5 @@ export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
     </Card>
   );
 }
+
+    

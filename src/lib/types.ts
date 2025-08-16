@@ -1,3 +1,4 @@
+
 export type KanbanStatus = 'Sourcing' | 'Screening' | 'Interview' | 'Hired';
 
 export interface LogEntry {
@@ -20,8 +21,6 @@ export type GauntletPhase =
   | 'PendingTechReview' 
   | 'SystemDesign' 
   | 'PendingDesignReview'
-  | 'FinalInterview'
-  | 'PendingFinalReview'
   | 'Complete'
   | 'Failed';
 
@@ -31,8 +30,8 @@ export interface GauntletState {
     techReview: FinalInterviewReviewOutput | null;
     systemDesignReport: string | null;
     designReview: FinalInterviewReviewOutput | null;
-    finalInterviewReport: string | null;
-    finalReview: FinalInterviewReviewOutput | null;
+    finalInterviewReport: string | null; // Legacy, unused in new flow
+    finalReview: FinalInterviewReviewOutput | null; // Legacy, unused in new flow
 }
 
 
@@ -88,3 +87,5 @@ export interface RubricChange {
   reason: string;
   status: 'Pending' | 'Approved' | 'Rejected';
 }
+
+    

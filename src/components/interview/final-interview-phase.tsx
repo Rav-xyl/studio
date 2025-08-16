@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mic, Bot, Send } from 'lucide-react';
+import { Loader2, Bot, Send } from 'lucide-react';
 import type { Candidate } from '@/lib/types';
 import { conductFinalInterview } from '@/ai/flows/final-interview';
 import { ScrollArea } from '../ui/scroll-area';
@@ -14,6 +14,10 @@ interface FinalInterviewPhaseProps {
     candidate: Candidate;
     onComplete: (report: string) => void;
 }
+
+// NOTE: This component is now effectively deprecated by the new flow.
+// It is kept in the codebase for potential future use or alternative interview paths,
+// but it is no longer called by the main Gauntlet component.
 
 export function FinalInterviewPhase({ candidate, onComplete }: FinalInterviewPhaseProps) {
     const { toast } = useToast();
@@ -88,3 +92,5 @@ export function FinalInterviewPhase({ candidate, onComplete }: FinalInterviewPha
         </div>
     );
 }
+
+    

@@ -5,7 +5,7 @@ import { useState, useEffect, use } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, BrainCircuit, FileText, ShieldCheck, Video, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, BrainCircuit, FileText, CheckCircle, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Candidate, GauntletPhase, GauntletState } from '@/lib/types';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
@@ -38,8 +38,8 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         techReview: null,
         systemDesignReport: null,
         designReview: null,
-        finalInterviewReport: null,
-        finalReview: null,
+        finalInterviewReport: null, // Kept for data model consistency, but unused in new flow
+        finalReview: null, // Kept for data model consistency, but unused in new flow
     });
     
     useEffect(() => {
@@ -63,7 +63,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                 const candidateDoc = await getDoc(candidateDocRef);
 
                 if (candidateDoc.exists()) {
-                    const candidateData = { id: candidateDoc.id, ...candidateDoc.data() } as Candidate;
+                    const candidateData = { id: candidateDoc.id, ...doc.data() } as Candidate;
                     setCandidate(candidateData);
                     if (candidateData.gauntletState) {
                         setGauntletState(candidateData.gauntletState);
@@ -115,10 +115,8 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         if (!candidate) return;
         setGauntletState(prev => ({ ...prev, phase: 'Failed' }));
 
-        // Generate a generic, professional report for the candidate
         const candidateReport = `Summary of the ${reason}:\n\nAfter a careful review of the assessment, we have decided to move forward with other candidates whose qualifications more closely align with the requirements of this role at this time. We appreciate your effort and wish you the best in your job search.`;
 
-        // Send email
         await aiDrivenCandidateEngagement({
             candidateName: candidate.name,
             candidateStage: 'Rejected',
@@ -129,16 +127,8 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
             rejectionReason: candidateReport,
         });
 
-        // Archive candidate
         await updateDoc(doc(db, 'candidates', candidate.id), { archived: true });
 
-        // If it's the final interview, run skill gap analysis for internal records
-        if (reason.includes("Final Interview")) {
-            await skillGapAnalysis({
-                candidateSkills: candidate.skills,
-                jobDescription: candidate.role, // In a real app, you'd use a real JD here
-            });
-        }
         toast({ variant: 'destructive', title: "Gauntlet Ended", description: "After careful review, we will not be proceeding." });
     };
 
@@ -146,21 +136,27 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         setIsProcessing(true);
         toast({ title: `Phase Complete: ${phase}`, description: "Submitting report to the BOSS AI for validation." });
         
-        const nextStateKey = phase === 'Technical' ? 'PendingTechReview' : phase === 'SystemDesign' ? 'PendingDesignReview' : 'PendingFinalReview';
+        const nextStateKey = phase === 'Technical' ? 'PendingTechReview' : 'PendingDesignReview';
         const reportKey = `${phase.charAt(0).toLowerCase() + phase.slice(1)}Report` as keyof GauntletState;
         setGauntletState(prev => ({ ...prev, phase: nextStateKey as GauntletPhase, [reportKey]: report }));
 
         try {
             const result = await finalInterviewReview({ interviewReport: report });
-            const reviewKey = phase === 'Technical' ? 'techReview' : phase === 'SystemDesign' ? 'designReview' : 'finalReview';
+            const reviewKey = phase === 'Technical' ? 'techReview' : 'designReview';
             
-            // Allow "Proceed with Caution" to also pass, but not for the final review
-            const isPass = result.finalRecommendation === "Strong Hire" || (result.finalRecommendation === "Proceed with Caution" && phase !== 'FinalInterview');
+            const isPass = result.finalRecommendation === "Strong Hire" || result.finalRecommendation === "Proceed with Caution";
 
             if (isPass) {
-                const nextPhase = phase === 'Technical' ? 'SystemDesign' : phase === 'SystemDesign' ? 'FinalInterview' : 'Complete';
+                const nextPhase = phase === 'Technical' ? 'SystemDesign' : 'Complete';
+                
+                if (nextPhase === 'Complete' && candidate) {
+                    // GAUNTLET PASSED! Move to Interview stage.
+                    await updateDoc(doc(db, 'candidates', candidate.id), { status: 'Interview' });
+                    toast({ title: "Gauntlet Passed!", description: "Candidate has been moved to the Interview stage." });
+                }
+
                 setGauntletState(prev => ({ ...prev, phase: nextPhase as GauntletPhase, [reviewKey]: result }));
-                 toast({ title: "Validation Successful!", description: "The BOSS AI has approved you for the next phase." });
+                toast({ title: "Validation Successful!", description: "The BOSS AI has approved you for the next phase." });
             } else {
                 setGauntletState(prev => ({ ...prev, [reviewKey]: result }));
                 await handleFailure(`${phase} Assessment`, report);
@@ -194,13 +190,6 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         report += `\n\n--- BOSS AI VALIDATION (SYSTEM DESIGN) ---\n`;
         report += gauntletState.designReview ? `Recommendation: ${gauntletState.designReview.finalRecommendation}\nAssessment: ${gauntletState.designReview.overallAssessment}` : "Phase not completed.";
         
-        report += `\n\n==================================================\n\n`;
-        
-        report += `--- PHASE 3: FINAL AI INTERVIEW ---\n`;
-        report += gauntletState.finalInterviewReport || "Phase not completed or data not available.";
-        report += `\n\n--- BOSS AI FINAL REVIEW ---\n`;
-        report += gauntletState.finalReview ? `Recommendation: ${gauntletState.finalReview.finalRecommendation}\nAssessment: ${gauntletState.finalReview.overallAssessment}` : "Phase not completed.";
-
         report += `\n\n--- END OF REPORT ---`;
         return report;
     }
@@ -224,7 +213,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     }
 
     const { phase } = gauntletState;
-    if (phase === 'Technical' || phase === 'SystemDesign' || phase === 'FinalInterview') {
+    if (phase === 'Technical' || phase === 'SystemDesign') {
         return (
             <InterviewGauntlet 
                 candidate={candidate} 
@@ -235,19 +224,15 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     }
 
     const stageStatus = (stage: GauntletPhase): StageStatus => {
-        const phaseOrder: GauntletPhase[] = ['Technical', 'PendingTechReview', 'SystemDesign', 'PendingDesignReview', 'FinalInterview', 'PendingFinalReview', 'Complete'];
+        const phaseOrder: GauntletPhase[] = ['Technical', 'PendingTechReview', 'SystemDesign', 'PendingDesignReview', 'Complete'];
         const currentPhaseIndex = phaseOrder.indexOf(phase);
         const stageIndex = phaseOrder.indexOf(stage);
 
         if (phase === 'Failed') {
-            const techFailed = gauntletState.techReview && gauntletState.techReview.finalRecommendation !== 'Strong Hire';
-            const designFailed = gauntletState.designReview && gauntletState.designReview.finalRecommendation !== 'Strong Hire';
-
+            const techFailed = gauntletState.techReview && (gauntletState.techReview.finalRecommendation === 'Do Not Hire');
             if (stage === 'Technical' && techFailed) return 'Failed';
             if (stage === 'Technical' && !techFailed) return 'Complete';
-            if (stage === 'SystemDesign' && designFailed) return 'Failed';
-            if (stage === 'SystemDesign' && !designFailed) return 'Complete';
-            if (stage === 'FinalInterview') return 'Failed'; // Final is always the fail point if we are here
+            if (stage === 'SystemDesign') return 'Failed';
             return 'Locked';
         }
 
@@ -278,12 +263,6 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                         description="A conceptual challenge to assess your architectural abilities."
                         status={stageStatus('SystemDesign')}
                     />
-                     <PhaseCard 
-                        icon={<Video />}
-                        title="Phase 3: Final AI Interview"
-                        description="A final behavioral and situational interview with our AI."
-                        status={stageStatus('FinalInterview')}
-                    />
                      {(phase === 'Complete' || phase === 'Failed') && (
                         <div className={`${phase === 'Complete' ? 'bg-green-100/50 border-green-400' : 'bg-red-100/50 border-red-400'} p-4 rounded-lg border`}>
                            <h4 className={`font-bold text-lg flex items-center gap-2 ${phase === 'Complete' ? 'text-green-700' : 'text-red-700'}`}>
@@ -292,7 +271,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                            </h4>
                            <p className={`text-sm mt-2 ${phase === 'Complete' ? 'text-green-600' : 'text-red-600'}`}>
                                {phase === 'Complete' 
-                                   ? "Thank you for completing all phases. The hiring team has been notified and will be in touch shortly regarding the next steps." 
+                                   ? "Congratulations! You have passed the technical assessment and advanced to the next stage. You will receive a separate invitation for the final AI Video Interview shortly." 
                                    : "Thank you for your time. After careful consideration, we will not be moving forward with your candidacy for this role."}
                            </p>
                            <Button variant="outline" className="mt-4" onClick={() => {
@@ -347,3 +326,5 @@ const PhaseCard = ({ icon, title, description, status }: { icon: React.ReactNode
         </div>
     )
 }
+
+    
