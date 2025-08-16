@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState } from "react";
@@ -34,11 +35,6 @@ const getGrandReport = (candidate: Candidate) => {
     report += `\n\n--- BOSS AI VALIDATION (SYSTEM DESIGN) ---\n`;
     report += gauntletState.designReview ? `Recommendation: ${gauntletState.designReview.finalRecommendation}\nAssessment: ${gauntletState.designReview.overallAssessment}` : "Phase not completed.";
     
-    report += `\n\n--- PHASE 3: FINAL AI INTERVIEW ---\n`;
-    report += gauntletState.finalInterviewReport || "Phase not completed.";
-    report += `\n\n--- BOSS AI FINAL REVIEW ---\n`;
-    report += gauntletState.finalReview ? `Recommendation: ${gauntletState.finalReview.finalRecommendation}\nAssessment: ${gauntletState.finalReview.overallAssessment}` : "Phase not completed.";
-
     report += `\n\n--- END OF REPORT ---`;
     return report;
 }
@@ -77,6 +73,7 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
     const { toast } = useToast();
 
     const gauntletCandidates = useMemo(() => {
+        // Show candidates who are eligible for gauntlet (score >= 70) and not archived
         return candidates.filter(c => (c.aiInitialScore || 0) >= 70 && !c.archived);
     }, [candidates]);
 
@@ -101,8 +98,7 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
         const { phase } = candidate.gauntletState;
         if (phase === 'Complete') return { text: 'Complete', value: 100 };
         if (phase === 'Failed') return { text: 'Failed', value: 0 };
-        if (phase === 'FinalInterview' || phase === 'PendingFinalReview') return { text: 'Phase 3: Final Interview', value: 66 };
-        if (phase === 'SystemDesign' || phase === 'PendingDesignReview') return { text: 'Phase 2: System Design', value: 33 };
+        if (phase === 'SystemDesign' || phase === 'PendingDesignReview') return { text: 'Phase 2: System Design', value: 50 };
         if (phase === 'Technical' || phase === 'PendingTechReview') return { text: 'Phase 1: Technical', value: 10 };
         return { text: 'Not Started', value: 0 };
     };
@@ -135,7 +131,7 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Candidate</TableHead>
-                                    <TableHead className="text-center">AI Score</TableHead>
+                                    <TableHead className="text-center">Pipeline Status</TableHead>
                                     <TableHead>Gauntlet Progress</TableHead>
                                     <TableHead className="text-center">Time Remaining</TableHead>
                                     <TableHead className="text-center">Final Recommendation</TableHead>
@@ -148,13 +144,15 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
                                         const status = getGauntletStatus(candidate);
                                         const deadline = getDaysRemaining(candidate);
                                         const isCompleteOrFailed = candidate.gauntletState?.phase === 'Complete' || candidate.gauntletState?.phase === 'Failed';
-                                        const recommendation = candidate.gauntletState?.finalReview?.finalRecommendation;
-
+                                        
+                                        // Use the last recommendation available
+                                        const finalRecommendation = candidate.gauntletState?.designReview?.finalRecommendation || candidate.gauntletState?.techReview?.finalRecommendation;
+                                        
                                         return (
                                             <TableRow key={candidate.id}>
                                                 <TableCell className="font-medium">{candidate.name}</TableCell>
                                                 <TableCell className="text-center">
-                                                    <Badge variant="secondary">{Math.round(candidate.aiInitialScore || 0)}</Badge>
+                                                     <Badge variant={candidate.status === 'Interview' ? 'default' : 'secondary'} className={candidate.status === 'Interview' ? 'bg-blue-600/80' : ''}>{candidate.status}</Badge>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex flex-col gap-2">
@@ -169,7 +167,7 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-center">
-                                                    <RecommendationBadge recommendation={isCompleteOrFailed ? recommendation : undefined} />
+                                                    <RecommendationBadge recommendation={isCompleteOrFailed ? finalRecommendation : undefined} />
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <DropdownMenu>
@@ -215,3 +213,5 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
         </>
     );
 }
+
+    

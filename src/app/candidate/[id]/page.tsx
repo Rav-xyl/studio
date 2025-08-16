@@ -63,7 +63,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                 const candidateDoc = await getDoc(candidateDocRef);
 
                 if (candidateDoc.exists()) {
-                    const candidateData = { id: candidateDoc.id, ...doc.data() } as Candidate;
+                    const candidateData = { id: candidateDoc.id, ...candidateDoc.data() } as Candidate;
                     setCandidate(candidateData);
                     if (candidateData.gauntletState) {
                         setGauntletState(candidateData.gauntletState);
@@ -132,7 +132,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         toast({ variant: 'destructive', title: "Gauntlet Ended", description: "After careful review, we will not be proceeding." });
     };
 
-    const handlePhaseComplete = async (phase: 'Technical' | 'SystemDesign' | 'FinalInterview', report: string) => {
+    const handlePhaseComplete = async (phase: 'Technical' | 'SystemDesign', report: string) => {
         setIsProcessing(true);
         toast({ title: `Phase Complete: ${phase}`, description: "Submitting report to the BOSS AI for validation." });
         
@@ -148,15 +148,15 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
 
             if (isPass) {
                 const nextPhase = phase === 'Technical' ? 'SystemDesign' : 'Complete';
-                
+                 setGauntletState(prev => ({ ...prev, phase: nextPhase as GauntletPhase, [reviewKey]: result }));
+
                 if (nextPhase === 'Complete' && candidate) {
                     // GAUNTLET PASSED! Move to Interview stage.
                     await updateDoc(doc(db, 'candidates', candidate.id), { status: 'Interview' });
-                    toast({ title: "Gauntlet Passed!", description: "Candidate has been moved to the Interview stage." });
+                    toast({ title: "Gauntlet Passed!", description: "You have passed the technical assessment and will be invited to the final interview stage shortly." });
+                } else {
+                     toast({ title: "Validation Successful!", description: "The BOSS AI has approved you for the next phase." });
                 }
-
-                setGauntletState(prev => ({ ...prev, phase: nextPhase as GauntletPhase, [reviewKey]: result }));
-                toast({ title: "Validation Successful!", description: "The BOSS AI has approved you for the next phase." });
             } else {
                 setGauntletState(prev => ({ ...prev, [reviewKey]: result }));
                 await handleFailure(`${phase} Assessment`, report);
@@ -326,5 +326,7 @@ const PhaseCard = ({ icon, title, description, status }: { icon: React.ReactNode
         </div>
     )
 }
+
+    
 
     
