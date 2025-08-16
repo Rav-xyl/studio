@@ -100,7 +100,22 @@ export function AstraHirePage() {
     }
 
     const originalCandidate = candidates.find(c => c.id === id);
-    if (originalCandidate && originalCandidate.status !== updatedCandidate.status) {
+    if (!originalCandidate) return;
+
+    // --- Gauntlet Failure Check ---
+    if (updatedCandidate.status === 'Interview') {
+        const hasFailedGauntlet = originalCandidate.gauntletState?.bossValidation?.finalRecommendation === 'Do Not Hire';
+        if (hasFailedGauntlet) {
+            toast({
+                variant: 'destructive',
+                title: 'Action Blocked',
+                description: 'This candidate has failed the Gauntlet and cannot proceed to the Interview stage.'
+            });
+            return; // Halt the update
+        }
+    }
+
+    if (originalCandidate.status !== updatedCandidate.status) {
          await addLog(id, {
             event: 'Status Change',
             details: `Candidate moved from ${originalCandidate.status} to ${updatedCandidate.status}`,
