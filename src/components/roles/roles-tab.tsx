@@ -1,4 +1,3 @@
-
 'use client'
 import type { Candidate, JobRole } from '@/lib/types';
 import { PlusCircle, FolderSearch, Trash2 } from 'lucide-react';
@@ -34,11 +33,11 @@ export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAd
         setIsMatching(true);
         setSelectedRoleForMatching(role);
         try {
-            const availableCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived);
+            const availableCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived && c.status === 'Screening');
             if (availableCandidates.length === 0) {
                 toast({
                     title: "No available candidates to match",
-                    description: "All candidates are currently assigned to a role. Unassign some to find matches.",
+                    description: "No 'Unassigned' candidates were found in the 'Screening' column.",
                     variant: "destructive"
                 });
                 return;

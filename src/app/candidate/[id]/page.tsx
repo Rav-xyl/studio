@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, use } from 'react';
@@ -13,7 +12,6 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import dynamic from 'next/dynamic';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
-import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 
 const InterviewGauntlet = dynamic(() => import('@/components/interview/interview-gauntlet').then(mod => mod.InterviewGauntlet), {
     ssr: false,
@@ -38,8 +36,8 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         techReview: null,
         systemDesignReport: null,
         designReview: null,
-        finalInterviewReport: null, // Kept for data model consistency, but unused in new flow
-        finalReview: null, // Kept for data model consistency, but unused in new flow
+        finalInterviewReport: null,
+        finalReview: null,
     });
     
     useEffect(() => {
@@ -68,7 +66,6 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                     if (candidateData.gauntletState) {
                         setGauntletState(candidateData.gauntletState);
                     } else {
-                        // If no state, start at the beginning
                         setGauntletState(prev => ({...prev, phase: 'Technical' }));
                     }
                 } else {
@@ -94,7 +91,6 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
             if (candidate && candidate.id && gauntletState.phase !== 'Locked' && isAuthenticated) {
                 try {
                     const candidateDocRef = doc(db, 'candidates', candidate.id);
-                    // Deep copy to avoid Firestore serialization issues with undefined
                     await updateDoc(candidateDocRef, {
                         gauntletState: JSON.parse(JSON.stringify(gauntletState)) 
                     });
@@ -111,11 +107,9 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         saveGauntletState();
     }, [gauntletState, candidate, toast, isAuthenticated]);
 
-    const handleFailure = async (reason: string, report: string) => {
+    const handleFailure = async (reason: string) => {
         if (!candidate) return;
         setGauntletState(prev => ({ ...prev, phase: 'Failed' }));
-
-        const candidateReport = `Summary of the ${reason}:\n\nAfter a careful review of the assessment, we have decided to move forward with other candidates whose qualifications more closely align with the requirements of this role at this time. We appreciate your effort and wish you the best in your job search.`;
 
         await aiDrivenCandidateEngagement({
             candidateName: candidate.name,
@@ -124,7 +118,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
             companyName: 'AstraHire',
             recruiterName: 'The Hiring Team',
             candidateSkills: candidate.skills.join(', '),
-            rejectionReason: candidateReport,
+            rejectionReason: `After a careful review of the ${reason}, we have decided to move forward with other candidates.`,
         });
 
         await updateDoc(doc(db, 'candidates', candidate.id), { archived: true });
@@ -148,18 +142,18 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
 
             if (isPass) {
                 const nextPhase = phase === 'Technical' ? 'SystemDesign' : 'Complete';
-                 setGauntletState(prev => ({ ...prev, phase: nextPhase as GauntletPhase, [reviewKey]: result }));
+                const newState: Partial<GauntletState> = { phase: nextPhase as GauntletPhase, [reviewKey]: result };
+                 setGauntletState(prev => ({ ...prev, ...newState }));
 
                 if (nextPhase === 'Complete' && candidate) {
-                    // GAUNTLET PASSED! Move to Interview stage.
-                    await updateDoc(doc(db, 'candidates', candidate.id), { status: 'Interview' });
+                    await updateDoc(doc(db, 'candidates', candidate.id), { status: 'Interview', gauntletState: { ...gauntletState, ...newState } });
                     toast({ title: "Gauntlet Passed!", description: "You have passed the technical assessment and will be invited to the final interview stage shortly." });
                 } else {
                      toast({ title: "Validation Successful!", description: "The BOSS AI has approved you for the next phase." });
                 }
             } else {
                 setGauntletState(prev => ({ ...prev, [reviewKey]: result }));
-                await handleFailure(`${phase} Assessment`, report);
+                await handleFailure(`${phase} Assessment`);
             }
         } catch (error) {
             console.error("BOSS validation failed", error);
@@ -232,8 +226,9 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
             const techFailed = gauntletState.techReview && (gauntletState.techReview.finalRecommendation === 'Do Not Hire');
             if (stage === 'Technical' && techFailed) return 'Failed';
             if (stage === 'Technical' && !techFailed) return 'Complete';
-            if (stage === 'SystemDesign') return 'Failed';
-            return 'Locked';
+            if (stage === 'SystemDesign' && !techFailed) return 'Locked';
+            if (stage === 'SystemDesign' && techFailed) return 'Failed';
+            return 'Failed';
         }
 
         if (currentPhaseIndex > stageIndex) return 'Complete';
@@ -326,7 +321,3 @@ const PhaseCard = ({ icon, title, description, status }: { icon: React.ReactNode
         </div>
     )
 }
-
-    
-
-    

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState } from "react";
@@ -46,7 +45,7 @@ const downloadReport = (candidate: Candidate) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `grand_report_${candidate.name}.txt`;
+    a.download = `Gauntlet_Report_${candidate.name.replace(/\s/g, '_')}.txt`;
     a.click();
     URL.revokeObjectURL(url);
 }
@@ -97,7 +96,7 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
         if (!candidate.gauntletState) return { text: 'Not Started', value: 0 };
         const { phase } = candidate.gauntletState;
         if (phase === 'Complete') return { text: 'Complete', value: 100 };
-        if (phase === 'Failed') return { text: 'Failed', value: 0 };
+        if (phase === 'Failed') return { text: 'Failed', value: 100 }; // Show 100% to indicate it's finished, but failed.
         if (phase === 'SystemDesign' || phase === 'PendingDesignReview') return { text: 'Phase 2: System Design', value: 50 };
         if (phase === 'Technical' || phase === 'PendingTechReview') return { text: 'Phase 1: Technical', value: 10 };
         return { text: 'Not Started', value: 0 };
@@ -145,7 +144,6 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
                                         const deadline = getDaysRemaining(candidate);
                                         const isCompleteOrFailed = candidate.gauntletState?.phase === 'Complete' || candidate.gauntletState?.phase === 'Failed';
                                         
-                                        // Use the last recommendation available
                                         const finalRecommendation = candidate.gauntletState?.designReview?.finalRecommendation || candidate.gauntletState?.techReview?.finalRecommendation;
                                         
                                         return (
@@ -178,9 +176,9 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuItem onClick={() => handleViewLog(candidate)}>
-                                                                <FileText className="mr-2 h-4 w-4" /> View Full Log
+                                                                 <FileText className="mr-2 h-4 w-4" /> View Full Log
                                                             </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => downloadReport(candidate)} disabled={!isCompleteOrFailed}>
+                                                            <DropdownMenuItem onClick={() => downloadReport(candidate)} disabled={!candidate.gauntletState}>
                                                                 <Download className="mr-2 h-4 w-4" /> Download Report
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => handleArchiveCandidate(candidate.id)}>
@@ -213,5 +211,3 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
         </>
     );
 }
-
-    

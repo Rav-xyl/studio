@@ -1,4 +1,3 @@
-
 import type { Candidate } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -93,5 +92,3 @@ export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
     </Card>
   );
 }
-
-    

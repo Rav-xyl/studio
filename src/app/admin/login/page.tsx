@@ -23,6 +23,9 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setIsLoading(true);
 
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
       sessionStorage.setItem('admin-auth', 'true');
       toast({
