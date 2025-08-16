@@ -7,6 +7,21 @@ export interface LogEntry {
   author: 'System' | 'AI' | 'Admin';
 }
 
+export interface FinalInterviewReviewOutput {
+  finalRecommendation: string;
+  overallAssessment: string;
+  keyStrengths: string[];
+  potentialConcerns: string[];
+}
+
+export interface GauntletState {
+    phase: 'Locked' | 'Technical' | 'PendingReview' | 'SystemDesign' | 'Complete';
+    technicalReport: string | null;
+    systemDesignReport: string | null;
+    bossValidation: FinalInterviewReviewOutput | null;
+}
+
+
 export interface Candidate {
   id: string;
   name: string;
@@ -20,6 +35,7 @@ export interface Candidate {
   archived?: boolean;
   log?: LogEntry[];
   gauntletStartDate?: string;
+  gauntletState?: GauntletState;
   // Optional fields from AI processing
   [key: string]: any;
 }

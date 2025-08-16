@@ -1,22 +1,73 @@
 'use client';
 
 import { useMemo, useState } from "react";
-import type { Candidate, LogEntry } from "@/lib/types";
+import type { Candidate, FinalInterviewReviewOutput } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { FileText, ShieldQuestion, Timer } from "lucide-react";
+import { FileText, ShieldQuestion, Timer, MoreHorizontal, Archive, Download, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CandidateLogDialog } from "./candidate-log-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 interface GauntletMonitorTableProps {
     candidates: Candidate[];
 }
 
+const getGrandReport = (candidate: Candidate) => {
+    if (!candidate.gauntletState) return "No gauntlet data available.";
+    const { gauntletState } = candidate;
+    let report = `GRAND REPORT FOR CANDIDATE: ${candidate?.name}\n\n`;
+    report += `--- PHASE 1: TECHNICAL GAUNTLET ---\n`;
+    report += gauntletState.technicalReport || "No data.";
+    report += `\n\n--- BOSS AI VALIDATION ---\n`;
+    if (gauntletState.bossValidation) {
+        report += `Recommendation: ${gauntletState.bossValidation.finalRecommendation}\n`;
+        report += `Assessment: ${gauntletState.bossValidation.overallAssessment}\n`;
+    } else {
+        report += "No validation data.";
+    }
+    report += `\n\n--- PHASE 2: SYSTEM DESIGN CHALLENGE ---\n`;
+    report += gauntletState.systemDesignReport || "Phase not completed or data unavailable.";
+    report += `\n\n--- END OF REPORT ---`;
+    return report;
+}
+
+const downloadReport = (candidate: Candidate) => {
+    const report = getGrandReport(candidate);
+    const blob = new Blob([report], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `grand_report_${candidate.name}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+const RecommendationBadge = ({ recommendation }: { recommendation: string | undefined }) => {
+    if (!recommendation) return <Badge variant="secondary">In Progress</Badge>;
+
+    switch (recommendation) {
+        case 'Strong Hire':
+            return <Badge className="bg-green-600/80 text-white"><CheckCircle className="mr-1 h-3 w-3" /> Strong Hire</Badge>;
+        case 'Proceed with Caution':
+            return <Badge className="bg-amber-500/80 text-white"><AlertCircle className="mr-1 h-3 w-3" /> Proceed with Caution</Badge>;
+        case 'Do Not Hire':
+            return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" /> Do Not Hire</Badge>;
+        default:
+            return <Badge variant="secondary">{recommendation}</Badge>;
+    }
+};
+
+
 export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) {
     const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
     const [isLogDialogOpen, setIsLogDialogOpen] = useState(false);
+    const { toast } = useToast();
 
     const gauntletCandidates = useMemo(() => {
         return candidates.filter(c => (c.aiInitialScore || 0) >= 70 && !c.archived);
@@ -25,6 +76,17 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
     const handleViewLog = (candidate: Candidate) => {
         setSelectedCandidate(candidate);
         setIsLogDialogOpen(true);
+    };
+    
+    const handleArchiveCandidate = async (candidateId: string) => {
+        try {
+            const candidateRef = doc(db, 'candidates', candidateId);
+            await updateDoc(candidateRef, { archived: true });
+            toast({ title: 'Candidate Archived', description: 'The candidate has been moved to the archives.' });
+        } catch (error) {
+            console.error('Failed to archive candidate:', error);
+            toast({ title: 'Error', description: 'Could not archive the candidate.', variant: 'destructive' });
+        }
     };
 
     const getGauntletStatus = (candidate: Candidate) => {
@@ -41,13 +103,14 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
         if (!candidate.gauntletStartDate || candidate.gauntletState?.phase === 'Complete') return { text: 'N/A', isUrgent: false, isExpired: false };
         const now = new Date();
         const startDate = new Date(candidate.gauntletStartDate);
-        const deadline = new Date(startDate.setDate(startDate.getDate() + 7));
+        const deadline = new Date(new Date(startDate).setDate(startDate.getDate() + 7));
         const daysRemaining = (deadline.getTime() - now.getTime()) / (1000 * 3600 * 24);
 
         if (daysRemaining < 0) return { text: 'Expired', isUrgent: false, isExpired: true };
         if (daysRemaining <= 3) return { text: `${Math.ceil(daysRemaining)} days left`, isUrgent: true, isExpired: false };
         return { text: `${Math.ceil(daysRemaining)} days left`, isUrgent: false, isExpired: false };
     };
+    
 
     return (
         <>
@@ -67,6 +130,7 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
                                     <TableHead className="text-center">AI Score</TableHead>
                                     <TableHead>Gauntlet Progress</TableHead>
                                     <TableHead className="text-center">Time Remaining</TableHead>
+                                    <TableHead className="text-center">Final Recommendation</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -75,6 +139,9 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
                                     gauntletCandidates.map(candidate => {
                                         const status = getGauntletStatus(candidate);
                                         const deadline = getDaysRemaining(candidate);
+                                        const isComplete = status.value === 100;
+                                        const recommendation = candidate.gauntletState?.bossValidation?.finalRecommendation;
+
                                         return (
                                             <TableRow key={candidate.id}>
                                                 <TableCell className="font-medium">{candidate.name}</TableCell>
@@ -93,17 +160,35 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
                                                         {deadline.text}
                                                     </div>
                                                 </TableCell>
+                                                <TableCell className="text-center">
+                                                    <RecommendationBadge recommendation={isComplete ? recommendation : undefined} />
+                                                </TableCell>
                                                 <TableCell className="text-right">
-                                                    <Button variant="ghost" size="sm" onClick={() => handleViewLog(candidate)}>
-                                                        <FileText className="mr-2 h-4 w-4" /> View Log
-                                                    </Button>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon">
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem onClick={() => handleViewLog(candidate)}>
+                                                                <FileText className="mr-2 h-4 w-4" /> View Full Log
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => downloadReport(candidate)} disabled={!isComplete}>
+                                                                <Download className="mr-2 h-4 w-4" /> Download Report
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleArchiveCandidate(candidate.id)}>
+                                                                <Archive className="mr-2 h-4 w-4" /> Archive Candidate
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </TableCell>
                                             </TableRow>
                                         )
                                     })
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="h-24 text-center">
+                                        <TableCell colSpan={6} className="h-24 text-center">
                                             <ShieldQuestion className="mx-auto h-10 w-10 text-muted-foreground mb-2" />
                                             No candidates have been shortlisted for the Gauntlet yet.
                                         </TableCell>
