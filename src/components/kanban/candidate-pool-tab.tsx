@@ -33,6 +33,7 @@ interface CandidatePoolTabProps {
     onClearFilter: () => void;
     onUpdateCandidate: (candidate: Candidate) => void;
     onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate: Candidate) => void;
+    onDeleteCandidate: (candidateId: string) => void;
 }
 
 export function CandidatePoolTab({
@@ -43,6 +44,7 @@ export function CandidatePoolTab({
     onClearFilter,
     onUpdateCandidate,
     onAddRole,
+    onDeleteCandidate,
 }: CandidatePoolTabProps) {
   
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -61,16 +63,6 @@ export function CandidatePoolTab({
     if (!open) {
       setSelectedCandidate(null);
     }
-  }
-
-  const handleDeleteCandidate = async (candidateId: string) => {
-      try {
-          await deleteDoc(doc(db, 'candidates', candidateId));
-          toast({ title: "Candidate Deleted", description: "The candidate has been permanently removed." });
-      } catch (error) {
-          console.error("Failed to delete candidate:", error);
-          toast({ title: "Deletion Failed", description: "Could not delete the candidate. See console for details.", variant: 'destructive' });
-      }
   }
 
   const handleOpenUploadDialog = (auditMode = false) => {
@@ -148,7 +140,7 @@ export function CandidatePoolTab({
             candidate={selectedCandidate}
             onUpdateCandidate={onUpdateCandidate}
             onAddRole={onAddRole}
-            onDeleteCandidate={handleDeleteCandidate}
+            onDeleteCandidate={onDeleteCandidate}
             />
         </div>
     </DndProvider>

@@ -5,9 +5,6 @@ import { useState } from 'react';
 import { Button } from '../ui/button';
 import { GenerateJdDialog } from './generate-jd-dialog';
 import { RoleCard } from './role-card';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 
@@ -15,57 +12,14 @@ interface RolesTabProps {
     roles: JobRole[];
     onViewCandidates: (role: JobRole) => void;
     onReEngage: (role: JobRole) => void;
+    onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>) => void;
+    onDeleteRole: (roleId: string, roleTitle: string) => void;
 }
 
 
-export function RolesTab({ roles, onViewCandidates, onReEngage }: RolesTabProps) {
+export function RolesTab({ roles, onViewCandidates, onReEngage, onAddRole, onDeleteRole }: RolesTabProps) {
     const [isJdDialogOpen, setIsJdDialogOpen] = useState(false);
-    const { toast } = useToast();
-
-    const handleAddRole = async (newRole: Omit<JobRole, 'id' | 'openings'>) => {
-        const existingRole = roles.find(role => role.title.toLowerCase() === newRole.title.toLowerCase());
-        if (existingRole) {
-            toast({
-                title: 'Role Already Exists',
-                description: `A role with the title "${newRole.title}" already exists.`,
-                variant: 'destructive',
-            });
-            return;
-        }
-
-        const fullNewRole: JobRole = {
-            id: `role-${nanoid(10)}`,
-            ...newRole,
-            openings: 1, 
-        };
-        const newRoleRef = doc(collection(db, 'roles'));
-        await setDoc(newRoleRef, fullNewRole);
-        
-        toast({ title: 'Role Added', description: `Successfully added ${fullNewRole.title} to client roles.` });
-    }
-
-    const handleDeleteRole = async (roleId: string, roleTitle: string) => {
-        try {
-            // First, delete the role document
-            await deleteDoc(doc(db, 'roles', roleId));
-
-            // Then, find all candidates assigned to this role and set their role to "Unassigned"
-            const q = query(collection(db, 'candidates'), where('role', '==', roleTitle));
-            const querySnapshot = await getDocs(q);
-            
-            const batch = writeBatch(db);
-            querySnapshot.forEach((candidateDoc) => {
-                batch.update(candidateDoc.ref, { role: 'Unassigned' });
-            });
-            await batch.commit();
-
-            toast({ title: 'Role Deleted', description: `${roleTitle} has been deleted and ${querySnapshot.size} candidate(s) have been unassigned.` });
-        } catch (error) {
-            console.error("Failed to delete role:", error);
-            toast({ title: 'Deletion Failed', description: "Could not delete the role. See console for details.", variant: 'destructive' });
-        }
-    }
-
+    
     return (
         <div className="fade-in-slide-up">
             <div className="flex justify-between items-center mb-6">
@@ -104,7 +58,7 @@ export function RolesTab({ roles, onViewCandidates, onReEngage }: RolesTabProps)
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDeleteRole(role.id, role.title)}>Confirm Delete</AlertDialogAction>
+                                        <AlertDialogAction onClick={() => onDeleteRole(role.id, role.title)}>Confirm Delete</AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
@@ -118,7 +72,7 @@ export function RolesTab({ roles, onViewCandidates, onReEngage }: RolesTabProps)
                     <p className="text-muted-foreground mt-2">Use the button above to synthesize a new Job Description.</p>
                 </div>
             )}
-            <GenerateJdDialog open={isJdDialogOpen} onOpenChange={setIsJdDialogOpen} onSave={handleAddRole} />
+            <GenerateJdDialog open={isJdDialogOpen} onOpenChange={setIsJdDialogOpen} onSave={onAddRole} />
         </div>
     )
 }

@@ -17,6 +17,7 @@ import {z} from 'genkit';
 const ReviewCandidateInputSchema = z.object({
   candidateData: z.string().describe('The candidate data to review.'),
   jobDescription: z.string().describe('The job description for the role.'),
+  companyType: z.enum(['startup', 'enterprise']).describe('The type of company hiring, which dictates the evaluation criteria.'),
 });
 export type ReviewCandidateInput = z.infer<typeof ReviewCandidateInputSchema>;
 
@@ -34,7 +35,16 @@ const reviewCandidatePrompt = ai.definePrompt({
   name: 'reviewCandidatePrompt',
   input: {schema: ReviewCandidateInputSchema},
   output: {schema: ReviewCandidateOutputSchema},
-  prompt: `You are an AI assistant that reviews candidate data and provides a recommendation.
+  prompt: `You are an AI assistant that reviews candidate data and provides a recommendation based on the company type.
+
+  Company Type: {{{companyType}}}
+
+  **Evaluation Criteria:**
+  {{#if (eq companyType "startup")}}
+  - **Startup Context:** Look for adaptability, potential to grow, and a fit for a fast-paced environment where roles are not rigidly defined. The justification should reflect this.
+  {{else}}
+  - **Enterprise Context:** Focus strictly on the alignment of skills and experience with the job description. The justification should be based on proven expertise and qualifications.
+  {{/if}}
 
   Based on the following candidate data:
   {{candidateData}}
@@ -43,8 +53,7 @@ const reviewCandidatePrompt = ai.definePrompt({
   {{jobDescription}}
 
   Provide a recommendation (Hire, Reject, Maybe) and a justification for your recommendation.
-  Ensure the recommendation aligns with the job description and candidate's qualifications.
-  Consider skills, experience, and overall fit for the role.
+  Ensure the recommendation and justification align with the evaluation criteria for the specified company type.
   
   IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.
   `,

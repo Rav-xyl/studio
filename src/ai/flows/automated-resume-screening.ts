@@ -20,6 +20,7 @@ const AutomatedResumeScreeningInputSchema = z.object({
     ),
   skillMappings: z.record(z.string(), z.string()).optional().describe('A map of candidate skills to company-preferred skills.'),
   companyPreferences: z.string().optional().describe('Any specific company preferences for candidates.'),
+  companyType: z.enum(['startup', 'enterprise']).describe('The type of company hiring, which dictates the evaluation criteria.'),
 });
 export type AutomatedResumeScreeningInput = z.infer<typeof AutomatedResumeScreeningInputSchema>;
 
@@ -47,10 +48,18 @@ const prompt = ai.definePrompt({
   name: 'automatedResumeScreeningPrompt',
   input: {schema: AutomatedResumeScreeningInputSchema},
   output: {schema: AutomatedResumeScreeningOutputSchema},
-  prompt: `You are an expert resume screener for the Indian job market.
+  prompt: `You are an expert resume screener for the Indian job market, adapting your evaluation based on the company type.
 
-  Analyze the provided resume and extract key information such as skills, experience, and any other relevant information.
-  Then, score the candidate based on their suitability for a generic role, taking into account any skill mappings and company preferences provided.
+  Company Type: {{{companyType}}}
+
+  **Evaluation Criteria:**
+  {{#if (eq companyType "startup")}}
+  - **Startup Context:** Prioritize adaptability, a broad range of skills, and signs of a proactive, "all-rounder" mindset. Be more lenient on formal education or linear career paths. Look for evidence of self-starting and wearing multiple hats.
+  {{else}}
+  - **Enterprise Context:** Prioritize deep, role-specific experience, stability in previous roles, and strong formal qualifications (e.g., specific degrees, certifications). Value specialized expertise over broad, general skills.
+  {{/if}}
+
+  Analyze the provided resume and extract key information. Then, score the candidate based on their suitability for a generic role within the specified company context.
 
   Resume:
   {{media url=resumeDataUri}}
@@ -65,7 +74,7 @@ const prompt = ai.definePrompt({
   {{{companyPreferences}}}
   {{/if}}
 
-  Provide a candidate score and reasoning for the score.
+  Provide a candidate score and reasoning for the score, strictly following the evaluation criteria for the given company type.
   - Extract the candidate's full name. If not found, use the filename.
   - Extract email and phone if available.
   - Find one social media or portfolio URL (LinkedIn, GitHub, Personal Website etc.) if available.

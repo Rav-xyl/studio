@@ -84,7 +84,8 @@ export function CandidateDetailSheet({
         if (type === 'review') {
             result = await reviewCandidate({
                 candidateData: candidate.narrative,
-                jobDescription: candidate.role
+                jobDescription: candidate.role,
+                companyType: 'startup', // This could be made dynamic
             });
         } else if (type === 'email') {
             result = await aiDrivenCandidateEngagement({
@@ -298,7 +299,7 @@ export function CandidateDetailSheet({
                   </CardHeader>
                   <CardContent className="space-y-4">
                      <div>
-                        <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('skillGap')} disabled={isGenerating.skillGap}>
+                        <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('skillGap')} disabled={isGenerating.skillGap || isUnassigned}>
                            {isGenerating.skillGap ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                            Analyze Skill Gap
                         </Button>

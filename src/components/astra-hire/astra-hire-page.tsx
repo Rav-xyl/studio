@@ -20,7 +20,7 @@ import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, addDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, addDoc, serverTimestamp, arrayUnion, deleteDoc } from 'firebase/firestore';
 import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
 import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
@@ -112,47 +112,50 @@ export function AstraHirePage() {
     await updateDoc(candidateDocRef, candidateData);
   };
 
-  const handleAddRole = async (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate: Candidate) => {
+  const handleAddRole = async (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate?: Candidate) => {
     
     const existingRole = roles.find(role => role.title.toLowerCase() === newRole.title.toLowerCase());
     if(existingRole) {
         toast({
             title: 'Role Already Exists',
-            description: `A role named "${newRole.title}" already exists. Assigning candidate to existing role.`,
+            description: `A role named "${newRole.title}" already exists.`,
             variant: 'destructive'
         });
-        const candidateRef = doc(db, 'candidates', candidateToUpdate.id);
-        await updateDoc(candidateRef, { role: existingRole.title });
-        await addLog(candidateToUpdate.id, {
-            event: 'Role Assigned',
-            details: `Candidate manually assigned to existing role: ${existingRole.title}`,
-            author: 'System'
-        });
+        if (candidateToUpdate) {
+            const candidateRef = doc(db, 'candidates', candidateToUpdate.id);
+            await updateDoc(candidateRef, { role: existingRole.title });
+            await addLog(candidateToUpdate.id, {
+                event: 'Role Assigned',
+                details: `Candidate manually assigned to existing role: ${existingRole.title}`,
+                author: 'System'
+            });
+        }
         return;
     }
     
+    const newRoleRef = doc(collection(db, 'roles'));
     const fullNewRole: JobRole = {
-        id: `role-${nanoid(10)}`,
+        id: newRoleRef.id,
         ...newRole,
         openings: 1,
     };
     
-    const newRoleRef = doc(collection(db, 'roles'));
-    const candidateRef = doc(db, 'candidates', candidateToUpdate.id);
-
-    const batch = writeBatch(db);
-    batch.set(newRoleRef, fullNewRole);
-    batch.update(candidateRef, { role: fullNewRole.title });
-    
-    await batch.commit();
-
-    await addLog(candidateToUpdate.id, {
-        event: 'Role Assigned',
-        details: `Candidate assigned to newly created role: ${fullNewRole.title}`,
-        author: 'AI'
-    });
-
-    toast({ title: 'Role Added & Assigned', description: `Successfully added ${fullNewRole.title} and assigned it to ${candidateToUpdate.name}.` });
+    if (candidateToUpdate) {
+        const candidateRef = doc(db, 'candidates', candidateToUpdate.id);
+        const batch = writeBatch(db);
+        batch.set(newRoleRef, fullNewRole);
+        batch.update(candidateRef, { role: fullNewRole.title });
+        await batch.commit();
+        await addLog(candidateToUpdate.id, {
+            event: 'Role Assigned',
+            details: `Candidate assigned to newly created role: ${fullNewRole.title}`,
+            author: 'AI'
+        });
+        toast({ title: 'Role Added & Assigned', description: `Successfully added ${fullNewRole.title} and assigned to ${candidateToUpdate.name}.` });
+    } else {
+        await setDoc(newRoleRef, fullNewRole);
+        toast({ title: 'Role Added', description: `Successfully added ${fullNewRole.title}.` });
+    }
   };
 
 
@@ -175,7 +178,8 @@ export function AstraHirePage() {
       addedCount++;
       try {
         const resumeDataUri = await convertFileToDataUri(file);
-        const result = await automatedResumeScreening({ resumeDataUri });
+        // We'll default to 'startup' for now, this could be a user choice in the dialog later.
+        const result = await automatedResumeScreening({ resumeDataUri, companyType: 'startup' });
         
         const candidateId = `cand-${nanoid(10)}`;
         const newCandidate: Candidate = {
@@ -305,15 +309,15 @@ export function AstraHirePage() {
                     jobTitle: targetRoleTitle,
                     companyInformation: "A fast-growing tech startup in the AI space, focused on innovation and agile development."
                 });
-                const newRole: JobRole = { id: `role-${nanoid(10)}`, title: targetRoleTitle, description: jdResult.jobDescription, department: "Engineering", openings: 1 };
                 const newRoleRef = doc(collection(db, 'roles'));
+                const newRole: JobRole = { id: newRoleRef.id, title: targetRoleTitle, description: jdResult.jobDescription, department: "Engineering", openings: 1 };
                 await setDoc(newRoleRef, newRole);
                 
                 log("Role Synthesis Complete", `Created and saved new role: '${newRole.title}'.`);
                 
                 const candidatesToReview = candidatesForSim.filter(c => c.status === 'Screening');
                 const reviewPromises = candidatesToReview.map(async (c) => {
-                    const review = await reviewCandidate({ candidateData: c.narrative, jobDescription: newRole.description });
+                    const review = await reviewCandidate({ candidateData: c.narrative, jobDescription: newRole.description, companyType: 'startup' });
                     if (review.recommendation === 'Hire' || review.recommendation === 'Maybe') {
                         return { ...c, status: 'Interview' as KanbanStatus, role: newRole.title };
                     }
@@ -398,7 +402,7 @@ export function AstraHirePage() {
             const screeningPromises = Array.from(files).map(async file => {
                 try {
                     const resumeDataUri = await convertFileToDataUri(file);
-                    const result = await automatedResumeScreening({ resumeDataUri });
+                    const result = await automatedResumeScreening({ resumeDataUri, companyType: 'startup' });
                     log("Automated Resume Screening", `Successfully screened ${file.name}. Score: ${result.candidateScore}`, "Success");
                     return { id: `audit-${nanoid(10)}`, ...result.extractedInformation, aiInitialScore: result.candidateScore, role: 'Unassigned', status: 'Screening' as KanbanStatus, lastUpdated: new Date().toISOString() };
                 } catch(e) {
@@ -430,7 +434,7 @@ export function AstraHirePage() {
                 const testRole: JobRole = { id: 'audit-role', title: suggestedRole.roleTitle, description: jdResult.jobDescription, department: "Audit", openings: 1};
 
                 setLoadingText("Phase 3: Targeted Review & Analysis...");
-                const review = await reviewCandidate({ candidateData: topCandidate.narrative, jobDescription: testRole.description });
+                const review = await reviewCandidate({ candidateData: topCandidate.narrative, jobDescription: testRole.description, companyType: 'enterprise' });
                 log("AI-Assisted Candidate Review", `Successfully reviewed ${topCandidate.name} for role. Recommendation: ${review.recommendation}`, "Success");
 
                 const skillGap = await skillGapAnalysis({ candidateSkills: topCandidate.skills, jobDescription: testRole.description });
@@ -463,6 +467,37 @@ export function AstraHirePage() {
             setIsLoading(false);
         }
 
+    }
+
+    const handleDeleteRole = async (roleId: string, roleTitle: string) => {
+        try {
+            await deleteDoc(doc(db, "roles", roleId));
+
+            const q = query(collection(db, 'candidates'), where('role', '==', roleTitle));
+            const querySnapshot = await getDocs(q);
+
+            const batch = writeBatch(db);
+            querySnapshot.forEach((doc) => {
+                batch.update(doc.ref, { role: "Unassigned" });
+            });
+            await batch.commit();
+            
+            toast({ title: "Role Deleted", description: `"${roleTitle}" has been deleted and associated candidates are now 'Unassigned'.` });
+
+        } catch (error) {
+            console.error("Error deleting role: ", error);
+            toast({ title: "Error", description: "Could not delete role.", variant: "destructive" });
+        }
+    }
+
+    const handleDeleteCandidate = async (candidateId: string) => {
+      try {
+          await deleteDoc(doc(db, 'candidates', candidateId));
+          toast({ title: "Candidate Deleted", description: "The candidate has been permanently removed." });
+      } catch (error) {
+          console.error("Failed to delete candidate:", error);
+          toast({ title: "Deletion Failed", description: "Could not delete the candidate. See console for details.", variant: 'destructive' });
+      }
     }
 
     const handleViewCandidatesForRole = (role: JobRole) => {
@@ -529,7 +564,7 @@ export function AstraHirePage() {
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
-        return <RolesTab roles={roles} onViewCandidates={handleViewCandidatesForRole} onReEngage={handleReEngageForRole} />;
+        return <RolesTab roles={roles} onViewCandidates={handleViewCandidatesForRole} onReEngage={handleReEngageForRole} onAddRole={handleAddRole} onDeleteRole={handleDeleteRole} />;
       case 'pool':
         return (
             <CandidatePoolTab 
@@ -540,6 +575,7 @@ export function AstraHirePage() {
                 filteredRole={filteredRole}
                 onClearFilter={() => setFilteredRole(null)}
                 onAddRole={handleAddRole}
+                onDeleteCandidate={handleDeleteCandidate}
             />
         );
        case 'gauntlet':
