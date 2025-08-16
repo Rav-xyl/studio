@@ -20,5 +20,7 @@ import '@/ai/flows/culture-fit-synthesis.ts';
 import '@/ai/flows/re-engage-candidate.ts';
 import '@/ai/flows/final-interview-review.ts';
 import '@/ai/flows/generate-system-design-question.ts';
+import '@/ai/flows/proctor-technical-exam.ts';
+
 
 

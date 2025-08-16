@@ -3,27 +3,26 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mic, Video, Square, Lightbulb, Brain } from 'lucide-react';
+import { Loader2, Mic, Video, Square, Lightbulb, Brain, AlertTriangle, Send } from 'lucide-react';
 import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
-import { evaluateInterviewResponse } from '@/ai/flows/evaluate-interview-response';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import type { Candidate } from '@/lib/types';
 import { generateSystemDesignQuestion } from '@/ai/flows/generate-system-design-question';
+import { Textarea } from '../ui/textarea';
+import { proctorTechnicalExam } from '@/ai/flows/proctor-technical-exam';
 
 const DUMMY_JOB_DESCRIPTION = "Seeking a Senior Frontend Developer with expertise in React, Next.js, and TypeScript. The ideal candidate will have experience building and deploying complex, high-performance web applications. Strong communication and problem-solving skills are a must.";
 
-type ConversationEntry = {
-    speaker: 'ARYA' | 'Candidate';
-    text: string;
-    evaluation?: any;
-    phase: 'Technical' | 'System Design';
+type ProctoringLogEntry = {
+    timestamp: string;
+    event: string;
 };
 
-type InterviewPhase = 'Technical' | 'System Design';
+type InterviewPhase = 'Technical' | 'SystemDesign';
 
 interface InterviewGauntletProps {
     candidate: Candidate;
@@ -40,15 +39,16 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
     const [hasCameraPermission, setHasCameraPermission] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
     
     const [phase, setPhase] = useState<InterviewPhase>(initialPhase);
     const [questions, setQuestions] = useState<string[]>([]);
     const [systemDesignQuestion, setSystemDesignQuestion] = useState<string>('');
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-    const [conversation, setConversation] = useState<ConversationEntry[]>([]);
-    const [transcript, setTranscript] = useState('');
+    const [writtenAnswer, setWrittenAnswer] = useState('');
+    const [proctoringLog, setProctoringLog] = useState<ProctoringLogEntry[]>([]);
+    const [ambientTranscript, setAmbientTranscript] = useState('');
 
+    // --- Proctoring and Permissions ---
     useEffect(() => {
         const setupSpeechRecognition = () => {
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -66,16 +66,9 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                         }
                     }
                     if (finalTranscript) {
-                        setTranscript(prev => prev + finalTranscript + '. ');
+                        setAmbientTranscript(prev => prev + finalTranscript + '. ');
                     }
                 };
-
-                recognition.onerror = (event: any) => {
-                    console.error('Speech recognition error:', event.error);
-                    toast({ title: 'Speech Recognition Error', description: 'There was an issue with the speech recognition.', variant: 'destructive' });
-                    setIsRecording(false);
-                };
-                
                 recognitionRef.current = recognition;
             }
         };
@@ -88,7 +81,6 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
             if (videoRef.current) {
               videoRef.current.srcObject = stream;
             }
-            // Setup speech recognition only after getting permissions and on the client.
             setupSpeechRecognition();
 
           } catch (error) {
@@ -106,6 +98,26 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
       }, [toast]);
 
     useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                const logEntry = { timestamp: new Date().toISOString(), event: 'Candidate switched tabs or minimized the window.' };
+                setProctoringLog(prev => [...prev, logEntry]);
+                toast({
+                    title: "Proctoring Alert",
+                    description: "Leaving the tab is logged and will be reported.",
+                    variant: "destructive"
+                });
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
+
+    // --- Question Fetching ---
+    useEffect(() => {
         const fetchQuestionsForPhase = async () => {
             setIsLoading(true);
             try {
@@ -116,13 +128,11 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                         candidateAnalysis: 'A promising candidate with strong skills in their domain.',
                     });
                     setQuestions(result.questions);
-                    if (result.questions.length > 0) {
-                        setConversation([{ speaker: 'ARYA', text: result.questions[0], phase: 'Technical' }]);
-                    }
+                    // Start listening for ambient audio
+                    recognitionRef.current?.start();
                 } else if (initialPhase === 'SystemDesign') {
                     const result = await generateSystemDesignQuestion({ jobTitle: candidate.role });
                     setSystemDesignQuestion(result.question);
-                    setConversation([{ speaker: 'ARYA', text: result.question, phase: 'System Design' }]);
                 }
             } catch (error) {
                 console.error("Failed to generate questions", error);
@@ -134,92 +144,76 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
         fetchQuestionsForPhase();
     }, [candidate, initialPhase, toast]);
 
-    const handleToggleRecording = () => {
-        const recognition = recognitionRef.current;
-        if (!recognition) {
-            toast({ title: 'Not Supported', description: 'Speech recognition is not supported in your browser.', variant: 'destructive' });
-            return;
-        }
-        if (isRecording) {
-            recognition.stop();
-            setIsRecording(false);
-            handleSubmitAnswer();
-        } else {
-            setTranscript('');
-            recognition.start();
-            setIsRecording(true);
-        }
-    };
-    
+
+    // --- Answer Submission ---
     const handleSubmitAnswer = async () => {
-        if (transcript.trim() === '') {
-            toast({ title: 'No answer detected', description: 'Please provide an answer before submitting.', variant: 'destructive' });
+        if (writtenAnswer.trim() === '') {
+            toast({ title: 'No answer provided', description: 'Please write an answer before submitting.', variant: 'destructive' });
             return;
         };
         
-        const currentPhase = phase;
-        const candidateEntry: ConversationEntry = { speaker: 'Candidate', text: transcript, phase: currentPhase };
-        
         setIsProcessing(true);
-        const updatedConversation = [...conversation, candidateEntry];
-        setConversation(updatedConversation);
+        recognitionRef.current?.stop();
 
         try {
-            const currentQuestion = phase === 'Technical' ? questions[currentQuestionIndex] : systemDesignQuestion;
-            const result = await evaluateInterviewResponse({
-                question: currentQuestion,
-                candidateResponse: transcript,
-                jobDescription: DUMMY_JOB_DESCRIPTION
-            });
-
-            const finalConversation = updatedConversation.map((entry, index) => {
-                if (index === updatedConversation.length - 2) { // The ARYA question before the candidate's answer
-                    return { ...entry, evaluation: result };
-                }
-                return entry;
-            });
-            setConversation(finalConversation);
-
             if (phase === 'Technical') {
-                if (currentQuestionIndex < questions.length - 1) {
-                    const nextQuestionIndex = currentQuestionIndex + 1;
-                    setCurrentQuestionIndex(nextQuestionIndex);
-                    setConversation(prev => [...prev, { speaker: 'ARYA', text: questions[nextQuestionIndex], phase: 'Technical' }]);
-                } else {
-                    // End of Technical phase
-                    const report = generateReport(finalConversation);
+                const currentQuestion = questions[currentQuestionIndex];
+                const result = await proctorTechnicalExam({
+                    question: currentQuestion,
+                    candidateAnswer: writtenAnswer,
+                    proctoringLog: proctoringLog.map(log => log.event),
+                    ambientAudioTranscript: ambientTranscript,
+                });
+                
+                const report = generateProctoringReport(currentQuestion, writtenAnswer, result);
+
+                if (!result.isPass) {
+                    toast({ variant: 'destructive', title: "Technical Round Failed", description: `Your score was below the passing threshold. Score: ${result.score}/100.` });
+                    // Even on failure, we call onTechnicalComplete to log the failure report
                     onTechnicalComplete(report);
+                    return; // Stop the process here
+                }
+
+                if (currentQuestionIndex < questions.length - 1) {
+                    toast({ title: `Question ${currentQuestionIndex + 1} Passed!`, description: `Score: ${result.score}/100. Loading next question.` });
+                    setCurrentQuestionIndex(prev => prev + 1);
+                    // Reset for next question
+                    setWrittenAnswer('');
+                    setProctoringLog([]);
+                    setAmbientTranscript('');
+                    recognitionRef.current?.start();
+                } else {
+                    onTechnicalComplete(report); // Final pass
                 }
             } else if (phase === 'SystemDesign') {
-                // End of System Design phase
-                const report = generateReport(finalConversation);
+                // For system design, we generate a simpler report without proctoring
+                const report = `SYSTEM DESIGN REPORT\n\nQuestion: ${systemDesignQuestion}\n\nCandidate Answer:\n${writtenAnswer}`;
                 onSystemDesignComplete(report);
             }
         } catch (error) {
              console.error("Failed to process response", error);
-            toast({ title: 'Error', description: 'Could not process the interview response.', variant: 'destructive'});
+            toast({ title: 'Error', description: 'Could not process your answer.', variant: 'destructive'});
         } finally {
             setIsProcessing(false);
-            setTranscript('');
         }
     };
-
-    const generateReport = (finalConversation: ConversationEntry[]) => {
-        let reportContent = `PHASE REPORT: ${phase.toUpperCase()}\n\n`;
-        finalConversation.forEach(entry => {
-            if (entry.speaker === 'ARYA') {
-                reportContent += `ARYA:\n${entry.text}\n\n`;
-                if(entry.evaluation) {
-                    reportContent += `EVALUATION: Score: ${entry.evaluation.score}/10 - ${entry.evaluation.evaluation}\n\n`;
-                }
-            } else {
-                reportContent += `CANDIDATE:\n${entry.text}\n\n`;
-            }
-        });
+    
+    const generateProctoringReport = (question: string, answer: string, result: any) => {
+        let reportContent = `PHASE REPORT: TECHNICAL (PROCTORED)\n\n`;
+        reportContent += `QUESTION: ${question}\n\n`;
+        reportContent += `CANDIDATE ANSWER:\n${answer}\n\n`;
+        reportContent += `--- AI EVALUATION & PROCTORING ---\n`;
+        reportContent += `SCORE: ${result.score}/100\n`;
+        reportContent += `PASS/FAIL: ${result.isPass ? 'Pass' : 'Fail'}\n\n`;
+        reportContent += `EVALUATION:\n${result.evaluation}\n\n`;
+        reportContent += `PROCTORING SUMMARY:\n${result.proctoringSummary}\n\n`;
+        reportContent += `FULL LOG:\n${proctoringLog.map(l => `- ${l.timestamp}: ${l.event}`).join('\n')}\n`;
+        reportContent += `AMBIENT AUDIO TRANSCRIPT:\n${ambientTranscript || 'None'}\n`;
         return reportContent;
     }
 
-    if (isLoading && conversation.length === 0) {
+
+    if (isLoading && (questions.length === 0 && phase === 'Technical')) {
          return (
             <div className="flex items-center justify-center h-screen bg-background text-foreground">
                 <Loader2 className="animate-spin h-10 w-10 text-primary" />
@@ -227,82 +221,70 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
             </div>
         )
     }
+    
+    const currentQuestionText = phase === 'Technical' ? questions[currentQuestionIndex] : systemDesignQuestion;
 
     return (
         <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
-            <Card className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <CardHeader className="lg:col-span-2">
-                    <CardTitle className="text-3xl text-primary flex items-center gap-3"><Brain /> AI Interview Gauntlet</CardTitle>
-                    <p className="text-muted-foreground">Candidate: {candidate.name} | Role: {candidate.role}</p>
-                    <div className="flex items-center gap-4 text-sm pt-2">
-                        <span className={`flex items-center gap-2 ${phase === 'Technical' ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
-                           <Lightbulb className='h-4 w-4'/> Phase: {phase}
-                        </span>
-                    </div>
+            <Card className="w-full max-w-6xl">
+                <CardHeader className="text-center">
+                    <CardTitle className="text-3xl text-primary flex items-center justify-center gap-3"><Brain /> AI Interview Gauntlet</CardTitle>
+                    <CardDescription>Candidate: {candidate.name} | Role: {candidate.role} | Phase: {phase}</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
+
+                <CardContent className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                    {/* Left Column: Proctoring & Instructions */}
+                    <div className="lg:col-span-2 space-y-4">
                         <div className="aspect-video bg-secondary rounded-lg flex items-center justify-center relative">
                             <video ref={videoRef} className="w-full aspect-video rounded-md" autoPlay muted />
-                            {isRecording && <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600/80 text-white px-3 py-1 rounded-full text-sm animate-pulse"><div className='h-2 w-2 rounded-full bg-white'></div>REC</div>}
+                            <div className="absolute bottom-2 right-2 flex items-center gap-4">
+                                <Badge variant={hasCameraPermission ? "secondary" : "destructive"}>
+                                    <Video className="mr-2 h-3 w-3" /> Camera {hasCameraPermission ? 'ON' : 'OFF'}
+                                </Badge>
+                                 <Badge variant={hasCameraPermission ? "secondary" : "destructive"}>
+                                    <Mic className="mr-2 h-3 w-3" /> Mic {hasCameraPermission ? 'ON' : 'OFF'}
+                                </Badge>
+                            </div>
                         </div>
-                         { !hasCameraPermission && (
-                            <Alert variant="destructive">
-                                <Video className="h-4 w-4" />
-                                <AlertTitle>Camera & Mic Access Required</AlertTitle>
-                                <AlertDescription>Please allow camera and microphone access in your browser to use this feature.</AlertDescription>
-                            </Alert>
-                        )}
-                        <div className="pt-4">
-                             <Button onClick={handleToggleRecording} disabled={isProcessing || !hasCameraPermission || (phase === 'Technical' && questions.length === 0)} className={`w-full h-12 text-lg ${isRecording ? 'bg-red-600 hover:bg-red-700' : ''}`}>
-                                {isProcessing ? <Loader2 className="animate-spin" /> : (isRecording ? <Square className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />)}
-                                {isRecording ? 'Stop & Submit Answer' : `Answer ${phase} Question`}
+                        <Alert variant="destructive">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>Proctoring is Active</AlertTitle>
+                            <AlertDescription>
+                                Your camera, microphone, and browser tab are being monitored. Please remain on this tab and ensure no one else is in the room.
+                            </AlertDescription>
+                        </Alert>
+                    </div>
+
+                    {/* Right Column: Question & Answer */}
+                    <div className="lg:col-span-3 flex flex-col">
+                        <div className="flex-grow space-y-4">
+                             <div>
+                                <Label htmlFor="question" className="text-sm font-semibold text-muted-foreground">
+                                    Question {phase === 'Technical' ? `${currentQuestionIndex + 1} of ${questions.length}` : ''}
+                                </Label>
+                                <Card id="question" className="p-4 bg-secondary/50 mt-1">
+                                    <p className="font-semibold">{currentQuestionText}</p>
+                                </Card>
+                            </div>
+                            <div>
+                                <Label htmlFor="answer" className="text-sm font-semibold text-muted-foreground">Your Answer</Label>
+                                <Textarea 
+                                    id="answer"
+                                    placeholder="Write your code or detailed answer here..."
+                                    className="h-64 font-mono text-sm"
+                                    value={writtenAnswer}
+                                    onChange={(e) => setWrittenAnswer(e.target.value)}
+                                    disabled={isProcessing}
+                                />
+                            </div>
+                        </div>
+                        <div className="mt-4">
+                            <Button onClick={handleSubmitAnswer} disabled={isProcessing || !hasCameraPermission} className="w-full h-12 text-lg">
+                                {isProcessing ? <Loader2 className="animate-spin" /> : <Send className="mr-2 h-5 w-5" />}
+                                Submit Answer
                             </Button>
                         </div>
                     </div>
-                </CardContent>
-                <CardContent>
-                    <h3 className="text-xl font-semibold mb-2 text-center">Live Transcript & Analysis</h3>
-                    <ScrollArea className="h-[60vh] bg-secondary/30 rounded-lg border border-border">
-                        <div className="space-y-6 p-4">
-                            {conversation.map((entry, index) => (
-                                <div key={index} className={`flex items-start gap-3 ${entry.speaker === 'Candidate' ? 'flex-row-reverse' : ''}`}>
-                                     <Avatar>
-                                        <AvatarFallback className={entry.speaker === 'ARYA' ? 'bg-primary text-primary-foreground' : 'bg-slate-600 text-slate-100'}>
-                                            {entry.speaker === 'ARYA' ? 'AI' : candidate.name.charAt(0)}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div className={`p-3 rounded-lg max-w-md ${entry.speaker === 'ARYA' ? 'bg-secondary' : 'bg-primary/80 text-primary-foreground'}`}>
-                                        <p className="font-bold text-xs uppercase tracking-wider mb-1 opacity-70">{entry.phase}</p>
-                                        <p className="text-sm">{entry.text}</p>
-                                        {entry.evaluation && (
-                                            <div className="mt-2 pt-2 border-t border-t-slate-500/50">
-                                                <p className="text-xs">
-                                                    <strong>Evaluation: </strong>{entry.evaluation.evaluation} (Score: {entry.evaluation.score}/10)
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                            {isRecording && (
-                                <div className="flex items-start gap-3 flex-row-reverse">
-                                    <Avatar><AvatarFallback className='bg-slate-600 text-slate-100'>{candidate.name.charAt(0)}</AvatarFallback></Avatar>
-                                    <div className="p-3 rounded-lg max-w-md bg-primary/50 border border-dashed border-primary">
-                                        <p className="text-sm italic">{transcript || 'Listening...'}</p>
-                                    </div>
-                                </div>
-                            )}
-                             {isProcessing && (
-                                <div className="flex items-start gap-3">
-                                    <Avatar><AvatarFallback className='bg-primary text-primary-foreground'>AI</AvatarFallback></Avatar>
-                                    <div className="p-3 rounded-lg max-w-md bg-secondary animate-pulse">
-                                        <p className="text-sm">Evaluating response and preparing next phase...</p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </ScrollArea>
                 </CardContent>
             </Card>
         </div>
