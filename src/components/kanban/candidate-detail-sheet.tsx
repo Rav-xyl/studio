@@ -150,11 +150,11 @@ export function CandidateDetailSheet({
 
   const handleSendInterviewInvite = () => {
     if (!candidate) return;
-    const interviewUrl = `${window.location.origin}/candidate/${candidate.id}`;
-    navigator.clipboard.writeText(interviewUrl);
+    const interviewUrl = `${window.location.origin}/gauntlet/login`;
+    navigator.clipboard.writeText(`URL: ${interviewUrl}\nID: ${candidate.id}\nPassword: TEST1234`);
     toast({
-        title: "Gauntlet Link Copied!",
-        description: `The unique interview link for ${candidate.name} has been copied to your clipboard.`
+        title: "Gauntlet Credentials Copied!",
+        description: `Login details for ${candidate.name} have been copied.`
     });
   }
   
@@ -309,8 +309,8 @@ export function CandidateDetailSheet({
                         </Button>
                         {cultureFit && (
                            <div className="mt-3 text-xs p-2 bg-secondary rounded-md space-y-2">
-                                <p><strong>Alignment Score:</strong> <Badge>{cultureFit.alignmentScore}/100</Badge></p>
-                                <p><strong>Summary:</strong> {cultureFit.summary}</p>
+                                <div><strong>Alignment Score:</strong> <Badge>{cultureFit.alignmentScore}/100</Badge></div>
+                                <div><strong>Summary:</strong> {cultureFit.summary}</div>
                             </div>
                         )}
                      </div>
@@ -327,7 +327,7 @@ export function CandidateDetailSheet({
                       <p className='text-sm text-muted-foreground mb-4'>Generate a unique, secure link to the multi-phase AI interview gauntlet for this candidate.</p>
                        <Button onClick={handleSendInterviewInvite} className="w-full">
                           <Link className="mr-2 h-4 w-4" />
-                          Copy Secure Gauntlet Link
+                          Copy Gauntlet Credentials
                         </Button>
                     </CardContent>
                   </Card>
