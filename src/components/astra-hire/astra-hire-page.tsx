@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,7 +6,7 @@ import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
 import { AnalyticsTab } from '../analytics/analytics-tab';
-import type { Candidate, JobRole, KanbanStatus, RubricChange } from '@/lib/types';
+import type { Candidate, JobRole, KanbanStatus, LogEntry, RubricChange } from '@/lib/types';
 import { automatedResumeScreening } from '@/ai/flows/automated-resume-screening';
 import { SaarthiReportModal } from './saarthi-report-modal';
 import { useToast } from '@/hooks/use-toast';
@@ -21,7 +20,7 @@ import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, addDoc, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
 import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
@@ -35,6 +34,16 @@ function convertFileToDataUri(file: File): Promise<string> {
         reader.onerror = (error) => reject(error);
     });
 }
+
+const addLog = async (candidateId: string, logEntry: Omit<LogEntry, 'timestamp'>) => {
+    const candidateRef = doc(db, 'candidates', candidateId);
+    await updateDoc(candidateRef, {
+        log: arrayUnion({
+            ...logEntry,
+            timestamp: new Date().toISOString(),
+        })
+    });
+};
 
 export function AstraHirePage() {
   const [activeTab, setActiveTab] = useState('pool');
@@ -89,18 +98,45 @@ export function AstraHirePage() {
         console.error("Candidate ID is missing. Cannot update.");
         return;
     }
+
+    const originalCandidate = candidates.find(c => c.id === id);
+    if (originalCandidate && originalCandidate.status !== updatedCandidate.status) {
+         await addLog(id, {
+            event: 'Status Change',
+            details: `Candidate moved from ${originalCandidate.status} to ${updatedCandidate.status}`,
+            author: 'System',
+        });
+    }
+
     const candidateDocRef = doc(db, 'candidates', id);
     await updateDoc(candidateDocRef, candidateData);
   };
 
   const handleAddRole = async (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate: Candidate) => {
+    
+    const existingRole = roles.find(role => role.title.toLowerCase() === newRole.title.toLowerCase());
+    if(existingRole) {
+        toast({
+            title: 'Role Already Exists',
+            description: `A role named "${newRole.title}" already exists. Assigning candidate to existing role.`,
+            variant: 'destructive'
+        });
+        const candidateRef = doc(db, 'candidates', candidateToUpdate.id);
+        await updateDoc(candidateRef, { role: existingRole.title });
+        await addLog(candidateToUpdate.id, {
+            event: 'Role Assigned',
+            details: `Candidate manually assigned to existing role: ${existingRole.title}`,
+            author: 'System'
+        });
+        return;
+    }
+    
     const fullNewRole: JobRole = {
         id: `role-${nanoid(10)}`,
         ...newRole,
         openings: 1,
     };
     
-    // Create new role and update candidate in a single flow
     const newRoleRef = doc(collection(db, 'roles'));
     const candidateRef = doc(db, 'candidates', candidateToUpdate.id);
 
@@ -109,6 +145,12 @@ export function AstraHirePage() {
     batch.update(candidateRef, { role: fullNewRole.title });
     
     await batch.commit();
+
+    await addLog(candidateToUpdate.id, {
+        event: 'Role Assigned',
+        details: `Candidate assigned to newly created role: ${fullNewRole.title}`,
+        author: 'AI'
+    });
 
     toast({ title: 'Role Added & Assigned', description: `Successfully added ${fullNewRole.title} and assigned it to ${candidateToUpdate.name}.` });
   };
@@ -125,24 +167,37 @@ export function AstraHirePage() {
     let addedCount = 0;
 
     const screeningPromises = Array.from(files).map(async (file) => {
-      // Check if a candidate with the same name already exists
       const existingCandidate = candidates.find(c => c.name === file.name.split('.').slice(0, -1).join('.'));
       if (existingCandidate) {
-          return null; // Skip if already exists
+          return null; 
       }
       
       addedCount++;
       try {
         const resumeDataUri = await convertFileToDataUri(file);
         const result = await automatedResumeScreening({ resumeDataUri });
-        return {
-          id: `cand-${nanoid(10)}`,
+        
+        const candidateId = `cand-${nanoid(10)}`;
+        const newCandidate: Candidate = {
+          id: candidateId,
           ...result.extractedInformation,
           status: 'Screening' as KanbanStatus, 
           role: 'Unassigned',
           aiInitialScore: result.candidateScore,
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
+          log: [{
+              timestamp: new Date().toISOString(),
+              event: 'Resume Uploaded',
+              details: `Candidate profile created from file: ${file.name}`,
+              author: 'System'
+          }, {
+              timestamp: new Date().toISOString(),
+              event: 'AI Screening Complete',
+              details: `Automated screening finished. Initial score: ${result.candidateScore}`,
+              author: 'AI'
+          }]
         };
+        return newCandidate;
       } catch (error) {
         console.error(`Failed to process ${file.name}:`, error);
         return {
@@ -154,6 +209,12 @@ export function AstraHirePage() {
           skills: [],
           inferredSkills: [],
           lastUpdated: new Date().toISOString(),
+          log: [{
+              timestamp: new Date().toISOString(),
+              event: 'Upload Failed',
+              details: `AI screening failed for file: ${file.name}`,
+              author: 'System'
+          }]
         };
       }
     });

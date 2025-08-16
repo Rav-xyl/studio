@@ -15,7 +15,7 @@ import {z} from 'genkit';
 
 const AiDrivenCandidateEngagementInputSchema = z.object({
   candidateName: z.string().describe('The name of the candidate.'),
-  candidateStage: z.string().describe('The current stage of the candidate in the hiring process (e.g., Eligible for Role, AI Video Interview Scheduled, Offer Extended, Rejected).'),
+  candidateStage: z.string().describe('The current stage of the candidate in the hiring process (e.g., Eligible for Role, AI Video Interview Scheduled, Offer Extended, Rejected, Gauntlet Deadline Approaching).'),
   jobTitle: z.string().describe('The title of the job the candidate is applying for.'),
   companyName: z.string().describe('The name of the company.'),
   recruiterName: z.string().describe('The name of the recruiter.'),
@@ -55,6 +55,17 @@ const prompt = ai.definePrompt({
 
   Here are example emails for different stages (these should be used as inspiration and should not be copied verbatim):
 
+  Stage: Gauntlet Deadline Approaching
+  Subject: Friendly Reminder: Your AI Gauntlet with {{{companyName}}}
+  Body: Dear {{{candidateName}}},
+
+  This is a friendly reminder that your window to complete the AI Gauntlet for the {{{jobTitle}}} position is closing soon. We are very interested in your profile and look forward to seeing your submission.
+
+  If you have any technical issues, please don't hesitate to reach out.
+
+  Best,
+  {{{recruiterName}}}
+
   Stage: Eligible for Role
   Subject: Exciting Opportunity at {{{companyName}}} - {{{jobTitle}}} Role
   Body: Dear {{{candidateName}}},
@@ -86,7 +97,6 @@ const prompt = ai.definePrompt({
   We look forward to welcoming you to our team!
 
   Sincerely,
-al,
   {{{recruiterName}}}
 
   Stage: Rejected

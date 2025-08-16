@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -15,6 +14,9 @@ import { CandidateDetailSheet } from './candidate-detail-sheet';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { BulkUploadDialog } from './bulk-upload-dialog';
+import { db } from '@/lib/firebase';
+import { deleteDoc, doc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 const KANBAN_COLUMNS: KanbanStatus[] = [
   'Sourcing',
@@ -47,6 +49,7 @@ export function CandidatePoolTab({
   const [isSheetOpen, setSheetOpen] = useState(false);
   const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [isAuditMode, setIsAuditMode] = useState(false);
+  const { toast } = useToast();
 
   const handleCardClick = (candidate: Candidate) => {
     setSelectedCandidate(candidate);
@@ -58,6 +61,16 @@ export function CandidatePoolTab({
     if (!open) {
       setSelectedCandidate(null);
     }
+  }
+
+  const handleDeleteCandidate = async (candidateId: string) => {
+      try {
+          await deleteDoc(doc(db, 'candidates', candidateId));
+          toast({ title: "Candidate Deleted", description: "The candidate has been permanently removed." });
+      } catch (error) {
+          console.error("Failed to delete candidate:", error);
+          toast({ title: "Deletion Failed", description: "Could not delete the candidate. See console for details.", variant: 'destructive' });
+      }
   }
 
   const handleOpenUploadDialog = (auditMode = false) => {
@@ -135,10 +148,9 @@ export function CandidatePoolTab({
             candidate={selectedCandidate}
             onUpdateCandidate={onUpdateCandidate}
             onAddRole={onAddRole}
+            onDeleteCandidate={handleDeleteCandidate}
             />
         </div>
     </DndProvider>
   );
 }
-
-    

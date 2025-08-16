@@ -1,6 +1,11 @@
-
-
 export type KanbanStatus = 'Sourcing' | 'Screening' | 'Interview' | 'Hired';
+
+export interface LogEntry {
+  timestamp: string;
+  event: string;
+  details: string;
+  author: 'System' | 'AI' | 'Admin';
+}
 
 export interface Candidate {
   id: string;
@@ -13,8 +18,10 @@ export interface Candidate {
   inferredSkills: string[];
   lastUpdated: string;
   archived?: boolean;
+  log?: LogEntry[];
+  gauntletStartDate?: string;
   // Optional fields from AI processing
-  [key: string]: any; 
+  [key: string]: any;
 }
 
 export interface JobRole {

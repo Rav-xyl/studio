@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -14,9 +13,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link, Github, Goal, PlusCircle } from 'lucide-react';
+import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link, Github, Goal, PlusCircle, Trash2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
 import { useState } from 'react';
 import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
@@ -27,6 +26,7 @@ import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
 import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 
 interface CandidateDetailSheetProps {
   open: boolean;
@@ -34,6 +34,7 @@ interface CandidateDetailSheetProps {
   candidate: Candidate | null;
   onUpdateCandidate: (updatedCandidate: Candidate) => void;
   onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate: Candidate) => void;
+  onDeleteCandidate: (candidateId: string) => void;
 }
 
 const getInitials = (name: string) => {
@@ -65,6 +66,7 @@ export function CandidateDetailSheet({
   candidate,
   onUpdateCandidate,
   onAddRole,
+  onDeleteCandidate
 }: CandidateDetailSheetProps) {
   const { toast } = useToast();
 
@@ -147,9 +149,19 @@ export function CandidateDetailSheet({
       toast({ title: `Candidate ${updatedCandidate.archived ? 'Archived' : 'Restored'}`, description: `${candidate.name} has been ${updatedCandidate.archived ? 'removed from' : 'restored to'} the active pipeline.`});
       onOpenChange(false);
   }
+  
+  const handleDelete = () => {
+      if (!candidate) return;
+      onDeleteCandidate(candidate.id);
+      onOpenChange(false);
+  }
 
   const handleSendInterviewInvite = () => {
     if (!candidate) return;
+
+    // Start the Gauntlet: Set start date
+    onUpdateCandidate({ ...candidate, gauntletStartDate: new Date().toISOString() });
+
     const interviewUrl = `${window.location.origin}/gauntlet/login`;
     navigator.clipboard.writeText(`URL: ${interviewUrl}\nID: ${candidate.id}\nPassword: TEST1234`);
     toast({
@@ -228,10 +240,10 @@ export function CandidateDetailSheet({
               <TabsContent value="ai-analysis" className="mt-4 space-y-4">
                 <Card>
                     <CardHeader>
-                        <CardTitle className='flex items-center gap-2 text-xl'><GitMerge className='h-5 w-5 text-primary' /> Mode 1: Exploratory Screening</CardTitle>
+                        <CardTitle className='flex items-center gap-2 text-lg'><GitMerge className='h-5 w-5 text-primary' /> Mode 1: Exploratory Screening</CardTitle>
+                        <CardDescription>Use AI to discover potential roles this candidate is a strong fit for.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <p className='text-sm text-muted-foreground mb-4'>Use AI to discover potential roles this candidate is a strong fit for, regardless of current openings.</p>
                          {roleMatches.length > 0 ? (
                             <div className='space-y-3'>
                                 {roleMatches.map((match: any, index: number) => (
@@ -254,16 +266,16 @@ export function CandidateDetailSheet({
                 </Card>
                 <Card>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><ShieldCheck className='h-5 w-5 text-primary' /> Mode 2: Targeted Review</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-lg'><ShieldCheck className='h-5 w-5 text-primary' /> Mode 2: Targeted Review</CardTitle>
+                     <CardDescription>Validate this candidate's fit for the assigned role.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {isUnassigned ? (
                       <div className='text-sm text-muted-foreground text-center p-4 bg-secondary/50 rounded-md'>
-                        Assign a specific role to this candidate on the Kanban board to enable a targeted review.
+                        Assign a role to enable a targeted review.
                       </div>
                     ) : (
                       <>
-                        <p className='text-sm text-muted-foreground mb-4'>Validate this candidate's fit for the specific role of **{candidate.role}**.</p>
                         {review ? (
                             <div className="space-y-2 text-sm">
                               <p><strong>Recommendation:</strong> <Badge variant={review.recommendation === 'Hire' ? 'default' : review.recommendation === 'Maybe' ? 'secondary' : 'destructive'} className={review.recommendation === 'Hire' ? 'bg-green-600/80' : ''}>{review.recommendation}</Badge></p>
@@ -272,7 +284,7 @@ export function CandidateDetailSheet({
                         ) : (
                             <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('review')} disabled={isGenerating.review}>
                               {isGenerating.review ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                              Review for this Role
+                              Review for {candidate.role}
                             </Button>
                         )}
                       </>
@@ -281,11 +293,11 @@ export function CandidateDetailSheet({
                 </Card>
                 <Card>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><Goal className='h-5 w-5 text-primary' /> Skill & Culture Analysis</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-lg'><Goal className='h-5 w-5 text-primary' /> Skill & Culture Analysis</CardTitle>
+                    <CardDescription>Identify growth areas and assess cultural alignment.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                      <div>
-                        <p className='text-sm text-muted-foreground mb-2'>Analyze the gap between the candidate's skills and the ideal profile for the role.</p>
                         <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('skillGap')} disabled={isGenerating.skillGap}>
                            {isGenerating.skillGap ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                            Analyze Skill Gap
@@ -302,7 +314,6 @@ export function CandidateDetailSheet({
                         )}
                      </div>
                      <div>
-                        <p className='text-sm text-muted-foreground mb-2'>Generate a 'Cultural Alignment Profile' by analyzing their resume's narrative and inferred soft skills.</p>
                          <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('cultureFit')} disabled={isGenerating.cultureFit}>
                            {isGenerating.cultureFit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                            Synthesize Culture Fit
@@ -321,19 +332,19 @@ export function CandidateDetailSheet({
               <TabsContent value="actions" className="mt-4 space-y-4">
                   <Card>
                     <CardHeader>
-                      <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> AI Interview Gauntlet</CardTitle>
+                      <CardTitle className='flex items-center gap-2 text-lg'><Brain className='h-5 w-5 text-primary' /> AI Interview Gauntlet</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className='text-sm text-muted-foreground mb-4'>Generate a unique, secure link to the multi-phase AI interview gauntlet for this candidate.</p>
-                       <Button onClick={handleSendInterviewInvite} className="w-full">
+                      <p className='text-sm text-muted-foreground mb-4'>Invite the candidate to the AI Gauntlet and copy their unique credentials.</p>
+                       <Button onClick={handleSendInterviewInvite} className="w-full" disabled={!candidate.id}>
                           <Link className="mr-2 h-4 w-4" />
-                          Copy Gauntlet Credentials
+                          Start Gauntlet & Copy Credentials
                         </Button>
                     </CardContent>
                   </Card>
                  <Card>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><FileSignature className='h-5 w-5 text-primary' /> Offer & Onboarding</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-lg'><FileSignature className='h-5 w-5 text-primary' /> Offer & Onboarding</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className='text-sm text-muted-foreground mb-4'>Generate a competitive offer letter or a 30-60-90 day onboarding plan.</p>
@@ -352,7 +363,7 @@ export function CandidateDetailSheet({
                 </Card>
                 <Card>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><Send className='h-5 w-5 text-primary' /> Candidate Communication</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-lg'><Send className='h-5 w-5 text-primary' /> Candidate Communication</CardTitle>
                   </CardHeader>
                   <CardContent>
                      <p className='text-sm text-muted-foreground mb-4'>Let AI draft a personalized email based on the candidate's current stage.</p>
@@ -366,8 +377,28 @@ export function CandidateDetailSheet({
             </Tabs>
           </div>
         </ScrollArea>
-        <SheetFooter className="p-6 pt-0 bg-background/95 backdrop-blur-sm border-t">
-          <Button variant={candidate.archived ? 'secondary' : 'destructive'} onClick={handleArchive}>
+        <SheetFooter className="p-6 pt-0 bg-background/95 backdrop-blur-sm border-t flex justify-between">
+          <AlertDialog>
+              <AlertDialogTrigger asChild>
+                  <Button variant="destructive">
+                      <Trash2 className="mr-2 h-4 w-4"/> Delete Candidate
+                  </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                  <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete the candidate's data from the servers.
+                      </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+                  </AlertDialogFooter>
+              </AlertDialogContent>
+          </AlertDialog>
+
+          <Button variant={candidate.archived ? 'secondary' : 'outline'} onClick={handleArchive}>
             <Archive className="mr-2 h-4 w-4"/> {candidate.archived ? 'Restore Candidate' : 'Archive Candidate'}
           </Button>
         </SheetFooter>
