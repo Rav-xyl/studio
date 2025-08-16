@@ -123,6 +123,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
             setIsLoading(true);
             try {
                 if (phase === 'Technical') {
+                    // Using a static but relevant question for consistency
                     setTechnicalQuestion("Given a list of integers, write a function to find the first missing positive integer. For example, for [3, 4, -1, 1], the answer is 2. For [1, 2, 0], the answer is 3. Your solution should run in O(n) time and use constant extra space.");
                     recognitionRef.current?.start();
                 } else if (phase === 'SystemDesign') {
@@ -140,7 +141,10 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
     }, [candidate.role, phase, toast, isPreFlightComplete]);
 
     const handleSubmitAnswer = async () => {
-        if (writtenAnswer.trim() === '') return;
+        if (writtenAnswer.trim() === '') {
+            toast({ title: "Answer Required", description: "Please provide an answer before submitting.", variant: 'destructive'});
+            return;
+        }
         setIsProcessing(true);
         recognitionRef.current?.stop();
         localStorage.removeItem(answerSaveKey); // Clear saved answer on submit
@@ -156,13 +160,13 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
                 const report = generateProctoringReport(technicalQuestion, writtenAnswer, result);
                 onPhaseComplete('Technical', report);
             } else if (phase === 'SystemDesign') {
+                // For system design, we generate a simpler report as direct evaluation is more complex
                 const report = `SYSTEM DESIGN REPORT\n\nQuestion: ${systemDesignQuestion}\n\nCandidate Answer:\n${writtenAnswer}`;
                 onPhaseComplete('SystemDesign', report);
             }
         } catch (error) {
             toast({ title: 'Error', description: 'Could not process your answer.', variant: 'destructive'});
-        } finally {
-            setIsProcessing(false);
+            setIsProcessing(false); // Re-enable button on error
         }
     };
     
@@ -266,3 +270,5 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
         </div>
     );
 }
+
+    

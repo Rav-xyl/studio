@@ -5,7 +5,7 @@
  *
  * - proctorTechnicalExam - A function that evaluates a candidate's written response and proctoring data.
  * - ProctorTechnicalExamInput - The input type for the function.
- * - ProctorTechnicalExamOutput - The return type for the function.
+ * - ProctorTechnicalExamOutput - The output type for the function.
  */
 
 import {ai} from '@/ai/genkit';
@@ -74,3 +74,5 @@ const proctorTechnicalExamFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    

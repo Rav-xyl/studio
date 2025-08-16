@@ -68,6 +68,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                     if (candidateData.gauntletState) {
                         setGauntletState(candidateData.gauntletState);
                     } else {
+                        // If no state, start at the beginning
                         setGauntletState(prev => ({...prev, phase: 'Technical' }));
                     }
                 } else {
@@ -93,6 +94,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
             if (candidate && candidate.id && gauntletState.phase !== 'Locked' && isAuthenticated) {
                 try {
                     const candidateDocRef = doc(db, 'candidates', candidate.id);
+                    // Deep copy to avoid Firestore serialization issues with undefined
                     await updateDoc(candidateDocRef, {
                         gauntletState: JSON.parse(JSON.stringify(gauntletState)) 
                     });
@@ -113,26 +115,28 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         if (!candidate) return;
         setGauntletState(prev => ({ ...prev, phase: 'Failed' }));
 
+        // Generate a generic, professional report for the candidate
+        const candidateReport = `Summary of the ${reason}:\n\nAfter a careful review of the assessment, we have decided to move forward with other candidates whose qualifications more closely align with the requirements of this role at this time. We appreciate your effort and wish you the best in your job search.`;
+
         // Send email
-        const emailResult = await aiDrivenCandidateEngagement({
+        await aiDrivenCandidateEngagement({
             candidateName: candidate.name,
             candidateStage: 'Rejected',
             jobTitle: candidate.role,
             companyName: 'AstraHire',
             recruiterName: 'The Hiring Team',
             candidateSkills: candidate.skills.join(', '),
-            rejectionReason: `After a careful review of the ${reason}, we have decided to move forward with other candidates. A summary of the assessment has been attached for your reference:\n\n${report}`,
+            rejectionReason: candidateReport,
         });
-        console.log("Rejection email generated:", emailResult); // In a real app, you'd send this
 
         // Archive candidate
         await updateDoc(doc(db, 'candidates', candidate.id), { archived: true });
 
-        // If it's the final interview, run skill gap analysis
+        // If it's the final interview, run skill gap analysis for internal records
         if (reason.includes("Final Interview")) {
             await skillGapAnalysis({
                 candidateSkills: candidate.skills,
-                jobDescription: candidate.role,
+                jobDescription: candidate.role, // In a real app, you'd use a real JD here
             });
         }
         toast({ variant: 'destructive', title: "Gauntlet Ended", description: "After careful review, we will not be proceeding." });
@@ -143,13 +147,15 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         toast({ title: `Phase Complete: ${phase}`, description: "Submitting report to the BOSS AI for validation." });
         
         const nextStateKey = phase === 'Technical' ? 'PendingTechReview' : phase === 'SystemDesign' ? 'PendingDesignReview' : 'PendingFinalReview';
-        setGauntletState(prev => ({ ...prev, phase: nextStateKey as GauntletPhase, [`${phase.toLowerCase()}Report`]: report }));
+        const reportKey = `${phase.charAt(0).toLowerCase() + phase.slice(1)}Report` as keyof GauntletState;
+        setGauntletState(prev => ({ ...prev, phase: nextStateKey as GauntletPhase, [reportKey]: report }));
 
         try {
             const result = await finalInterviewReview({ interviewReport: report });
             const reviewKey = phase === 'Technical' ? 'techReview' : phase === 'SystemDesign' ? 'designReview' : 'finalReview';
             
-            const isPass = result.finalRecommendation === "Strong Hire" || result.finalRecommendation === "Proceed with Caution";
+            // Allow "Proceed with Caution" to also pass, but not for the final review
+            const isPass = result.finalRecommendation === "Strong Hire" || (result.finalRecommendation === "Proceed with Caution" && phase !== 'FinalInterview');
 
             if (isPass) {
                 const nextPhase = phase === 'Technical' ? 'SystemDesign' : phase === 'SystemDesign' ? 'FinalInterview' : 'Complete';
@@ -171,19 +177,27 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
 
 
     const getGrandReport = () => {
-        let report = `GRAND REPORT FOR CANDIDATE: ${candidate?.name}\n\n`;
-        report += `--- PHASE 1: TECHNICAL GAUNTLET ---\n`;
-        report += gauntletState.technicalReport || "No data.";
+        let report = `GRAND DOSSIER FOR CANDIDATE: ${candidate?.name}\n\n`;
+        report += `ROLE: ${candidate?.role}\n`;
+        report += `DATE: ${new Date().toLocaleDateString()}\n`;
+        report += `==================================================\n\n`;
+
+        report += `--- PHASE 1: TECHNICAL EXAM ---\n`;
+        report += gauntletState.technicalReport || "Phase not completed or data not available.";
         report += `\n\n--- BOSS AI VALIDATION (TECHNICAL) ---\n`;
         report += gauntletState.techReview ? `Recommendation: ${gauntletState.techReview.finalRecommendation}\nAssessment: ${gauntletState.techReview.overallAssessment}` : "No validation data.";
         
-        report += `\n\n--- PHASE 2: SYSTEM DESIGN CHALLENGE ---\n`;
-        report += gauntletState.systemDesignReport || "Phase not completed.";
+        report += `\n\n==================================================\n\n`;
+        
+        report += `--- PHASE 2: SYSTEM DESIGN CHALLENGE ---\n`;
+        report += gauntletState.systemDesignReport || "Phase not completed or data not available.";
         report += `\n\n--- BOSS AI VALIDATION (SYSTEM DESIGN) ---\n`;
         report += gauntletState.designReview ? `Recommendation: ${gauntletState.designReview.finalRecommendation}\nAssessment: ${gauntletState.designReview.overallAssessment}` : "Phase not completed.";
         
-        report += `\n\n--- PHASE 3: FINAL AI INTERVIEW ---\n`;
-        report += gauntletState.finalInterviewReport || "Phase not completed.";
+        report += `\n\n==================================================\n\n`;
+        
+        report += `--- PHASE 3: FINAL AI INTERVIEW ---\n`;
+        report += gauntletState.finalInterviewReport || "Phase not completed or data not available.";
         report += `\n\n--- BOSS AI FINAL REVIEW ---\n`;
         report += gauntletState.finalReview ? `Recommendation: ${gauntletState.finalReview.finalRecommendation}\nAssessment: ${gauntletState.finalReview.overallAssessment}` : "Phase not completed.";
 
@@ -226,15 +240,20 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         const stageIndex = phaseOrder.indexOf(stage);
 
         if (phase === 'Failed') {
-            const failedIndex = phaseOrder.indexOf(gauntletState.phase);
-            if (stageIndex < failedIndex) return 'Complete';
-            if (stageIndex === failedIndex) return 'Failed';
+            const techFailed = gauntletState.techReview && gauntletState.techReview.finalRecommendation !== 'Strong Hire';
+            const designFailed = gauntletState.designReview && gauntletState.designReview.finalRecommendation !== 'Strong Hire';
+
+            if (stage === 'Technical' && techFailed) return 'Failed';
+            if (stage === 'Technical' && !techFailed) return 'Complete';
+            if (stage === 'SystemDesign' && designFailed) return 'Failed';
+            if (stage === 'SystemDesign' && !designFailed) return 'Complete';
+            if (stage === 'FinalInterview') return 'Failed'; // Final is always the fail point if we are here
             return 'Locked';
         }
 
         if (currentPhaseIndex > stageIndex) return 'Complete';
         if (currentPhaseIndex === stageIndex) return 'Unlocked';
-        if (phase.startsWith('Pending') && stageIndex === currentPhaseIndex) return 'Pending';
+        if (phase.startsWith('Pending') && stageIndex === currentPhaseIndex -1) return 'Pending';
         
         return 'Locked';
     }
@@ -281,7 +300,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                                const url = URL.createObjectURL(blob);
                                const a = document.createElement('a');
                                a.href = url;
-                               a.download = `gauntlet_report_${candidate.name}.txt`;
+                               a.download = `Gauntlet_Report_${candidate.name.replace(/\s/g, '_')}.txt`;
                                a.click();
                                URL.revokeObjectURL(url);
                            }}>Download Your Final Report</Button>
@@ -327,3 +346,5 @@ const PhaseCard = ({ icon, title, description, status }: { icon: React.ReactNode
         </div>
     )
 }
+
+    
