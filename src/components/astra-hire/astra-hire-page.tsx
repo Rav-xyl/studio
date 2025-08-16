@@ -101,38 +101,26 @@ export function AstraHirePage() {
         const originalCandidate = candidates.find(c => c.id === updatedCandidate.id);
         if (!originalCandidate) return;
 
-        const originalStageIndex = KANBAN_STAGES.indexOf(originalCandidate.status);
-        const newStageIndex = KANBAN_STAGES.indexOf(updatedCandidate.status);
-
-        // --- Validation Logic ---
-        const hasFailedGauntlet = originalCandidate.gauntletState?.finalReview?.finalRecommendation === 'Do Not Hire';
-        
-        // Block any forward movement if gauntlet is failed
-        if (hasFailedGauntlet && newStageIndex > originalStageIndex) {
+        // --- Divine Law & Order: Gauntlet Validation ---
+        const hasFailedGauntlet = originalCandidate.gauntletState?.phase === 'Failed';
+        if (hasFailedGauntlet && (updatedCandidate.status === 'Interview' || updatedCandidate.status === 'Hired')) {
             toast({
                 variant: 'destructive',
-                title: 'Action Blocked',
+                title: 'Action Blocked by Divine Law',
                 description: 'This candidate has failed the Gauntlet and cannot be moved forward.'
             });
-            // Revert UI optimistically
-            setCandidates(prev => [...prev]); 
-            return;
+            return; // Halt execution
         }
-        
-        // Block move to 'Hired' from 'Screening' if gauntlet not complete for high-scorers
+
         const isGauntletRequired = (originalCandidate.aiInitialScore || 0) >= 70;
-        if (isGauntletRequired && originalCandidate.status === 'Screening' && updatedCandidate.status === 'Hired') {
-            const isGauntletComplete = originalCandidate.gauntletState?.phase === 'Complete';
-            if (!isGauntletComplete) {
-                toast({
-                    variant: 'destructive',
-                    title: 'Action Blocked',
-                    description: 'Candidate must complete the Gauntlet before being moved to Hired.'
-                });
-                // Revert UI optimistically
-                setCandidates(prev => [...prev]); 
-                return; 
-            }
+        const isGauntletComplete = originalCandidate.gauntletState?.phase === 'Complete';
+        if (isGauntletRequired && updatedCandidate.status === 'Hired' && !isGauntletComplete) {
+            toast({
+                variant: 'destructive',
+                title: 'Action Blocked by Divine Law',
+                description: 'A candidate with a high score must pass the Gauntlet to be hired.'
+            });
+            return; // Halt execution
         }
         
         // Optimistically update UI

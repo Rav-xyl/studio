@@ -30,8 +30,6 @@ export interface GauntletState {
     techReview: FinalInterviewReviewOutput | null;
     systemDesignReport: string | null;
     designReview: FinalInterviewReviewOutput | null;
-    finalInterviewReport: string | null; // Legacy, unused in new flow
-    finalReview: FinalInterviewReviewOutput | null; // Legacy, unused in new flow
 }
 
 
