@@ -23,6 +23,8 @@ import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, addDoc } from 'firebase/firestore';
 import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
+import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
+import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -49,8 +51,6 @@ export function AstraHirePage() {
   const [loadingText, setLoadingText] = useState('Loading...');
   const [isSaarthiReportOpen, setIsSaarthiReportOpen] = useState(false);
   const { toast } = useToast();
-
-  const [uploadedFiles, setUploadedFiles] = useState<Map<string, File>>(new Map());
 
   // --- Firestore Data Fetching ---
   useEffect(() => {
@@ -109,56 +109,53 @@ export function AstraHirePage() {
   };
 
 
-  const handleBulkUpload = async (files: FileList | null) => {
+  const handleBulkUpload = async (files: FileList | null, isAudit = false) => {
     if (!files) return;
 
-    const newFilesMap = new Map<string, File>();
+    if (isAudit) {
+        await handleSystemAudit(files);
+        return;
+    }
+
     const newCandidates: Candidate[] = [];
     let addedCount = 0;
 
-    for (const file of files) {
+    const screeningPromises = Array.from(files).map(async (file) => {
       if (!candidates.some(c => c.name === file.name)) {
-        newFilesMap.set(file.name, file);
-        const newCandidate: Candidate = {
-          id: `cand-${nanoid(10)}`,
-          name: file.name,
-          avatarUrl: '',
-          role: 'Unassigned', 
-          skills: [],
-          status: 'Sourcing', 
-          narrative: `Resume file: ${file.name}`,
-          inferredSkills: [],
-          lastUpdated: new Date().toISOString(),
-        };
-        newCandidates.push(newCandidate);
         addedCount++;
-      }
-    }
-
-    if (addedCount > 0) {
-      toast({ title: "Upload Successful", description: `${addedCount} new resumes added. Screening automatically...` });
-      
-      setIsLoading(true);
-      setLoadingText(`Screening ${newCandidates.length} new resumes...`);
-
-      const screeningPromises = newCandidates.map(async (candidate) => {
-        const file = newFilesMap.get(candidate.name);
-        if (!file) return null;
         try {
           const resumeDataUri = await convertFileToDataUri(file);
           const result = await automatedResumeScreening({ resumeDataUri });
           return {
-            ...candidate,
+            id: `cand-${nanoid(10)}`,
             ...result.extractedInformation,
             status: 'Screening' as KanbanStatus, 
+            role: 'Unassigned',
             aiInitialScore: result.candidateScore,
             lastUpdated: new Date().toISOString()
           };
         } catch (error) {
-          console.error(`Failed to process ${candidate.name}:`, error);
-          return { ...candidate, status: 'Sourcing' as KanbanStatus, narrative: 'AI screening failed.' };
+          console.error(`Failed to process ${file.name}:`, error);
+          return {
+            id: `cand-${nanoid(10)}`,
+            name: file.name,
+            status: 'Sourcing' as KanbanStatus,
+            role: 'Unassigned',
+            narrative: 'AI screening failed.',
+            skills: [],
+            inferredSkills: [],
+            lastUpdated: new Date().toISOString(),
+          };
         }
-      });
+      }
+      return null;
+    });
+      
+    if (addedCount > 0) {
+      toast({ title: "Upload Successful", description: `${addedCount} new resumes added. Screening automatically...` });
+      
+      setIsLoading(true);
+      setLoadingText(`Screening ${addedCount} new resumes...`);
       
       const processedCandidates = (await Promise.all(screeningPromises)).filter(Boolean) as Candidate[];
       
@@ -241,7 +238,7 @@ export function AstraHirePage() {
                     companyInformation: "A fast-growing tech startup in the AI space, focused on innovation and agile development."
                 });
                 const newRole: JobRole = { id: `role-${nanoid(10)}`, title: targetRoleTitle, description: jdResult.jobDescription, department: "Engineering", openings: 1 };
-                await setDoc(doc(db, 'roles', newRole.id), newRole);
+                await addDoc(collection(db, 'roles'), newRole);
                 
                 log("Role Synthesis Complete", `Created and saved new role: '${newRole.title}'.`);
                 
@@ -254,30 +251,54 @@ export function AstraHirePage() {
                     return c;
                 });
 
-                const updatedCandidates = await Promise.all(reviewPromises);
+                const reviewedCandidates = await Promise.all(reviewPromises);
+                
                 const batch = writeBatch(db);
-                updatedCandidates.forEach(c => {
+                reviewedCandidates.forEach(c => {
                     const { id, ...data } = c;
                     batch.update(doc(db, 'candidates', id), data);
                 });
                 await batch.commit();
                 
-                const matchedCount = updatedCandidates.filter(c => c.status === 'Interview').length;
+                const matchedCount = reviewedCandidates.filter(c => c.status === 'Interview').length;
                 log("Candidate Review Complete", `Matched ${matchedCount} candidates to '${newRole.title}' and moved to 'Interview'.`);
+
+                const interviewCandidate = reviewedCandidates.find(c => c.status === 'Interview');
+                if (interviewCandidate) {
+                    setLoadingText("Phase 3/5: Simulating AI Gauntlet...");
+                    log("Gauntlet Simulation", `Simulating gauntlet for ${interviewCandidate.name}.`);
+                    const bossReview = await finalInterviewReview({interviewReport: "Simulated Technical and System Design phases."});
+
+                    if (bossReview.finalRecommendation === "Strong Hire") {
+                        setLoadingText("Phase 4/5: BOSS AI approved. Drafting offer...");
+                        log("BOSS Validation", `BOSS AI approved ${interviewCandidate.name} with recommendation: ${bossReview.finalRecommendation}.`);
+                        
+                        const offer = await draftOfferLetter({
+                           candidateName: interviewCandidate.name,
+                           roleTitle: interviewCandidate.role,
+                           candidateSkills: interviewCandidate.skills,
+                           candidateExperience: interviewCandidate.narrative,
+                           companyName: "AstraHire Client",
+                           companySalaryBands: "For a senior role, the band is typically between $120,000 and $150,000.",
+                           simulatedMarketData: "Market analysis indicates the average salary for this role with this experience is around $135,000."
+                        });
+
+                        log("Offer Drafted", `Market-aware offer drafted for ${interviewCandidate.name} with salary ${offer.suggestedSalary}.`);
+                        setLoadingText("Phase 5/5: Hiring candidate...");
+                        await updateDoc(doc(db, 'candidates', interviewCandidate.id), { status: 'Hired' });
+                        log("Hiring Decision", `Autonomously hired ${interviewCandidate.name} for the role of ${interviewCandidate.role}.`);
+                    } else {
+                        log("BOSS Validation", `BOSS AI rejected ${interviewCandidate.name}. Ending simulation.`);
+                    }
+                }
             } else {
                  log("Role Synthesis", "Not enough qualified candidates to synthesize a new role. Ending simulation.");
                  throw new Error("Simulation ended early: No qualified candidates found.");
             }
-
-            log("Simulation", "Further phases (Interview, BOSS review, Offer) are simulated for brevity.");
-            const finalCandidateToHire = candidatesForSim.find(c => c.status === 'Interview');
-            if (finalCandidateToHire) {
-                await updateDoc(doc(db, 'candidates', finalCandidateToHire.id), { status: 'Hired' });
-                log("Hiring Decision", `Autonomously hired ${finalCandidateToHire.name} for the role of ${finalCandidateToHire.role}.`);
-            }
-
+            
             setLastSaarthiReport({
-                simulationSummary: `The end-to-end simulation autonomously processed the pipeline. It sourced/screened candidates, created a role, and moved the top candidate through to a hired state.`,
+                reportType: "Pipeline Simulation",
+                simulationSummary: `The end-to-end simulation autonomously processed the pipeline. It sourced/screened candidates, created a role, and moved the top candidate through a full gauntlet, validation, and offer process.`,
                 detailedProcessLog: currentSimulationLog,
             });
             setIsSaarthiReportOpen(true);
@@ -291,6 +312,88 @@ export function AstraHirePage() {
         }
     };
   
+    const handleSystemAudit = async (files: FileList) => {
+        setIsLoading(true);
+        const auditLog: any[] = [];
+        const log = (step: string, description: string, status: 'Success' | 'Failure' | 'Info' = 'Info') => {
+            console.log(`[AUDIT LOG] ${step} (${status}): ${description}`);
+            auditLog.push({ step, description, status });
+        };
+        
+        try {
+            log("Start Audit", `Starting system audit with ${files.length} resumes.`);
+            setLoadingText("Phase 1: Screening...");
+            
+            const screeningPromises = Array.from(files).map(async file => {
+                try {
+                    const resumeDataUri = await convertFileToDataUri(file);
+                    const result = await automatedResumeScreening({ resumeDataUri });
+                    log("Automated Resume Screening", `Successfully screened ${file.name}. Score: ${result.candidateScore}`, "Success");
+                    return { id: `audit-${nanoid(10)}`, ...result.extractedInformation, aiInitialScore: result.candidateScore, role: 'Unassigned', status: 'Screening' as KanbanStatus, lastUpdated: new Date().toISOString() };
+                } catch(e) {
+                    log("Automated Resume Screening", `Failed to screen ${file.name}. Error: ${e instanceof Error ? e.message : 'Unknown'}`, "Failure");
+                    return null;
+                }
+            });
+            const auditCandidates = (await Promise.all(screeningPromises)).filter(Boolean) as Candidate[];
+            
+            if (auditCandidates.length === 0) {
+                throw new Error("Audit failed: No resumes could be screened successfully.");
+            }
+
+            const topCandidate = auditCandidates.sort((a,b) => (b.aiInitialScore || 0) - (a.aiInitialScore || 0))[0];
+            
+            setLoadingText("Phase 2: Role Discovery & Synthesis...");
+            try {
+                const roleSuggestions = await suggestRoleMatches({
+                    candidateName: topCandidate.name,
+                    candidateSkills: topCandidate.skills.join(', '),
+                    candidateNarrative: topCandidate.narrative,
+                    candidateInferredSkills: topCandidate.inferredSkills.join(', '),
+                });
+                const suggestedRole = roleSuggestions.roles[0];
+                log("Suggest Role Matches", `Successfully suggested role '${suggestedRole.roleTitle}' for ${topCandidate.name}`, "Success");
+
+                const jdResult = await synthesizeJobDescription({ jobTitle: suggestedRole.roleTitle, companyInformation: "A test company." });
+                log("Job Description Synthesis", `Successfully synthesized JD for '${suggestedRole.roleTitle}'`, "Success");
+                const testRole: JobRole = { id: 'audit-role', title: suggestedRole.roleTitle, description: jdResult.jobDescription, department: "Audit", openings: 1};
+
+                setLoadingText("Phase 3: Targeted Review & Analysis...");
+                const review = await reviewCandidate({ candidateData: topCandidate.narrative, jobDescription: testRole.description });
+                log("AI-Assisted Candidate Review", `Successfully reviewed ${topCandidate.name} for role. Recommendation: ${review.recommendation}`, "Success");
+
+                const skillGap = await skillGapAnalysis({ candidateSkills: topCandidate.skills, jobDescription: testRole.description });
+                log("Skill Gap Analysis", `Successfully analyzed skill gap. Found ${skillGap.skillGaps.length} gaps.`, "Success");
+
+                setLoadingText("Phase 4: Offer & Onboarding...");
+                const offer = await draftOfferLetter({ ...topCandidate, roleTitle: testRole.title, candidateExperience: topCandidate.narrative, companyName: 'Audit Inc', companySalaryBands: '100k-120k', simulatedMarketData: 'Avg 110k' });
+                log("Autonomous Offer Drafting", `Successfully drafted offer with salary ${offer.suggestedSalary}`, "Success");
+                
+                const onboarding = await generateOnboardingPlan({ candidateName: topCandidate.name, roleTitle: testRole.title, roleResponsibilities: '...', candidateStrengths: topCandidate.skills, companyCulture: 'test' });
+                log("Automated Onboarding Plan", `Successfully generated onboarding plan.`, "Success");
+
+            } catch (e) {
+                 log("Mid-Audit Failure", `An error occurred during the main audit sequence: ${e instanceof Error ? e.message : 'Unknown'}`, "Failure");
+            }
+            
+            log("Audit Complete", "SAARTHI has completed the system audit.");
+             setLastSaarthiReport({
+                reportType: "System Audit",
+                simulationSummary: `The system audit processed ${files.length} resumes and tested the core AI pipeline on the best candidate. See the log for detailed results of each feature test.`,
+                detailedProcessLog: auditLog,
+            });
+            setIsSaarthiReportOpen(true);
+
+
+        } catch(e) {
+            log("Fatal Audit Error", `The audit could not be completed. Error: ${e instanceof Error ? e.message : 'Unknown'}`, "Failure");
+            toast({ title: "Audit Failed", description: "A critical error occurred. Check the SAARTHI report and console for details.", variant: 'destructive' });
+        } finally {
+            setIsLoading(false);
+        }
+
+    }
+
     const handleViewCandidatesForRole = (role: JobRole) => {
         setFilteredRole(role);
         setActiveTab('pool');
@@ -398,7 +501,7 @@ export function AstraHirePage() {
           if (lastSaarthiReport) {
               setIsSaarthiReportOpen(true);
           } else {
-              toast({ title: "No SAARTHI report available yet.", description: "Please run the 'Stimulate Full Pipeline' first.", variant: "destructive" });
+              toast({ title: "No SAARTHI report available yet.", description: "Please run a simulation or audit first.", variant: "destructive" });
           }
       }} />
       <main>
@@ -441,3 +544,5 @@ export function AstraHirePage() {
     </div>
   );
 }
+
+    

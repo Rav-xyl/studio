@@ -4,15 +4,16 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Key, ShieldCheck, BrainCircuit, FileText } from 'lucide-react';
+import { Loader2, Key } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Candidate } from '@/lib/types';
 import { finalInterviewReview, type FinalInterviewReviewOutput } from '@/ai/flows/final-interview-review';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import dynamic from 'next/dynamic';
+import { BrainCircuit, FileText, ShieldCheck } from 'lucide-react';
 
 const InterviewGauntlet = dynamic(() => import('@/components/interview/interview-gauntlet').then(mod => mod.InterviewGauntlet), {
     ssr: false,
@@ -30,7 +31,7 @@ interface GauntletState {
 }
 
 export default function CandidatePortalPage({ params }: { params: { id: string } }) {
-    const { id: candidateId } = params;
+    const candidateId = params.id; // Correct way to access param
     const router = useRouter();
     const { toast } = useToast();
     
@@ -51,7 +52,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
             if (!candidateId) return;
             setIsLoading(true);
             try {
-                const candidateDocRef = doc(db, 'candidates', candidateId as string);
+                const candidateDocRef = doc(db, 'candidates', candidateId);
                 const candidateDoc = await getDoc(candidateDocRef);
 
                 if (candidateDoc.exists()) {
@@ -234,11 +235,11 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                         status={stageStatus('SystemDesign')}
                     />
                      {phase === 'Complete' && (
-                        <Alert variant="default" className="bg-green-100/50 border-green-400">
-                           <AlertTitle className="font-bold text-green-700">Gauntlet Complete!</AlertTitle>
-                           <AlertDescription className="text-green-600">
+                        <div className="bg-green-100/50 border-green-400 p-4 rounded-lg">
+                           <h4 className="font-bold text-green-700">Gauntlet Complete!</h4>
+                           <p className="text-sm text-green-600">
                                Thank you for completing all phases. The hiring team will be in touch shortly with the next steps.
-                           </AlertDescription>
+                           </p>
                            <Button className="mt-4" onClick={() => {
                                const report = getGrandReport();
                                const blob = new Blob([report], { type: 'text/plain' });
@@ -249,7 +250,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                                a.click();
                                URL.revokeObjectURL(url);
                            }}>Download Your Grand Report</Button>
-                        </Alert>
+                        </div>
                     )}
                 </CardContent>
             </Card>
@@ -275,3 +276,5 @@ const PhaseCard = ({ icon, title, description, status }: { icon: React.ReactNode
         </div>
     )
 }
+
+    

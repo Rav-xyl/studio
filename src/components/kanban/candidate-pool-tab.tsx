@@ -5,6 +5,7 @@ import {
   FilterX,
   PlusCircle,
   Zap,
+  TestTube2,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useState, useMemo } from 'react';
@@ -24,7 +25,7 @@ const KANBAN_COLUMNS: KanbanStatus[] = [
 
 interface CandidatePoolTabProps {
     candidates: Candidate[];
-    onUpload: (files: FileList | null) => void;
+    onUpload: (files: FileList | null, isAudit?: boolean) => void;
     onStimulateFullPipeline: () => void;
     filteredRole: JobRole | null;
     onClearFilter: () => void;
@@ -45,6 +46,7 @@ export function CandidatePoolTab({
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [isSheetOpen, setSheetOpen] = useState(false);
   const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [isAuditMode, setIsAuditMode] = useState(false);
 
   const handleCardClick = (candidate: Candidate) => {
     setSelectedCandidate(candidate);
@@ -56,6 +58,11 @@ export function CandidatePoolTab({
     if (!open) {
       setSelectedCandidate(null);
     }
+  }
+
+  const handleOpenUploadDialog = (auditMode = false) => {
+      setIsAuditMode(auditMode);
+      setUploadDialogOpen(true);
   }
 
   const displayedCandidates = useMemo(() => {
@@ -94,12 +101,16 @@ export function CandidatePoolTab({
             </div>
             
             <div className="flex items-center gap-2">
-                <Button onClick={() => setUploadDialogOpen(true)} variant="outline">
+                <Button onClick={() => handleOpenUploadDialog(false)} variant="outline">
                   <PlusCircle className="w-4 h-4 mr-2" /> Add Candidates
                 </Button>
                 
-                <Button onClick={onStimulateFullPipeline} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                  <Zap className="w-4 h-4 mr-2" /> Stimulate Full Pipeline
+                <Button onClick={onStimulateFullPipeline} variant="secondary">
+                  <Zap className="w-4 h-4 mr-2" /> Stimulate Pipeline
+                </Button>
+
+                <Button onClick={() => handleOpenUploadDialog(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                  <TestTube2 className="w-4 h-4 mr-2" /> Run SAARTHI Audit
                 </Button>
             </div>
         </div>
@@ -116,7 +127,7 @@ export function CandidatePoolTab({
             ))}
         </div>
 
-        <BulkUploadDialog open={isUploadDialogOpen} onOpenChange={setUploadDialogOpen} onUpload={onUpload} />
+        <BulkUploadDialog open={isUploadDialogOpen} onOpenChange={setUploadDialogOpen} onUpload={onUpload} isAudit={isAuditMode} />
 
         <CandidateDetailSheet 
             open={isSheetOpen} 
@@ -129,3 +140,5 @@ export function CandidatePoolTab({
     </DndProvider>
   );
 }
+
+    
