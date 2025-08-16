@@ -32,18 +32,18 @@ const prompt = ai.definePrompt({
   name: 'dynamicInterviewQuestionPrompt',
   input: {schema: GenerateInterviewQuestionsInputSchema},
   output: {schema: GenerateInterviewQuestionsOutputSchema},
-  prompt: `You are an expert recruiter. Generate a set of interview questions tailored to the candidate and the role.
+  prompt: `You are an expert recruiter. Generate a set of interview questions tailored to the candidate and the role they are assigned to.
 
 Candidate Resume:
 {{{resumeText}}}
 
-Job Description:
+Job Description for the Assigned Role:
 {{{jobDescription}}}
 
 Candidate Analysis:
 {{{candidateAnalysis}}}
 
-Generate 5-7 interview questions that probe specific areas of the candidate's profile and assess their suitability for the role. Ensure that questions are open-ended and encourage the candidate to elaborate on their experiences and skills.
+Generate 5-7 interview questions that probe specific areas of the candidate's profile and assess their suitability for the specific role defined in the job description. Ensure that questions are open-ended and encourage the candidate to elaborate on their experiences and skills.
 
 IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -8,14 +7,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Mic, Video, Brain, AlertTriangle, Send, CheckCircle, XCircle } from 'lucide-react';
 import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
-import type { Candidate } from '@/lib/types';
+import type { Candidate, JobRole } from '@/lib/types';
 import { generateSystemDesignQuestion } from '@/ai/flows/generate-system-design-question';
 import { Textarea } from '../ui/textarea';
 import { proctorTechnicalExam } from '@/ai/flows/proctor-technical-exam';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
-const DUMMY_JOB_DESCRIPTION = "Seeking a Senior Frontend Developer with expertise in React, Next.js, and TypeScript. The ideal candidate will have experience building and deploying complex, high-performance web applications. Strong communication and problem-solving skills are a must.";
 
 type ProctoringLogEntry = {
     timestamp: string;
@@ -46,6 +46,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
     
     const [phase, setPhase] = useState<InterviewPhase>(initialPhase);
     const [questions, setQuestions] = useState<string[]>([]);
+    const [jobDescription, setJobDescription] = useState<string>('');
     const [systemDesignQuestion, setSystemDesignQuestion] = useState<string>('');
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [writtenAnswer, setWrittenAnswer] = useState('');
@@ -123,10 +124,20 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
             if (!isPreFlightComplete) return;
             setIsLoading(true);
             try {
+                // Fetch job description for the assigned role
+                const rolesRef = collection(db, "roles");
+                const q = query(rolesRef, where("title", "==", candidate.role));
+                const querySnapshot = await getDocs(q);
+                let desc = "No specific job description found for this role.";
+                if (!querySnapshot.empty) {
+                    desc = (querySnapshot.docs[0].data() as JobRole).description;
+                }
+                setJobDescription(desc);
+
                 if (phase === 'Technical') {
                     const result = await generateInterviewQuestions({
                         resumeText: candidate.narrative,
-                        jobDescription: DUMMY_JOB_DESCRIPTION,
+                        jobDescription: desc,
                         candidateAnalysis: 'A promising candidate with strong skills in their domain.',
                     });
                     setQuestions(result.questions);

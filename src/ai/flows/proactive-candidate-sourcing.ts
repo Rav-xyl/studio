@@ -20,7 +20,7 @@ const ProactiveCandidateSourcingInputSchema = z.object({
 export type ProactiveCandidateSourcingInput = z.infer<typeof ProactiveCandidateSourcingInputSchema>;
 
 const SourcedCandidateSchema = z.object({
-  name: z.string().describe("A plausible-sounding full name for the fictional candidate."),
+  name: z.string().describe("A plausible-sounding full name for the fictional candidate that is fit for the Indian market."),
   role: z.string().describe("A job title for the fictional candidate, closely matching one of the open roles."),
   skills: z.array(z.string()).describe("A list of 5-7 relevant skills for the role."),
   narrative: z.string().describe("A 2-3 sentence fictional summary of the candidate's experience and career goals."),
@@ -47,7 +47,7 @@ Open Roles:
 - **{{title}}**: {{description}}
 {{/each}}
 
-For each generated candidate, create a plausible name, assign them to one of the roles, and generate a relevant set of skills, a brief narrative summary, and some inferred skills. The profiles should be diverse and reflect the talent pool in India.
+For each generated candidate, create a plausible name that is fit for the Indian market, assign them to one of the roles, and generate a relevant set of skills, a brief narrative summary, and some inferred skills. The profiles should be diverse and reflect the talent pool in India.
 
 IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
