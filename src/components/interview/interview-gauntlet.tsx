@@ -14,6 +14,8 @@ import type { Candidate } from '@/lib/types';
 import { generateSystemDesignQuestion } from '@/ai/flows/generate-system-design-question';
 import { Textarea } from '../ui/textarea';
 import { proctorTechnicalExam } from '@/ai/flows/proctor-technical-exam';
+import { Badge } from '../ui/badge';
+import { Label } from '../ui/label';
 
 const DUMMY_JOB_DESCRIPTION = "Seeking a Senior Frontend Developer with expertise in React, Next.js, and TypeScript. The ideal candidate will have experience building and deploying complex, high-performance web applications. Strong communication and problem-solving skills are a must.";
 
