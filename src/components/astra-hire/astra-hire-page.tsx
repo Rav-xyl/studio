@@ -95,42 +95,67 @@ export function AstraHirePage() {
 
 
   // --- Core Logic ---
-  const handleUpdateCandidate = async (updatedCandidate: Candidate) => {
-    const { id, ...candidateData } = updatedCandidate;
-    if (!id) {
-        console.error("Candidate ID is missing. Cannot update.");
-        return;
-    }
+    const handleUpdateCandidate = async (updatedCandidate: Candidate) => {
+        const originalCandidate = candidates.find(c => c.id === updatedCandidate.id);
+        if (!originalCandidate) return;
 
-    const originalCandidate = candidates.find(c => c.id === id);
-    if (!originalCandidate) return;
+        // --- Validation Logic ---
+        const originalStageIndex = KANBAN_STAGES.indexOf(originalCandidate.status);
+        const newStageIndex = KANBAN_STAGES.indexOf(updatedCandidate.status);
 
-    // --- Gauntlet Failure Check ---
-    const hasFailedGauntlet = originalCandidate.gauntletState?.bossValidation?.finalRecommendation === 'Do Not Hire';
-    const originalStageIndex = KANBAN_STAGES.indexOf(originalCandidate.status);
-    const newStageIndex = KANBAN_STAGES.indexOf(updatedCandidate.status);
+        const hasFailedGauntlet = originalCandidate.gauntletState?.bossValidation?.finalRecommendation === 'Do Not Hire';
+        
+        // Block forward movement if gauntlet is failed
+        if (hasFailedGauntlet && newStageIndex > originalStageIndex) {
+            toast({
+                variant: 'destructive',
+                title: 'Action Blocked',
+                description: 'This candidate has failed the Gauntlet and cannot be moved forward.'
+            });
+            return; // Halt the update
+        }
+        
+        // Block move to 'Hired' from 'Screening' if gauntlet not complete
+        if (originalCandidate.status === 'Screening' && updatedCandidate.status === 'Hired' && (originalCandidate.aiInitialScore || 0) >= 70) {
+            const isGauntletComplete = originalCandidate.gauntletState?.phase === 'Complete';
+            if (!isGauntletComplete) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Action Blocked',
+                    description: 'Candidate must complete the Gauntlet before being moved to Hired.'
+                });
+                return; // Halt the update
+            }
+        }
+        
+        // Optimistically update UI
+        setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
 
-    if (hasFailedGauntlet && newStageIndex > originalStageIndex) {
-        toast({
-            variant: 'destructive',
-            title: 'Action Blocked',
-            description: 'This candidate has failed the Gauntlet and cannot be moved to a subsequent stage.'
-        });
-        return; // Halt the update
-    }
+        // Persist to Firestore
+        const { id, ...candidateData } = updatedCandidate;
+        if (!id) {
+            console.error("Candidate ID is missing. Cannot update.");
+            return;
+        }
 
-    if (originalCandidate.status !== updatedCandidate.status) {
-         await addLog(id, {
-            event: 'Status Change',
-            details: `Candidate moved from ${originalCandidate.status} to ${updatedCandidate.status}`,
-            author: 'System',
-        });
-    }
+        if (originalCandidate.status !== updatedCandidate.status) {
+            await addLog(id, {
+                event: 'Status Change',
+                details: `Candidate moved from ${originalCandidate.status} to ${updatedCandidate.status}`,
+                author: 'System',
+            });
+        }
 
-    const candidateDocRef = doc(db, 'candidates', id);
-    await updateDoc(candidateDocRef, candidateData);
-  };
-
+        const candidateDocRef = doc(db, 'candidates', id);
+        try {
+            await updateDoc(candidateDocRef, candidateData);
+        } catch (error) {
+            // Revert optimistic update on failure
+            setCandidates(prev => prev.map(c => c.id === originalCandidate.id ? originalCandidate : c));
+            toast({ title: "Update Failed", description: "Could not save candidate changes.", variant: "destructive" });
+        }
+    };
+    
   const handleAddRole = async (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate?: Candidate) => {
     
     const existingRole = roles.find(role => role.title.toLowerCase() === newRole.title.toLowerCase());
@@ -141,8 +166,7 @@ export function AstraHirePage() {
             variant: 'destructive'
         });
         if (candidateToUpdate) {
-            const candidateRef = doc(db, 'candidates', candidateToUpdate.id);
-            await updateDoc(candidateRef, { role: existingRole.title });
+            await handleUpdateCandidate({ ...candidateToUpdate, role: existingRole.title });
             await addLog(candidateToUpdate.id, {
                 event: 'Role Assigned',
                 details: `Candidate manually assigned to existing role: ${existingRole.title}`,
@@ -160,11 +184,12 @@ export function AstraHirePage() {
     };
     
     if (candidateToUpdate) {
-        const candidateRef = doc(db, 'candidates', candidateToUpdate.id);
         const batch = writeBatch(db);
         batch.set(newRoleRef, fullNewRole);
-        batch.update(candidateRef, { role: fullNewRole.title });
-        await batch.commit();
+        // We call handleUpdateCandidate to ensure all logic/logging is applied
+        await setDoc(newRoleRef, fullNewRole);
+        await handleUpdateCandidate({ ...candidateToUpdate, role: fullNewRole.title });
+        
         await addLog(candidateToUpdate.id, {
             event: 'Role Assigned',
             details: `Candidate assigned to newly created role: ${fullNewRole.title}`,
@@ -265,7 +290,7 @@ export function AstraHirePage() {
     }
   };
   
-  const handleStimulateFullPipeline = async () => {
+    const handleStimulateFullPipeline = async () => {
         setIsLoading(true);
         const currentSimulationLog: any[] = [];
         
