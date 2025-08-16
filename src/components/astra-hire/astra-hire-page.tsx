@@ -99,11 +99,16 @@ export function AstraHirePage() {
         ...newRole,
         openings: 1,
     };
-    await addDoc(collection(db, 'roles'), fullNewRole);
     
-    // Assign the new role to the candidate
-    const updatedCandidate = { ...candidateToUpdate, role: fullNewRole.title };
-    await handleUpdateCandidate(updatedCandidate);
+    // Create new role and update candidate in a single flow
+    const newRoleRef = doc(collection(db, 'roles'));
+    const candidateRef = doc(db, 'candidates', candidateToUpdate.id);
+
+    const batch = writeBatch(db);
+    batch.set(newRoleRef, fullNewRole);
+    batch.update(candidateRef, { role: fullNewRole.title });
+    
+    await batch.commit();
 
     toast({ title: 'Role Added & Assigned', description: `Successfully added ${fullNewRole.title} and assigned it to ${candidateToUpdate.name}.` });
   };
@@ -117,38 +122,40 @@ export function AstraHirePage() {
         return;
     }
 
-    const newCandidates: Candidate[] = [];
     let addedCount = 0;
 
     const screeningPromises = Array.from(files).map(async (file) => {
-      if (!candidates.some(c => c.name === file.name)) {
-        addedCount++;
-        try {
-          const resumeDataUri = await convertFileToDataUri(file);
-          const result = await automatedResumeScreening({ resumeDataUri });
-          return {
-            id: `cand-${nanoid(10)}`,
-            ...result.extractedInformation,
-            status: 'Screening' as KanbanStatus, 
-            role: 'Unassigned',
-            aiInitialScore: result.candidateScore,
-            lastUpdated: new Date().toISOString()
-          };
-        } catch (error) {
-          console.error(`Failed to process ${file.name}:`, error);
-          return {
-            id: `cand-${nanoid(10)}`,
-            name: file.name,
-            status: 'Sourcing' as KanbanStatus,
-            role: 'Unassigned',
-            narrative: 'AI screening failed.',
-            skills: [],
-            inferredSkills: [],
-            lastUpdated: new Date().toISOString(),
-          };
-        }
+      // Check if a candidate with the same name already exists
+      const existingCandidate = candidates.find(c => c.name === file.name.split('.').slice(0, -1).join('.'));
+      if (existingCandidate) {
+          return null; // Skip if already exists
       }
-      return null;
+      
+      addedCount++;
+      try {
+        const resumeDataUri = await convertFileToDataUri(file);
+        const result = await automatedResumeScreening({ resumeDataUri });
+        return {
+          id: `cand-${nanoid(10)}`,
+          ...result.extractedInformation,
+          status: 'Screening' as KanbanStatus, 
+          role: 'Unassigned',
+          aiInitialScore: result.candidateScore,
+          lastUpdated: new Date().toISOString()
+        };
+      } catch (error) {
+        console.error(`Failed to process ${file.name}:`, error);
+        return {
+          id: `cand-${nanoid(10)}`,
+          name: file.name,
+          status: 'Sourcing' as KanbanStatus,
+          role: 'Unassigned',
+          narrative: 'AI screening failed.',
+          skills: [],
+          inferredSkills: [],
+          lastUpdated: new Date().toISOString(),
+        };
+      }
     });
       
     if (addedCount > 0) {
@@ -238,7 +245,8 @@ export function AstraHirePage() {
                     companyInformation: "A fast-growing tech startup in the AI space, focused on innovation and agile development."
                 });
                 const newRole: JobRole = { id: `role-${nanoid(10)}`, title: targetRoleTitle, description: jdResult.jobDescription, department: "Engineering", openings: 1 };
-                await addDoc(collection(db, 'roles'), newRole);
+                const newRoleRef = doc(collection(db, 'roles'));
+                await setDoc(newRoleRef, newRole);
                 
                 log("Role Synthesis Complete", `Created and saved new role: '${newRole.title}'.`);
                 
@@ -255,8 +263,10 @@ export function AstraHirePage() {
                 
                 const batch = writeBatch(db);
                 reviewedCandidates.forEach(c => {
-                    const { id, ...data } = c;
-                    batch.update(doc(db, 'candidates', id), data);
+                    if (c.id) {
+                        const { id, ...data } = c;
+                        batch.update(doc(db, 'candidates', id), data);
+                    }
                 });
                 await batch.commit();
                 
@@ -544,5 +554,3 @@ export function AstraHirePage() {
     </div>
   );
 }
-
-    

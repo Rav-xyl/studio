@@ -7,7 +7,7 @@ import { Button } from '../ui/button';
 import { GenerateJdDialog } from './generate-jd-dialog';
 import { RoleCard } from './role-card';
 import { db } from '@/lib/firebase';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, doc, setDoc } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
 import { useToast } from '@/hooks/use-toast';
 
@@ -29,7 +29,9 @@ export function RolesTab({ roles, onViewCandidates, onReEngage }: RolesTabProps)
             openings: 1, // Start with 1 opening by default
         };
         // Add the new role to Firestore
-        await addDoc(collection(db, 'roles'), fullNewRole);
+        const newRoleRef = doc(collection(db, 'roles'));
+        await setDoc(newRoleRef, fullNewRole);
+        
         toast({ title: 'Role Added', description: `Successfully added ${fullNewRole.title} to client roles.` });
     }
 

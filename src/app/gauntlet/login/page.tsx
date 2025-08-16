@@ -35,6 +35,16 @@ export default function GauntletLoginPage() {
       return;
     }
 
+    if (!candidateId.trim()) {
+        toast({
+            variant: 'destructive',
+            title: 'Candidate ID Required',
+            description: 'Please enter a valid Candidate ID.',
+        });
+        setIsLoading(false);
+        return;
+    }
+
     try {
       const candidateDocRef = doc(db, 'candidates', candidateId);
       const candidateDoc = await getDoc(candidateDocRef);

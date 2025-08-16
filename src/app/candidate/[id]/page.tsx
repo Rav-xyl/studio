@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -97,14 +97,23 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     useEffect(() => {
         const saveGauntletState = async () => {
             if (candidate && candidate.id && gauntletState.phase !== 'Locked') {
-                const candidateDocRef = doc(db, 'candidates', candidate.id);
-                await updateDoc(candidateDocRef, {
-                    gauntletState: JSON.parse(JSON.stringify(gauntletState)) 
-                });
+                try {
+                    const candidateDocRef = doc(db, 'candidates', candidate.id);
+                    await updateDoc(candidateDocRef, {
+                        gauntletState: JSON.parse(JSON.stringify(gauntletState)) 
+                    });
+                } catch (error) {
+                    console.error("Failed to save gauntlet state:", error);
+                    toast({
+                        title: "Save Error",
+                        description: "Could not save your progress. Please check your connection.",
+                        variant: "destructive",
+                    });
+                }
             }
         }
         saveGauntletState();
-    }, [gauntletState, candidate]);
+    }, [gauntletState, candidate, toast]);
 
 
     const handleTechnicalComplete = async (report: string) => {
