@@ -40,9 +40,10 @@ const reviewCandidatePrompt = ai.definePrompt({
   Company Type: {{{companyType}}}
 
   **Evaluation Criteria:**
-  {{#if (eq companyType "startup")}}
+  {{#if companyType.startup}}
   - **Startup Context:** Look for adaptability, potential to grow, and a fit for a fast-paced environment where roles are not rigidly defined. The justification should reflect this.
-  {{else}}
+  {{/if}}
+  {{#if companyType.enterprise}}
   - **Enterprise Context:** Focus strictly on the alignment of skills and experience with the job description. The justification should be based on proven expertise and qualifications.
   {{/if}}
 
@@ -65,8 +66,13 @@ const reviewCandidateFlow = ai.defineFlow(
     inputSchema: ReviewCandidateInputSchema,
     outputSchema: ReviewCandidateOutputSchema,
   },
-  async input => {
-    const {output} = await reviewCandidatePrompt(input);
+  async (input) => {
+    const { output } = await reviewCandidatePrompt({
+      ...input,
+      companyType: {
+        [input.companyType]: true,
+      } as any,
+    });
     return output!;
   }
 );

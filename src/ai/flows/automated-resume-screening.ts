@@ -53,9 +53,10 @@ const prompt = ai.definePrompt({
   Company Type: {{{companyType}}}
 
   **Evaluation Criteria:**
-  {{#if (eq companyType "startup")}}
+  {{#if companyType.startup}}
   - **Startup Context:** Prioritize adaptability, a broad range of skills, and signs of a proactive, "all-rounder" mindset. Be more lenient on formal education or linear career paths. Look for evidence of self-starting and wearing multiple hats.
-  {{else}}
+  {{/if}}
+  {{#if companyType.enterprise}}
   - **Enterprise Context:** Prioritize deep, role-specific experience, stability in previous roles, and strong formal qualifications (e.g., specific degrees, certifications). Value specialized expertise over broad, general skills.
   {{/if}}
 
@@ -95,8 +96,13 @@ const automatedResumeScreeningFlow = ai.defineFlow(
     inputSchema: AutomatedResumeScreeningInputSchema,
     outputSchema: AutomatedResumeScreeningOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input) => {
+    const { output } = await prompt({
+      ...input,
+      companyType: {
+        [input.companyType]: true,
+      } as any,
+    });
     return output!;
   }
 );
