@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -6,11 +7,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
-import { PlusCircle, UserSearch } from 'lucide-react';
+import { PlusCircle, UserSearch, Users } from 'lucide-react';
 
 interface MatchedCandidatesDialogProps {
   isOpen: boolean;
@@ -18,9 +20,10 @@ interface MatchedCandidatesDialogProps {
   matches: any[];
   roleTitle: string;
   onAssign: (candidateId: string) => void;
+  onAssignAll: (matches: any[]) => void;
 }
 
-export function MatchedCandidatesDialog({ isOpen, onClose, matches, roleTitle, onAssign }: MatchedCandidatesDialogProps) {
+export function MatchedCandidatesDialog({ isOpen, onClose, matches, roleTitle, onAssign, onAssignAll }: MatchedCandidatesDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -58,6 +61,15 @@ export function MatchedCandidatesDialog({ isOpen, onClose, matches, roleTitle, o
             )}
             </div>
         </ScrollArea>
+        {matches.length > 0 && (
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose}>Close</Button>
+            <Button onClick={() => onAssignAll(matches)}>
+              <Users className="mr-2 h-4 w-4" />
+              Assign All ({matches.length})
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

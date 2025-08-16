@@ -1,3 +1,4 @@
+
 'use client'
 import type { Candidate, JobRole } from '@/lib/types';
 import { PlusCircle, FolderSearch, Trash2 } from 'lucide-react';
@@ -74,6 +75,25 @@ export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAd
         // Also remove the assigned candidate from the dialog list
         setMatchedCandidates(prev => prev.filter(m => m.candidateId !== candidateId));
     };
+
+    const handleAssignAllRoles = (matchesToAssign: any[]) => {
+        if (!selectedRoleForMatching) return;
+        
+        matchesToAssign.forEach(match => {
+            const candidate = candidates.find(c => c.id === match.candidateId);
+            if (candidate) {
+                onUpdateCandidate({ ...candidate, role: selectedRoleForMatching.title });
+            }
+        });
+
+        toast({
+            title: "Bulk Assignment Complete!",
+            description: `Assigned ${matchesToAssign.length} candidates to the ${selectedRoleForMatching.title} role.`
+        });
+        
+        setIsMatchesDialogOpen(false);
+        setMatchedCandidates([]);
+    };
     
     return (
         <div className="fade-in-slide-up">
@@ -136,6 +156,7 @@ export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAd
                 matches={matchedCandidates}
                 roleTitle={selectedRoleForMatching?.title || ''}
                 onAssign={handleAssignRole}
+                onAssignAll={handleAssignAllRoles}
             />
         </div>
     )
