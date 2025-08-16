@@ -9,12 +9,12 @@ import {
   SheetDescription,
   SheetFooter,
 } from '@/components/ui/sheet';
-import type { Candidate } from '@/lib/types';
+import type { Candidate, JobRole } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link, Github, Goal } from 'lucide-react';
+import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link, Github, Goal, PlusCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
@@ -27,6 +27,7 @@ import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
 import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
+import { nanoid } from 'nanoid';
 
 
 interface CandidateDetailSheetProps {
@@ -34,13 +35,16 @@ interface CandidateDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   candidate: Candidate | null;
   onUpdateCandidate: (updatedCandidate: Candidate) => void;
+  onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>) => void;
 }
 
 const getInitials = (name: string) => {
     return name ? name.split(' ').map(n => n[0]).join('') : '';
 }
 
-const SocialLink = ({ url }: { url: string }) => {
+const SocialLink = ({ url }: { url: string | undefined }) => {
+    if (!url) return null;
+
     let icon = <Link className="h-5 w-5 text-muted-foreground hover:text-primary" />;
     if (url.includes('linkedin.com')) {
         icon = <Linkedin className="h-5 w-5 text-muted-foreground hover:text-primary" />;
@@ -62,6 +66,7 @@ export function CandidateDetailSheet({
   onOpenChange,
   candidate,
   onUpdateCandidate,
+  onAddRole,
 }: CandidateDetailSheetProps) {
   const { toast } = useToast();
 
@@ -154,6 +159,14 @@ export function CandidateDetailSheet({
         description: `The unique interview link for ${candidate.name} has been copied to your clipboard.`
     });
   }
+  
+  const handleAddSuggestedRole = (role: { roleTitle: string; rationale: string; }) => {
+    onAddRole({
+      title: role.roleTitle,
+      description: role.rationale,
+      department: 'AI Suggested',
+    });
+  };
 
   const review = generatedData.review;
   const email = generatedData.email;
@@ -180,7 +193,7 @@ export function CandidateDetailSheet({
                   {candidate.role}
                 </SheetDescription>
                 <div className='mt-2'>
-                    {candidate.socialUrl && <SocialLink url={candidate.socialUrl} />}
+                    <SocialLink url={candidate.socialUrl} />
                 </div>
               </div>
             </SheetHeader>
@@ -214,10 +227,6 @@ export function CandidateDetailSheet({
               </TabsContent>
 
               <TabsContent value="ai-analysis" className="mt-4 space-y-4">
-                 <div className="text-center">
-                    <h3 className="text-lg font-semibold">AI Assessment Modes</h3>
-                    <p className="text-sm text-muted-foreground">Choose how the AI should analyze this candidate.</p>
-                </div>
                 <Card>
                     <CardHeader>
                         <CardTitle className='flex items-center gap-2 text-xl'><GitMerge className='h-5 w-5 text-primary' /> Mode 1: Exploratory Screening</CardTitle>
@@ -227,9 +236,12 @@ export function CandidateDetailSheet({
                          {roleMatches.length > 0 ? (
                             <div className='space-y-3'>
                                 {roleMatches.map((match: any, index: number) => (
-                                    <div key={index} className="p-3 rounded-md border border-dashed border-border">
-                                        <p className="font-semibold text-primary">{match.roleTitle}</p>
-                                        <p className="text-xs text-muted-foreground">{match.rationale}</p>
+                                    <div key={index} className="p-3 rounded-md border border-dashed border-border flex items-center justify-between">
+                                        <div>
+                                            <p className="font-semibold text-primary">{match.roleTitle}</p>
+                                            <p className="text-xs text-muted-foreground">{match.rationale}</p>
+                                        </div>
+                                        <Button size="sm" variant="ghost" onClick={() => handleAddSuggestedRole(match)}><PlusCircle className="mr-2 h-4 w-4" />Add Role</Button>
                                     </div>
                                 ))}
                             </div>
@@ -268,7 +280,7 @@ export function CandidateDetailSheet({
                     )}
                   </CardContent>
                 </Card>
-                 <Card>
+                <Card>
                   <CardHeader>
                     <CardTitle className='flex items-center gap-2 text-xl'><Goal className='h-5 w-5 text-primary' /> Skill & Culture Analysis</CardTitle>
                   </CardHeader>
@@ -279,6 +291,16 @@ export function CandidateDetailSheet({
                            {isGenerating.skillGap ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                            Analyze Skill Gap
                         </Button>
+                        {skillGaps.length > 0 && (
+                            <div className="mt-3 space-y-2">
+                                {skillGaps.map((gap: any, index: number) => (
+                                <div key={index} className="text-xs p-2 bg-secondary rounded-md">
+                                    <p><strong>Gap:</strong> {gap.skill}</p>
+                                    <p><strong>Suggestion:</strong> {gap.suggestion}</p>
+                                </div>
+                                ))}
+                            </div>
+                        )}
                      </div>
                      <div>
                         <p className='text-sm text-muted-foreground mb-2'>Generate a 'Cultural Alignment Profile' by analyzing their resume's narrative and inferred soft skills.</p>
@@ -286,6 +308,12 @@ export function CandidateDetailSheet({
                            {isGenerating.cultureFit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                            Synthesize Culture Fit
                         </Button>
+                        {cultureFit && (
+                           <div className="mt-3 text-xs p-2 bg-secondary rounded-md space-y-2">
+                                <p><strong>Alignment Score:</strong> <Badge>{cultureFit.alignmentScore}/100</Badge></p>
+                                <p><strong>Summary:</strong> {cultureFit.summary}</p>
+                            </div>
+                        )}
                      </div>
                   </CardContent>
                 </Card>

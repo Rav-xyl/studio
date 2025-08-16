@@ -29,6 +29,7 @@ interface CandidatePoolTabProps {
     filteredRole: JobRole | null;
     onClearFilter: () => void;
     onUpdateCandidate: (candidate: Candidate) => void;
+    onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>) => void;
 }
 
 export function CandidatePoolTab({
@@ -37,7 +38,8 @@ export function CandidatePoolTab({
     onStimulateFullPipeline,
     filteredRole,
     onClearFilter,
-    onUpdateCandidate
+    onUpdateCandidate,
+    onAddRole,
 }: CandidatePoolTabProps) {
   
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -121,6 +123,7 @@ export function CandidatePoolTab({
             onOpenChange={onOpenChange} 
             candidate={selectedCandidate}
             onUpdateCandidate={onUpdateCandidate}
+            onAddRole={onAddRole}
             />
         </div>
     </DndProvider>

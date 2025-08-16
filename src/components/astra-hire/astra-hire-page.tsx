@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart2, Briefcase, Users, Loader2 } from 'lucide-react';
+import { BarChart2, Briefcase, Users, Loader2, Shield } from 'lucide-react';
 import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
@@ -21,7 +21,8 @@ import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, addDoc } from 'firebase/firestore';
+import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -84,8 +85,22 @@ export function AstraHirePage() {
   // --- Core Logic ---
   const handleUpdateCandidate = async (updatedCandidate: Candidate) => {
     const { id, ...candidateData } = updatedCandidate;
+    if (!id) {
+        console.error("Candidate ID is missing. Cannot update.");
+        return;
+    }
     const candidateDocRef = doc(db, 'candidates', id);
     await updateDoc(candidateDocRef, candidateData);
+  };
+
+  const handleAddRole = async (newRole: Omit<JobRole, 'id' | 'openings'>) => {
+    const fullNewRole: JobRole = {
+        id: `role-${nanoid(10)}`,
+        ...newRole,
+        openings: 1,
+    };
+    await addDoc(collection(db, 'roles'), fullNewRole);
+    toast({ title: 'Role Added', description: `Successfully added ${fullNewRole.title} to client roles.` });
   };
 
 
@@ -130,7 +145,7 @@ export function AstraHirePage() {
           return {
             ...candidate,
             ...result.extractedInformation,
-            status: 'Screening' as KanbanStatus, // Move directly to screening
+            status: 'Screening' as KanbanStatus, 
             aiInitialScore: result.candidateScore,
             lastUpdated: new Date().toISOString()
           };
@@ -142,7 +157,6 @@ export function AstraHirePage() {
       
       const processedCandidates = (await Promise.all(screeningPromises)).filter(Boolean) as Candidate[];
       
-      // Batch write new candidates to Firestore
       const batch = writeBatch(db);
       processedCandidates.forEach(candidate => {
         const docRef = doc(db, "candidates", candidate.id);
@@ -170,7 +184,6 @@ export function AstraHirePage() {
         try {
             log("Start Simulation", "Beginning autonomous pipeline simulation.");
             
-            // Phase 1: Proactive Sourcing if needed
             let candidatesForSim = [...candidates];
             if (candidatesForSim.filter(c => c.status === 'Sourcing' || c.status === 'Screening').length === 0) {
               setLoadingText("Phase 1/5: No candidates found. Proactively sourcing talent...");
@@ -204,7 +217,6 @@ export function AstraHirePage() {
               log("Proactive Sourcing Complete", `Generated and saved ${sourcedCandidates.length} new candidates.`);
             }
 
-            // Phase 2: Autonomous Role Creation & Matching
             setLoadingText("Phase 2/5: Synthesizing role and matching candidates...");
             const topCandidate = candidatesForSim.filter(c => c.status === 'Screening').sort((a,b) => (b.aiInitialScore || 0) - (a.aiInitialScore || 0))[0];
             
@@ -252,8 +264,6 @@ export function AstraHirePage() {
                  throw new Error("Simulation ended early: No qualified candidates found.");
             }
 
-            // Phases 3-5 would follow a similar pattern of running AI flows and batch updating Firestore.
-            // This is a simplified version for demonstration.
             log("Simulation", "Further phases (Interview, BOSS review, Offer) are simulated for brevity.");
             const finalCandidateToHire = candidatesForSim.find(c => c.status === 'Interview');
             if (finalCandidateToHire) {
@@ -340,7 +350,7 @@ export function AstraHirePage() {
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
-        return <RolesTab roles={roles} setRoles={setRoles} onViewCandidates={handleViewCandidatesForRole} onReEngage={handleReEngageForRole} />;
+        return <RolesTab roles={roles} onViewCandidates={handleViewCandidatesForRole} onReEngage={handleReEngageForRole} />;
       case 'pool':
         return (
             <CandidatePoolTab 
@@ -350,8 +360,11 @@ export function AstraHirePage() {
                 onUpdateCandidate={handleUpdateCandidate}
                 filteredRole={filteredRole}
                 onClearFilter={() => setFilteredRole(null)}
+                onAddRole={handleAddRole}
             />
         );
+       case 'gauntlet':
+        return <GauntletPortalTab candidates={candidates} />;
       case 'analytics':
         return <AnalyticsTab roles={roles} candidates={candidates} suggestedChanges={suggestedChanges} setSuggestedChanges={setSuggestedChanges} />;
       default:
@@ -392,6 +405,13 @@ export function AstraHirePage() {
             >
               <Users className="inline-block w-4 h-4 mr-2" />
               Candidate Pool
+            </button>
+             <button
+              className={`tab-btn ${activeTab === 'gauntlet' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('gauntlet'); setFilteredRole(null); }}
+            >
+              <Shield className="inline-block w-4 h-4 mr-2" />
+              Gauntlet Portal
             </button>
             <button
               className={`tab-btn ${activeTab === 'roles' ? 'active' : ''}`}

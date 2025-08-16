@@ -10,9 +10,14 @@ import { Loader2, Key, ShieldCheck, BrainCircuit, FileText } from 'lucide-react'
 import { useRouter } from 'next/navigation';
 import type { Candidate } from '@/lib/types';
 import { finalInterviewReview, type FinalInterviewReviewOutput } from '@/ai/flows/final-interview-review';
-import { InterviewGauntlet } from '@/components/interview/interview-gauntlet';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import dynamic from 'next/dynamic';
+
+const InterviewGauntlet = dynamic(() => import('@/components/interview/interview-gauntlet').then(mod => mod.InterviewGauntlet), {
+    ssr: false,
+    loading: () => <div className="flex h-screen items-center justify-center"><Loader2 className="h-10 w-10 animate-spin" /><p className="ml-4">Loading Gauntlet...</p></div>
+});
 
 type GauntletPhase = 'Locked' | 'Technical' | 'PendingReview' | 'SystemDesign' | 'Complete';
 type StageStatus = 'Locked' | 'Unlocked' | 'Pending' | 'Complete';
@@ -44,31 +49,40 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     useEffect(() => {
         const fetchCandidateData = async () => {
             if (!candidateId) return;
-            const candidateDocRef = doc(db, 'candidates', candidateId);
-            const candidateDoc = await getDoc(candidateDocRef);
+            try {
+                const candidateDocRef = doc(db, 'candidates', candidateId as string);
+                const candidateDoc = await getDoc(candidateDocRef);
 
-            if (candidateDoc.exists()) {
-                const candidateData = { id: candidateDoc.id, ...candidateDoc.data() } as Candidate;
-                setCandidate(candidateData);
-                // Load gauntlet state from the candidate document
-                if (candidateData.gauntletState) {
-                    setGauntletState(candidateData.gauntletState);
+                if (candidateDoc.exists()) {
+                    const candidateData = { id: candidateDoc.id, ...candidateDoc.data() } as Candidate;
+                    setCandidate(candidateData);
+                    if (candidateData.gauntletState) {
+                        setGauntletState(candidateData.gauntletState);
+                    }
+                } else {
+                    console.error("No such candidate!");
+                    setCandidate(null); // Explicitly set to null if not found
                 }
-            } else {
-                console.error("No such candidate!");
+            } catch (error) {
+                console.error("Error fetching candidate data:", error);
+                toast({
+                    title: "Database Error",
+                    description: "Could not retrieve candidate information.",
+                    variant: "destructive",
+                });
+            } finally {
+                setIsLoading(false);
             }
-            setIsLoading(false);
         }
         fetchCandidateData();
-    }, [candidateId]);
+    }, [candidateId, toast]);
 
     useEffect(() => {
-        // Save state to Firestore whenever it changes
         const saveGauntletState = async () => {
-            if (candidate) {
+            if (candidate && candidate.id) {
                 const candidateDocRef = doc(db, 'candidates', candidate.id);
                 await updateDoc(candidateDocRef, {
-                    gauntletState: JSON.parse(JSON.stringify(gauntletState)) // Ensure plain object
+                    gauntletState: JSON.parse(JSON.stringify(gauntletState)) 
                 });
             }
         }
@@ -79,7 +93,6 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
 
 
     const handleLogin = () => {
-        // This is a simulated login for the prototype.
         setIsAuthenticated(true);
         setGauntletState(prev => ({...prev, phase: prev.phase === 'Locked' ? 'Technical' : prev.phase }));
     };
@@ -88,13 +101,11 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         setIsProcessing(true);
         toast({ title: "Phase 1 Complete", description: "Submitting report to the BOSS AI for validation." });
         
-        // Use a functional update to ensure we have the latest state before processing
         setGauntletState(prev => ({...prev, phase: 'PendingReview', technicalReport: report }));
 
         try {
             const result = await finalInterviewReview({ interviewReport: report });
             
-            // Use functional updates for state transitions based on the API result
             setGauntletState(prev => {
                 const newState = { ...prev, bossValidation: result };
                 if (result.finalRecommendation === "Strong Hire" || result.finalRecommendation === "Proceed with Caution") {
@@ -109,7 +120,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         } catch (error) {
             console.error("BOSS validation failed", error);
             toast({ variant: 'destructive', title: "Error", description: "Could not get validation from the BOSS AI." });
-            setGauntletState(prev => ({...prev, phase: 'Technical'})); // Revert to retry
+            setGauntletState(prev => ({...prev, phase: 'Technical'})); 
         } finally {
             setIsProcessing(false);
         }
