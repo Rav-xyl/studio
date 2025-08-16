@@ -99,12 +99,13 @@ export function AstraHirePage() {
         const originalCandidate = candidates.find(c => c.id === updatedCandidate.id);
         if (!originalCandidate) return;
 
-        // --- Validation Logic ---
         const originalStageIndex = KANBAN_STAGES.indexOf(originalCandidate.status);
         const newStageIndex = KANBAN_STAGES.indexOf(updatedCandidate.status);
+
+        // --- Validation Logic ---
         const hasFailedGauntlet = originalCandidate.gauntletState?.bossValidation?.finalRecommendation === 'Do Not Hire';
         
-        // Block forward movement if gauntlet is failed
+        // Block any forward movement if gauntlet is failed
         if (hasFailedGauntlet && newStageIndex > originalStageIndex) {
             toast({
                 variant: 'destructive',
@@ -114,8 +115,9 @@ export function AstraHirePage() {
             return; // Halt the update
         }
         
-        // Block move to 'Hired' from 'Screening' if gauntlet not complete
-        if (originalCandidate.status === 'Screening' && updatedCandidate.status === 'Hired' && (originalCandidate.aiInitialScore || 0) >= 70) {
+        // Block move to 'Hired' from 'Screening' if gauntlet not complete for high-scorers
+        const isGauntletRequired = (originalCandidate.aiInitialScore || 0) >= 70;
+        if (isGauntletRequired && originalCandidate.status === 'Screening' && updatedCandidate.status === 'Hired') {
             const isGauntletComplete = originalCandidate.gauntletState?.phase === 'Complete';
             if (!isGauntletComplete) {
                 toast({
@@ -149,6 +151,7 @@ export function AstraHirePage() {
         try {
             await updateDoc(candidateDocRef, candidateData);
         } catch (error) {
+            console.error("Failed to update candidate:", error);
             // Revert optimistic update on failure
             setCandidates(prev => prev.map(c => c.id === originalCandidate.id ? originalCandidate : c));
             toast({ title: "Update Failed", description: "Could not save candidate changes.", variant: "destructive" });
@@ -183,10 +186,8 @@ export function AstraHirePage() {
     };
     
     if (candidateToUpdate) {
-        const batch = writeBatch(db);
-        batch.set(newRoleRef, fullNewRole);
-        // We call handleUpdateCandidate to ensure all logic/logging is applied
         await setDoc(newRoleRef, fullNewRole);
+        // We call handleUpdateCandidate to ensure all logic/logging is applied
         await handleUpdateCandidate({ ...candidateToUpdate, role: fullNewRole.title });
         
         await addLog(candidateToUpdate.id, {
@@ -223,15 +224,12 @@ export function AstraHirePage() {
     setIsLoading(true);
     setLoadingText(`Screening 0/${filesToProcess.length} new resumes...`);
     
-    const processedCandidates: Candidate[] = [];
+    let processedCount = 0;
     let failedCount = 0;
 
-    for (let i = 0; i < filesToProcess.length; i++) {
-        const file = filesToProcess[i];
-        setLoadingText(`Screening ${i + 1}/${filesToProcess.length} new resumes...`);
+    for (const file of filesToProcess) {
         try {
             const resumeDataUri = await convertFileToDataUri(file);
-            // We'll default to 'startup' for now, this could be a user choice in the dialog later.
             const result = await automatedResumeScreening({ resumeDataUri, companyType: 'startup' });
             
             const candidateId = `cand-${nanoid(10)}`;
@@ -254,26 +252,21 @@ export function AstraHirePage() {
                     author: 'AI'
                 }]
             };
-            processedCandidates.push(newCandidate);
+            await setDoc(doc(db, "candidates", newCandidate.id), newCandidate);
+            processedCount++;
         } catch (error) {
             console.error(`Failed to process ${file.name}:`, error);
             failedCount++;
         }
-    }
-
-    if (processedCandidates.length > 0) {
-        const batch = writeBatch(db);
-        processedCandidates.forEach(candidate => {
-            const docRef = doc(db, "candidates", candidate.id);
-            batch.set(docRef, candidate);
-        });
-        await batch.commit();
+        setLoadingText(`Screening ${processedCount + failedCount}/${filesToProcess.length} new resumes...`);
+        // Add a delay to avoid hitting rate limits
+        await new Promise(resolve => setTimeout(resolve, 500)); 
     }
       
     setIsLoading(false);
     toast({ 
         title: 'Screening Complete', 
-        description: `Successfully processed ${processedCandidates.length} resumes. ${failedCount > 0 ? `${failedCount} failed.` : ''}` 
+        description: `Successfully processed ${processedCount} resumes. ${failedCount > 0 ? `${failedCount} failed.` : ''}` 
     });
   };
   
@@ -600,6 +593,7 @@ export function AstraHirePage() {
         return (
             <CandidatePoolTab 
                 candidates={candidates}
+                roles={roles}
                 onUpload={handleBulkUpload}
                 onStimulateFullPipeline={handleStimulateFullPipeline}
                 onUpdateCandidate={handleUpdateCandidate}

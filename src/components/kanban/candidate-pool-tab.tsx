@@ -27,6 +27,7 @@ const KANBAN_COLUMNS: KanbanStatus[] = [
 
 interface CandidatePoolTabProps {
     candidates: Candidate[];
+    roles: JobRole[];
     onUpload: (files: FileList | null, isAudit?: boolean) => void;
     onStimulateFullPipeline: () => void;
     filteredRole: JobRole | null;
@@ -38,6 +39,7 @@ interface CandidatePoolTabProps {
 
 export function CandidatePoolTab({
     candidates,
+    roles,
     onUpload,
     onStimulateFullPipeline,
     filteredRole,
@@ -138,6 +140,7 @@ export function CandidatePoolTab({
             open={isSheetOpen} 
             onOpenChange={onOpenChange} 
             candidate={selectedCandidate}
+            roles={roles}
             onUpdateCandidate={onUpdateCandidate}
             onAddRole={onAddRole}
             onDeleteCandidate={onDeleteCandidate}

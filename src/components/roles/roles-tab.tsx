@@ -29,7 +29,7 @@ export function RolesTab({ roles, onViewCandidates, onReEngage, onAddRole, onDel
                 </div>
                 <Button onClick={() => setIsJdDialogOpen(true)} className='bg-primary text-primary-foreground hover:bg-primary/90'>
                     <PlusCircle className="mr-2 h-5 w-5" />
-                    Synthesize New JD
+                    Add New Role
                 </Button>
             </div>
 
@@ -69,7 +69,7 @@ export function RolesTab({ roles, onViewCandidates, onReEngage, onAddRole, onDel
                 <div className="text-center py-16 bg-secondary/30 rounded-lg">
                     <FolderSearch className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
                     <h3 className="text-xl font-semibold text-foreground">No client roles defined yet.</h3>
-                    <p className="text-muted-foreground mt-2">Use the button above to synthesize a new Job Description.</p>
+                    <p className="text-muted-foreground mt-2">Use the button above to add a new role.</p>
                 </div>
             )}
             <GenerateJdDialog open={isJdDialogOpen} onOpenChange={setIsJdDialogOpen} onSave={onAddRole} />

@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link, Github, Goal, PlusCircle, Trash2 } from 'lucide-react';
+import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link, Github, Goal, PlusCircle, Trash2, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
@@ -26,12 +26,14 @@ import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
 import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
+import { findPotentialRoles } from '@/ai/flows/find-potential-roles';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 
 interface CandidateDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   candidate: Candidate | null;
+  roles: JobRole[];
   onUpdateCandidate: (updatedCandidate: Candidate) => void;
   onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate: Candidate) => void;
   onDeleteCandidate: (candidateId: string) => void;
@@ -64,6 +66,7 @@ export function CandidateDetailSheet({
   open,
   onOpenChange,
   candidate,
+  roles,
   onUpdateCandidate,
   onAddRole,
   onDeleteCandidate
@@ -75,7 +78,7 @@ export function CandidateDetailSheet({
   
   if (!candidate) return null;
 
-  const handleGenerateClick = async (type: 'review' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'roleMatches') => {
+  const handleGenerateClick = async (type: 'review' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'roleMatches' | 'potentialRoles') => {
     if (!candidate) return;
 
     setIsGenerating(prev => ({ ...prev, [type]: true }));
@@ -132,6 +135,14 @@ export function CandidateDetailSheet({
               candidateNarrative: candidate.narrative,
               candidateInferredSkills: candidate.inferredSkills.join(', '),
             });
+        } else if (type === 'potentialRoles') {
+            result = await findPotentialRoles({
+                candidateProfile: {
+                    skills: candidate.skills,
+                    narrative: candidate.narrative,
+                },
+                jobRoles: roles,
+            });
         }
         setGeneratedData(prev => ({...prev, [type]: result }));
         toast({ title: `AI ${type} generated successfully!`})
@@ -179,6 +190,12 @@ export function CandidateDetailSheet({
       department: 'AI Suggested',
     }, candidate);
   };
+  
+  const handleAssignRole = (roleTitle: string) => {
+    if(!candidate) return;
+    onUpdateCandidate({...candidate, role: roleTitle});
+    toast({title: "Role Assigned", description: `${candidate.name} has been assigned to ${roleTitle}.`});
+  }
 
   const review = generatedData.review;
   const email = generatedData.email;
@@ -187,6 +204,7 @@ export function CandidateDetailSheet({
   const onboardingPlan = generatedData.onboarding;
   const cultureFit = generatedData.cultureFit;
   const roleMatches = generatedData.roleMatches?.roles || [];
+  const potentialRoles = generatedData.potentialRoles?.matches || [];
   const isUnassigned = candidate.role === 'Unassigned';
 
   return (
@@ -241,8 +259,8 @@ export function CandidateDetailSheet({
               <TabsContent value="ai-analysis" className="mt-4 space-y-4">
                 <Card>
                     <CardHeader>
-                        <CardTitle className='flex items-center gap-2 text-lg'><GitMerge className='h-5 w-5 text-primary' /> Mode 1: Exploratory Screening</CardTitle>
-                        <CardDescription>Use AI to discover potential roles this candidate is a strong fit for.</CardDescription>
+                        <CardTitle className='flex items-center gap-2 text-lg'><GitMerge className='h-5 w-5 text-primary' /> Mode 1: Suggest New Roles</CardTitle>
+                        <CardDescription>Use AI to discover brand new roles this candidate might be a fit for.</CardDescription>
                     </CardHeader>
                     <CardContent>
                          {roleMatches.length > 0 ? (
@@ -253,22 +271,49 @@ export function CandidateDetailSheet({
                                             <p className="font-semibold text-primary">{match.roleTitle}</p>
                                             <p className="text-xs text-muted-foreground">{match.rationale}</p>
                                         </div>
-                                        <Button size="sm" variant="ghost" onClick={() => handleAddSuggestedRole(match)}><PlusCircle className="mr-2 h-4 w-4" />Add & Assign Role</Button>
+                                        <Button size="sm" variant="ghost" onClick={() => handleAddSuggestedRole(match)}><PlusCircle className="mr-2 h-4 w-4" />Add & Assign</Button>
                                     </div>
                                 ))}
                             </div>
                         ) : (
                            <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('roleMatches')} disabled={isGenerating.roleMatches}>
                               {isGenerating.roleMatches ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                              Find Potential Roles
+                              Suggest & Create New Roles
                             </Button>
                         )}
                     </CardContent>
                 </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className='flex items-center gap-2 text-lg'><Search className='h-5 w-5 text-primary' /> Mode 2: Match to Existing Roles</CardTitle>
+                        <CardDescription>Scan all available client roles to find the best fit for this candidate.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                         {potentialRoles.length > 0 ? (
+                            <div className='space-y-3'>
+                                {potentialRoles.map((match: any, index: number) => (
+                                    <div key={index} className="p-3 rounded-md border border-dashed border-border flex items-center justify-between">
+                                        <div>
+                                            <p className="font-semibold text-primary">{match.roleTitle}</p>
+                                            <p className="text-xs text-muted-foreground">{match.justification}</p>
+                                        </div>
+                                        <Button size="sm" variant="ghost" onClick={() => handleAssignRole(match.roleTitle)}><PlusCircle className="mr-2 h-4 w-4" />Assign Role</Button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                           <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('potentialRoles')} disabled={isGenerating.potentialRoles || roles.length === 0}>
+                              {isGenerating.potentialRoles ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                              Find Potential Roles
+                            </Button>
+                        )}
+                         {roles.length === 0 && <p className="text-xs text-center text-muted-foreground mt-2">No client roles exist to match against.</p>}
+                    </CardContent>
+                </Card>
                 <Card>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-lg'><ShieldCheck className='h-5 w-5 text-primary' /> Mode 2: Targeted Review</CardTitle>
-                     <CardDescription>Validate this candidate's fit for the assigned role.</CardDescription>
+                    <CardTitle className='flex items-center gap-2 text-lg'><ShieldCheck className='h-5 w-5 text-primary' /> Mode 3: Targeted Review</CardTitle>
+                     <CardDescription>Validate this candidate's fit for their currently assigned role.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {isUnassigned ? (

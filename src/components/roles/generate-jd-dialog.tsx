@@ -12,11 +12,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Zap, Loader2 } from 'lucide-react';
+import { Zap, Loader2, Lightbulb } from 'lucide-react';
 import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
 import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
 import type { JobRole } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches'; // This is a bit of a hack, but it can extract titles.
 
 interface GenerateJdDialogProps {
   open: boolean;
@@ -24,85 +26,96 @@ interface GenerateJdDialogProps {
   onSave: (newRole: Omit<JobRole, 'id' | 'openings'>) => void;
 }
 
-
 export function GenerateJdDialog({ open, onOpenChange, onSave }: GenerateJdDialogProps) {
+    const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
+    const [isSuggesting, setIsSuggesting] = useState(false);
     const [jobTitle, setJobTitle] = useState("");
-    const [companyInfo, setCompanyInfo] = useState("");
-    const [generatedJd, setGeneratedJd] = useState("");
+    const [jd, setJd] = useState("");
 
-    const handleGenerate = async () => {
-        if(!jobTitle) return;
-        setIsLoading(true);
+    const handleSuggestTitle = async () => {
+        if(!jd) return;
+        setIsSuggesting(true);
         try {
-            const result = await synthesizeJobDescription({ jobTitle, companyInformation: companyInfo });
-            setGeneratedJd(result.jobDescription);
+            // We use suggestRoleMatches as a proxy to get a title from a description.
+            const result = await suggestRoleMatches({
+                candidateName: "Fictional Candidate",
+                candidateSkills: "",
+                candidateNarrative: jd,
+                candidateInferredSkills: "",
+            });
+            if(result.roles.length > 0) {
+                setJobTitle(result.roles[0].roleTitle);
+                toast({title: "AI Suggestion", description: "Job title has been suggested based on the description."});
+            } else {
+                toast({title: "Could not suggest a title.", variant: "destructive"});
+            }
         } catch (error) {
-            console.error("Failed to synthesize JD:", error);
-            // You might want to show a toast notification here
+            console.error("Failed to suggest title:", error);
+            toast({title: "Error", description: "Could not suggest a title.", variant: "destructive"});
         } finally {
-            setIsLoading(false);
+            setIsSuggesting(false);
         }
     }
 
     const handleSave = () => {
-        if (!generatedJd || !jobTitle) return;
+        if (!jd || !jobTitle) {
+             toast({title: "Missing Information", description: "Please ensure both Job Title and Description are filled.", variant: "destructive"});
+            return;
+        }
         onSave({
             title: jobTitle,
             department: "Uncategorized", // Default department
-            description: generatedJd,
+            description: jd,
         });
         // Reset state and close
         setJobTitle("");
-        setCompanyInfo("");
-        setGeneratedJd("");
+        setJd("");
         onOpenChange(false);
     }
     
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl glass-card">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Automated Job Description Synthesis</DialogTitle>
+          <DialogTitle>Add New Client Role</DialogTitle>
           <DialogDescription>
-            Enter a job title and optional company info. AI will analyze public data to synthesize a tailored job description.
+            Provide a job description to create a new role. You can use the AI to suggest a title.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
-            <div className='space-y-4'>
-                <div>
-                    <Label htmlFor="job-title">Job Title</Label>
-                    <Input id="job-title" placeholder="e.g., Senior Frontend Developer" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
-                </div>
-                <div>
-                    <Label htmlFor="company-info">Company Information (Optional)</Label>
-                    <Textarea id="company-info" placeholder="Paste company website URL, values, or other info here..." className='h-48' value={companyInfo} onChange={(e) => setCompanyInfo(e.target.value)} />
-                </div>
-                <Button onClick={handleGenerate} disabled={isLoading || !jobTitle} className='w-full'>
-                    {isLoading ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                        <Zap className="mr-2 h-4 w-4" />
-                    )}
-                    Synthesize Description
-                </Button>
+        <div className="space-y-4 py-4">
+            <div className='space-y-2'>
+                <Label htmlFor="job-description">Job Description</Label>
+                <Textarea 
+                    id="job-description" 
+                    placeholder="Paste the full job description here..." 
+                    className='h-48 font-mono text-xs' 
+                    value={jd} 
+                    onChange={(e) => setJd(e.target.value)} 
+                />
             </div>
-            <div className='flex flex-col'>
-                <Label>Generated Description</Label>
-                <ScrollArea className="h-72 w-full rounded-md border bg-secondary/50 p-4 mt-2">
-                    {generatedJd ? (
-                        <pre className="text-sm whitespace-pre-wrap font-sans">{generatedJd}</pre>
-                    ) : (
-                        <div className="flex items-center justify-center h-full text-muted-foreground">
-                            <p>AI-generated content will appear here.</p>
-                        </div>
-                    )}
-                </ScrollArea>
+            <div className='space-y-2'>
+                <div className="flex items-center justify-between">
+                    <Label htmlFor="job-title">Job Title</Label>
+                    <Button variant="ghost" size="sm" onClick={handleSuggestTitle} disabled={isSuggesting || !jd}>
+                         {isSuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
+                        Suggest Title from JD
+                    </Button>
+                </div>
+                <Input 
+                    id="job-title" 
+                    placeholder="e.g., Senior Frontend Developer" 
+                    value={jobTitle} 
+                    onChange={(e) => setJobTitle(e.target.value)} 
+                />
             </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={!generatedJd}>Save Job Description</Button>
+          <Button onClick={handleSave} disabled={isLoading}>
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Save New Role
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
