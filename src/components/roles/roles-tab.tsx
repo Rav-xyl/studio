@@ -6,6 +6,9 @@ import { useState } from 'react';
 import { Button } from '../ui/button';
 import { GenerateJdDialog } from './generate-jd-dialog';
 import { RoleCard } from './role-card';
+import { db } from '@/lib/firebase';
+import { collection, addDoc } from 'firebase/firestore';
+import { nanoid } from 'nanoid';
 
 interface RolesTabProps {
     roles: JobRole[];
@@ -18,13 +21,14 @@ interface RolesTabProps {
 export function RolesTab({ roles, setRoles, onViewCandidates, onReEngage }: RolesTabProps) {
     const [isJdDialogOpen, setIsJdDialogOpen] = useState(false);
 
-    const handleAddRole = (newRole: Omit<JobRole, 'id' | 'openings'>) => {
+    const handleAddRole = async (newRole: Omit<JobRole, 'id' | 'openings'>) => {
         const fullNewRole: JobRole = {
-            id: `role-${Date.now()}`,
+            id: `role-${nanoid(10)}`,
             ...newRole,
             openings: 1, // Start with 1 opening by default
         };
-        setRoles(prev => [...prev, fullNewRole]);
+        // Add the new role to Firestore
+        await addDoc(collection(db, 'roles'), fullNewRole);
     }
 
     return (

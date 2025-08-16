@@ -11,6 +11,8 @@ import { useRouter } from 'next/navigation';
 import type { Candidate } from '@/lib/types';
 import { finalInterviewReview, type FinalInterviewReviewOutput } from '@/ai/flows/final-interview-review';
 import { InterviewGauntlet } from '@/components/interview/interview-gauntlet';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 type GauntletPhase = 'Locked' | 'Technical' | 'PendingReview' | 'SystemDesign' | 'Complete';
 type StageStatus = 'Locked' | 'Unlocked' | 'Pending' | 'Complete';
@@ -40,27 +42,38 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     });
     
     useEffect(() => {
-        // In a real app, you'd fetch this from a DB. We'll use localStorage for this prototype.
-        const allCandidatesString = localStorage.getItem('candidates');
-        if (allCandidatesString) {
-            const allCandidates: Candidate[] = JSON.parse(allCandidatesString);
-            const foundCandidate = allCandidates.find(c => c.id === candidateId);
-            if (foundCandidate) {
-                setCandidate(foundCandidate);
-                // Load saved state
-                const savedState = localStorage.getItem(`gauntlet_${candidateId}`);
-                if (savedState) {
-                    setGauntletState(JSON.parse(savedState));
+        const fetchCandidateData = async () => {
+            if (!candidateId) return;
+            const candidateDocRef = doc(db, 'candidates', candidateId);
+            const candidateDoc = await getDoc(candidateDocRef);
+
+            if (candidateDoc.exists()) {
+                const candidateData = { id: candidateDoc.id, ...candidateDoc.data() } as Candidate;
+                setCandidate(candidateData);
+                // Load gauntlet state from the candidate document
+                if (candidateData.gauntletState) {
+                    setGauntletState(candidateData.gauntletState);
                 }
+            } else {
+                console.error("No such candidate!");
             }
+            setIsLoading(false);
         }
-        setIsLoading(false);
+        fetchCandidateData();
     }, [candidateId]);
 
     useEffect(() => {
-        // Save state to localStorage whenever it changes
-        if(candidate) {
-            localStorage.setItem(`gauntlet_${candidate.id}`, JSON.stringify(gauntletState));
+        // Save state to Firestore whenever it changes
+        const saveGauntletState = async () => {
+            if (candidate) {
+                const candidateDocRef = doc(db, 'candidates', candidate.id);
+                await updateDoc(candidateDocRef, {
+                    gauntletState: JSON.parse(JSON.stringify(gauntletState)) // Ensure plain object
+                });
+            }
+        }
+        if (candidate) {
+            saveGauntletState();
         }
     }, [gauntletState, candidate]);
 
@@ -75,19 +88,24 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         setIsProcessing(true);
         toast({ title: "Phase 1 Complete", description: "Submitting report to the BOSS AI for validation." });
         
+        // Use a functional update to ensure we have the latest state before processing
         setGauntletState(prev => ({...prev, phase: 'PendingReview', technicalReport: report }));
 
         try {
             const result = await finalInterviewReview({ interviewReport: report });
-            setGauntletState(prev => ({ ...prev, bossValidation: result }));
             
-            if (result.finalRecommendation === "Strong Hire" || result.finalRecommendation === "Proceed with Caution") {
-                toast({ title: "Validation Successful!", description: "The BOSS AI has approved you for the next phase." });
-                setGauntletState(prev => ({ ...prev, phase: 'SystemDesign' }));
-            } else {
-                toast({ variant: 'destructive', title: "Gauntlet Ended", description: "After careful review, we will not be proceeding to the next phase." });
-                setGauntletState(prev => ({ ...prev, phase: 'Complete' }));
-            }
+            // Use functional updates for state transitions based on the API result
+            setGauntletState(prev => {
+                const newState = { ...prev, bossValidation: result };
+                if (result.finalRecommendation === "Strong Hire" || result.finalRecommendation === "Proceed with Caution") {
+                    toast({ title: "Validation Successful!", description: "The BOSS AI has approved you for the next phase." });
+                    return { ...newState, phase: 'SystemDesign' };
+                } else {
+                    toast({ variant: 'destructive', title: "Gauntlet Ended", description: "After careful review, we will not be proceeding to the next phase." });
+                    return { ...newState, phase: 'Complete' };
+                }
+            });
+
         } catch (error) {
             console.error("BOSS validation failed", error);
             toast({ variant: 'destructive', title: "Error", description: "Could not get validation from the BOSS AI." });

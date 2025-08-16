@@ -1,0 +1,19 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  projectId: 'talentflow-ai-1lu7m',
+  appId: '1:523888981631:web:5c5c7c439489b2206db14a',
+  storageBucket: 'talentflow-ai-1lu7m.firebasestorage.app',
+  apiKey: 'AIzaSyDwwbVgb6ZpW3qhMz1dRe-3qey8gPvkz1o',
+  authDomain: 'talentflow-ai-1lu7m.firebaseapp.com',
+  messagingSenderId: '523888981631',
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+export { db };

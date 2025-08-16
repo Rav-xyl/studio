@@ -122,9 +122,9 @@ export function CandidateDetailSheet({
 
   const handleArchive = () => {
       if (!candidate) return;
-      const updatedCandidate = { ...candidate, archived: true };
+      const updatedCandidate = { ...candidate, archived: !candidate.archived };
       onUpdateCandidate(updatedCandidate);
-      toast({ title: 'Candidate Archived', description: `${candidate.name} has been removed from the active pipeline.`});
+      toast({ title: `Candidate ${updatedCandidate.archived ? 'Archived' : 'Restored'}`, description: `${candidate.name} has been ${updatedCandidate.archived ? 'removed from' : 'restored to'} the active pipeline.`});
       onOpenChange(false);
   }
 
@@ -303,8 +303,8 @@ export function CandidateDetailSheet({
           </div>
         </ScrollArea>
         <SheetFooter className="p-6 pt-0 bg-background/95 backdrop-blur-sm border-t">
-          <Button variant="destructive" onClick={handleArchive}>
-            <Archive className="mr-2 h-4 w-4"/> Archive Candidate
+          <Button variant={candidate.archived ? 'secondary' : 'destructive'} onClick={handleArchive}>
+            <Archive className="mr-2 h-4 w-4"/> {candidate.archived ? 'Restore Candidate' : 'Archive Candidate'}
           </Button>
         </SheetFooter>
       </SheetContent>
