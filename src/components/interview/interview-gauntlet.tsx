@@ -7,14 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Mic, Video, Brain, AlertTriangle, Send, CheckCircle, XCircle } from 'lucide-react';
-import type { Candidate, JobRole } from '@/lib/types';
+import type { Candidate } from '@/lib/types';
 import { Textarea } from '../ui/textarea';
 import { proctorTechnicalExam } from '@/ai/flows/proctor-technical-exam';
 import { generateSystemDesignQuestion } from '@/ai/flows/generate-system-design-question';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { FinalInterviewPhase } from './final-interview-phase';
 
 
@@ -51,14 +49,18 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
     const [proctoringLog, setProctoringLog] = useState<ProctoringLogEntry[]>([]);
     const [ambientTranscript, setAmbientTranscript] = useState('');
 
+    const answerSaveKey = `gauntlet_answer_${candidate.id}_${phase}`;
+
     useEffect(() => {
         const runPreFlightChecks = async () => {
+            // Check Camera
             try {
                 const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
                 if (videoRef.current) videoRef.current.srcObject = videoStream;
                 setCameraStatus('Success');
             } catch (error) { setCameraStatus('Error'); }
 
+            // Check Microphone
             try {
                 await navigator.mediaDevices.getUserMedia({ audio: true });
                 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -80,6 +82,22 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
         };
         runPreFlightChecks();
     }, []);
+    
+    useEffect(() => {
+        // Load saved answer from local storage when phase changes
+        const savedAnswer = localStorage.getItem(answerSaveKey);
+        if (savedAnswer) {
+            setWrittenAnswer(savedAnswer);
+        } else {
+            setWrittenAnswer('');
+        }
+    }, [phase, answerSaveKey]);
+
+    const handleAnswerChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const newAnswer = e.target.value;
+        setWrittenAnswer(newAnswer);
+        localStorage.setItem(answerSaveKey, newAnswer);
+    };
 
     useEffect(() => {
         const handleVisibilityChange = () => {
@@ -105,12 +123,12 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
             setIsLoading(true);
             try {
                 if (phase === 'Technical') {
-                    // In a real scenario, this could be a dynamic question. For now, it's one tough question.
                     setTechnicalQuestion("Given a list of integers, write a function to find the first missing positive integer. For example, for [3, 4, -1, 1], the answer is 2. For [1, 2, 0], the answer is 3. Your solution should run in O(n) time and use constant extra space.");
                     recognitionRef.current?.start();
                 } else if (phase === 'SystemDesign') {
                     const result = await generateSystemDesignQuestion({ jobTitle: candidate.role });
                     setSystemDesignQuestion(result.question);
+                     recognitionRef.current?.start();
                 }
             } catch (error) {
                 toast({ title: 'Error', description: 'Could not generate interview questions.', variant: 'destructive'});
@@ -125,6 +143,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
         if (writtenAnswer.trim() === '') return;
         setIsProcessing(true);
         recognitionRef.current?.stop();
+        localStorage.removeItem(answerSaveKey); // Clear saved answer on submit
 
         try {
             if (phase === 'Technical') {
@@ -182,7 +201,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
                             {micStatus === 'Success' && <CheckCircle className="text-green-600" />}
                             {micStatus === 'Error' && <XCircle className="text-red-600" />}
                         </div>
-                        <Button className="w-full" disabled={cameraStatus !== 'Success' || micStatus !== 'Success'} onClick={() => setIsPreFlightComplete(true)}> Begin Gauntlet </Button>
+                        <Button className="w-full h-11" disabled={cameraStatus !== 'Success' || micStatus !== 'Success'} onClick={() => setIsPreFlightComplete(true)}> Begin Gauntlet </Button>
                         {(cameraStatus === 'Error' || micStatus === 'Error') && <p className="text-xs text-center text-destructive">Please check your browser permissions and ensure your devices are connected.</p>}
                     </CardContent>
                 </Card>
@@ -232,7 +251,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
                             </div>
                             <div>
                                 <Label htmlFor="answer" className="text-sm font-semibold text-muted-foreground">Your Answer</Label>
-                                <Textarea id="answer" placeholder="Write your code or detailed answer here..." className="h-64 font-mono text-sm" value={writtenAnswer} onChange={(e) => setWrittenAnswer(e.target.value)} disabled={isProcessing} />
+                                <Textarea id="answer" placeholder="Write your code or detailed answer here..." className="h-64 font-mono text-sm" value={writtenAnswer} onChange={handleAnswerChange} disabled={isProcessing} />
                             </div>
                         </div>
                         <div className="mt-4">
