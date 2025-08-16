@@ -49,6 +49,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     useEffect(() => {
         const fetchCandidateData = async () => {
             if (!candidateId) return;
+            setIsLoading(true);
             try {
                 const candidateDocRef = doc(db, 'candidates', candidateId as string);
                 const candidateDoc = await getDoc(candidateDocRef);
@@ -61,7 +62,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                     }
                 } else {
                     console.error("No such candidate!");
-                    setCandidate(null); // Explicitly set to null if not found
+                    setCandidate(null); 
                 }
             } catch (error) {
                 console.error("Error fetching candidate data:", error);
@@ -86,7 +87,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                 });
             }
         }
-        if (candidate) {
+        if (candidate && gauntletState.phase !== 'Locked') { // Avoid saving initial locked state
             saveGauntletState();
         }
     }, [gauntletState, candidate]);

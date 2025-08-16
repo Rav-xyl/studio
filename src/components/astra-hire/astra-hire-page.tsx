@@ -93,14 +93,19 @@ export function AstraHirePage() {
     await updateDoc(candidateDocRef, candidateData);
   };
 
-  const handleAddRole = async (newRole: Omit<JobRole, 'id' | 'openings'>) => {
+  const handleAddRole = async (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate: Candidate) => {
     const fullNewRole: JobRole = {
         id: `role-${nanoid(10)}`,
         ...newRole,
         openings: 1,
     };
     await addDoc(collection(db, 'roles'), fullNewRole);
-    toast({ title: 'Role Added', description: `Successfully added ${fullNewRole.title} to client roles.` });
+    
+    // Assign the new role to the candidate
+    const updatedCandidate = { ...candidateToUpdate, role: fullNewRole.title };
+    await handleUpdateCandidate(updatedCandidate);
+
+    toast({ title: 'Role Added & Assigned', description: `Successfully added ${fullNewRole.title} and assigned it to ${candidateToUpdate.name}.` });
   };
 
 
@@ -118,7 +123,7 @@ export function AstraHirePage() {
           id: `cand-${nanoid(10)}`,
           name: file.name,
           avatarUrl: '',
-          role: 'Unassigned', // Start as unassigned
+          role: 'Unassigned', 
           skills: [],
           status: 'Sourcing', 
           narrative: `Resume file: ${file.name}`,

@@ -27,15 +27,13 @@ import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
 import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
-import { nanoid } from 'nanoid';
-
 
 interface CandidateDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   candidate: Candidate | null;
   onUpdateCandidate: (updatedCandidate: Candidate) => void;
-  onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>) => void;
+  onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate: Candidate) => void;
 }
 
 const getInitials = (name: string) => {
@@ -161,11 +159,12 @@ export function CandidateDetailSheet({
   }
   
   const handleAddSuggestedRole = (role: { roleTitle: string; rationale: string; }) => {
+    if (!candidate) return;
     onAddRole({
       title: role.roleTitle,
       description: role.rationale,
       department: 'AI Suggested',
-    });
+    }, candidate);
   };
 
   const review = generatedData.review;
@@ -241,7 +240,7 @@ export function CandidateDetailSheet({
                                             <p className="font-semibold text-primary">{match.roleTitle}</p>
                                             <p className="text-xs text-muted-foreground">{match.rationale}</p>
                                         </div>
-                                        <Button size="sm" variant="ghost" onClick={() => handleAddSuggestedRole(match)}><PlusCircle className="mr-2 h-4 w-4" />Add Role</Button>
+                                        <Button size="sm" variant="ghost" onClick={() => handleAddSuggestedRole(match)}><PlusCircle className="mr-2 h-4 w-4" />Add & Assign Role</Button>
                                     </div>
                                 ))}
                             </div>

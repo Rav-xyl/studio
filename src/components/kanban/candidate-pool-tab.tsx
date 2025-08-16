@@ -29,7 +29,7 @@ interface CandidatePoolTabProps {
     filteredRole: JobRole | null;
     onClearFilter: () => void;
     onUpdateCandidate: (candidate: Candidate) => void;
-    onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>) => void;
+    onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate: Candidate) => void;
 }
 
 export function CandidatePoolTab({
