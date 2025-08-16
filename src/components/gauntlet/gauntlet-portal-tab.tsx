@@ -4,18 +4,16 @@
 import type { Candidate } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Copy, ShieldQuestion } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { ShieldQuestion, Info } from "lucide-react";
 import { useMemo } from "react";
 import { Progress } from "../ui/progress";
+import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 
 interface GauntletPortalTabProps {
     candidates: Candidate[];
 }
 
 export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
-    const { toast } = useToast();
 
     const shortlistedCandidates = useMemo(() => {
         return candidates.filter(c => (c.aiInitialScore || 0) >= 70 && !c.archived);
@@ -31,32 +29,32 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
         return { text: 'Not Started', value: 0 };
     }
 
-    const handleCopyLink = (candidateId: string) => {
-        const interviewUrl = `${window.location.origin}/candidate/${candidateId}`;
-        navigator.clipboard.writeText(interviewUrl);
-        toast({
-            title: "Gauntlet Link Copied!",
-            description: `The unique interview link has been copied to your clipboard.`
-        });
-    }
-
     return (
         <div className="fade-in-slide-up">
             <div className="mb-6">
                 <h2 className="text-3xl font-bold tracking-tighter">Gauntlet Portal</h2>
                 <p className="text-muted-foreground mt-1">
-                    Only candidates with an AI screening score of 70+ are shortlisted for the Gauntlet.
+                    Manage and monitor candidates who have been shortlisted for the AI Gauntlet.
                 </p>
             </div>
+            
+            <Alert className="mb-6">
+                <Info className="h-4 w-4" />
+                <AlertTitle>Instructions for Recruiters</AlertTitle>
+                <AlertDescription>
+                    To invite a candidate to the Gauntlet, provide them with the portal link <strong>/gauntlet/login</strong>, their unique <strong>Candidate ID</strong> from the table below, and the universal password: <strong>TEST1234</strong>.
+                </AlertDescription>
+            </Alert>
+
 
             <div className="rounded-lg border">
                 <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Candidate</TableHead>
+                            <TableHead>Candidate ID</TableHead>
                             <TableHead className="text-center">AI Score</TableHead>
                             <TableHead>Gauntlet Status</TableHead>
-                            <TableHead className="text-right">Action</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -66,6 +64,7 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
                                 return (
                                 <TableRow key={candidate.id}>
                                     <TableCell className="font-medium">{candidate.name}</TableCell>
+                                    <TableCell><Badge variant="outline">{candidate.id}</Badge></TableCell>
                                     <TableCell className="text-center">
                                         <Badge variant="secondary">{Math.round(candidate.aiInitialScore || 0)}</Badge>
                                     </TableCell>
@@ -74,12 +73,6 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
                                             <span className="text-xs text-muted-foreground">{status.text}</span>
                                             <Progress value={status.value} className="h-2" />
                                         </div>
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm" onClick={() => handleCopyLink(candidate.id)}>
-                                            <Copy className="mr-2 h-4 w-4" />
-                                            Copy Gauntlet Link
-                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             )})

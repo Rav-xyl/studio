@@ -4,7 +4,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Key } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -31,7 +30,7 @@ interface GauntletState {
 }
 
 export default function CandidatePortalPage({ params }: { params: { id: string } }) {
-    const candidateId = params.id; // Correct way to access param
+    const candidateId = params.id;
     const router = useRouter();
     const { toast } = useToast();
     
@@ -48,6 +47,19 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     });
     
     useEffect(() => {
+        // Authentication Check
+        const authenticatedId = sessionStorage.getItem('gauntlet-auth-id');
+        if (authenticatedId !== candidateId) {
+            toast({
+                variant: 'destructive',
+                title: 'Access Denied',
+                description: 'You must log in to access the gauntlet.',
+            });
+            router.replace('/gauntlet/login');
+            return;
+        }
+        setIsAuthenticated(true);
+
         const fetchCandidateData = async () => {
             if (!candidateId) return;
             setIsLoading(true);
@@ -60,6 +72,9 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                     setCandidate(candidateData);
                     if (candidateData.gauntletState) {
                         setGauntletState(candidateData.gauntletState);
+                    } else {
+                        // If no state exists, this is the first entry. Unlock the technical phase.
+                        setGauntletState(prev => ({...prev, phase: 'Technical' }));
                     }
                 } else {
                     console.error("No such candidate!");
@@ -77,27 +92,20 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
             }
         }
         fetchCandidateData();
-    }, [candidateId, toast]);
+    }, [candidateId, toast, router]);
 
     useEffect(() => {
         const saveGauntletState = async () => {
-            if (candidate && candidate.id) {
+            if (candidate && candidate.id && gauntletState.phase !== 'Locked') {
                 const candidateDocRef = doc(db, 'candidates', candidate.id);
                 await updateDoc(candidateDocRef, {
                     gauntletState: JSON.parse(JSON.stringify(gauntletState)) 
                 });
             }
         }
-        if (candidate && gauntletState.phase !== 'Locked') { // Avoid saving initial locked state
-            saveGauntletState();
-        }
+        saveGauntletState();
     }, [gauntletState, candidate]);
 
-
-    const handleLogin = () => {
-        setIsAuthenticated(true);
-        setGauntletState(prev => ({...prev, phase: prev.phase === 'Locked' ? 'Technical' : prev.phase }));
-    };
 
     const handleTechnicalComplete = async (report: string) => {
         setIsProcessing(true);
@@ -151,8 +159,8 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     }
 
 
-    if (isLoading) {
-        return <div className="flex h-screen items-center justify-center"><Loader2 className="h-10 w-10 animate-spin" /></div>;
+    if (isLoading || !isAuthenticated) {
+        return <div className="flex h-screen items-center justify-center"><Loader2 className="h-10 w-10 animate-spin" /><p className="ml-4">Loading Candidate Portal...</p></div>;
     }
 
     if (!candidate) {
@@ -161,31 +169,12 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                 <Card className="text-center p-8">
                     <CardHeader><CardTitle>Candidate Not Found</CardTitle></CardHeader>
                     <CardContent>
-                        <AlertDescription>The candidate ID is invalid or the interview does not exist.</AlertDescription>
-                        <Button onClick={() => router.push('/')} className="mt-4">Return to Home</Button>
+                        <CardDescription>The candidate ID is invalid or the interview does not exist.</CardDescription>
+                        <Button onClick={() => router.push('/gauntlet/login')} className="mt-4">Return to Login</Button>
                     </CardContent>
                 </Card>
             </div>
         );
-    }
-    
-    if (!isAuthenticated) {
-        return (
-            <div className="flex items-center justify-center h-screen bg-secondary">
-                <Card className="w-full max-w-md p-8 text-center">
-                    <CardHeader>
-                        <CardTitle className="text-3xl">AstraHire Gauntlet</CardTitle>
-                        <CardDescription>Welcome, {candidate.name}. Please log in to begin your intelligent assessment.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                         <Button onClick={handleLogin} className="w-full h-12 text-lg">
-                            <Key className="mr-2" /> Use ID: {candidate.id}
-                        </Button>
-                        <p className="text-xs text-muted-foreground mt-4">This is a unique, secure portal for your interview process.</p>
-                    </CardContent>
-                </Card>
-            </div>
-        )
     }
 
     const { phase } = gauntletState;
@@ -194,7 +183,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         return (
             <InterviewGauntlet 
                 candidate={candidate} 
-                initialPhase={phase === 'Technical' ? 'Technical' : 'System Design'}
+                initialPhase={phase}
                 onTechnicalComplete={handleTechnicalComplete}
                 onSystemDesignComplete={handleSystemDesignComplete}
             />
@@ -252,6 +241,12 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                            }}>Download Your Grand Report</Button>
                         </div>
                     )}
+                     {phase !== 'Complete' && isProcessing && (
+                         <div className="flex items-center justify-center p-4 bg-yellow-100/50 rounded-lg">
+                            <Loader2 className="h-6 w-6 animate-spin text-yellow-600" />
+                            <p className="ml-3 text-yellow-700 font-medium">Processing your submission...</p>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
@@ -276,5 +271,3 @@ const PhaseCard = ({ icon, title, description, status }: { icon: React.ReactNode
         </div>
     )
 }
-
-    
