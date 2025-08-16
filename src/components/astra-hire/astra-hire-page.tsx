@@ -102,7 +102,6 @@ export function AstraHirePage() {
         // --- Validation Logic ---
         const originalStageIndex = KANBAN_STAGES.indexOf(originalCandidate.status);
         const newStageIndex = KANBAN_STAGES.indexOf(updatedCandidate.status);
-
         const hasFailedGauntlet = originalCandidate.gauntletState?.bossValidation?.finalRecommendation === 'Do Not Hire';
         
         // Block forward movement if gauntlet is failed
@@ -211,83 +210,71 @@ export function AstraHirePage() {
         return;
     }
 
-    let addedCount = 0;
+    const filesToProcess = Array.from(files).filter(file => 
+        !candidates.some(c => c.name === file.name.split('.').slice(0, -1).join('.'))
+    );
 
-    const screeningPromises = Array.from(files).map(async (file) => {
-      const existingCandidate = candidates.find(c => c.name === file.name.split('.').slice(0, -1).join('.'));
-      if (existingCandidate) {
-          return null; 
-      }
-      
-      addedCount++;
-      try {
-        const resumeDataUri = await convertFileToDataUri(file);
-        // We'll default to 'startup' for now, this could be a user choice in the dialog later.
-        const result = await automatedResumeScreening({ resumeDataUri, companyType: 'startup' });
-        
-        const candidateId = `cand-${nanoid(10)}`;
-        const newCandidate: Candidate = {
-          id: candidateId,
-          ...result.extractedInformation,
-          status: 'Screening' as KanbanStatus, 
-          role: 'Unassigned',
-          aiInitialScore: result.candidateScore,
-          lastUpdated: new Date().toISOString(),
-          log: [{
-              timestamp: new Date().toISOString(),
-              event: 'Resume Uploaded',
-              details: `Candidate profile created from file: ${file.name}`,
-              author: 'System'
-          }, {
-              timestamp: new Date().toISOString(),
-              event: 'AI Screening Complete',
-              details: `Automated screening finished. Initial score: ${result.candidateScore}`,
-              author: 'AI'
-          }]
-        };
-        return newCandidate;
-      } catch (error) {
-        console.error(`Failed to process ${file.name}:`, error);
-        return {
-          id: `cand-${nanoid(10)}`,
-          name: file.name,
-          status: 'Sourcing' as KanbanStatus,
-          role: 'Unassigned',
-          narrative: 'AI screening failed.',
-          skills: [],
-          inferredSkills: [],
-          lastUpdated: new Date().toISOString(),
-          log: [{
-              timestamp: new Date().toISOString(),
-              event: 'Upload Failed',
-              details: `AI screening failed for file: ${file.name}`,
-              author: 'System'
-          }]
-        };
-      }
-    });
-      
-    if (addedCount > 0) {
-      toast({ title: "Upload Successful", description: `${addedCount} new resumes added. Screening automatically...` });
-      
-      setIsLoading(true);
-      setLoadingText(`Screening ${addedCount} new resumes...`);
-      
-      const processedCandidates = (await Promise.all(screeningPromises)).filter(Boolean) as Candidate[];
-      
-      const batch = writeBatch(db);
-      processedCandidates.forEach(candidate => {
-        const docRef = doc(db, "candidates", candidate.id);
-        batch.set(docRef, candidate);
-      });
-      await batch.commit();
-
-      setIsLoading(false);
-      toast({ title: 'Screening Complete', description: `Processed and saved ${processedCandidates.length} resumes.` });
-
-    } else {
-      toast({ title: "No new resumes added", description: "All selected files were already in the pool.", variant: "destructive" });
+    if (filesToProcess.length === 0) {
+        toast({ title: "No new resumes to add", description: "All selected files were already in the pool.", variant: "destructive" });
+        return;
     }
+    
+    toast({ title: "Upload Successful", description: `${filesToProcess.length} new resumes added. Screening automatically...` });
+    setIsLoading(true);
+    setLoadingText(`Screening 0/${filesToProcess.length} new resumes...`);
+    
+    const processedCandidates: Candidate[] = [];
+    let failedCount = 0;
+
+    for (let i = 0; i < filesToProcess.length; i++) {
+        const file = filesToProcess[i];
+        setLoadingText(`Screening ${i + 1}/${filesToProcess.length} new resumes...`);
+        try {
+            const resumeDataUri = await convertFileToDataUri(file);
+            // We'll default to 'startup' for now, this could be a user choice in the dialog later.
+            const result = await automatedResumeScreening({ resumeDataUri, companyType: 'startup' });
+            
+            const candidateId = `cand-${nanoid(10)}`;
+            const newCandidate: Candidate = {
+                id: candidateId,
+                ...result.extractedInformation,
+                status: 'Screening' as KanbanStatus, 
+                role: 'Unassigned',
+                aiInitialScore: result.candidateScore,
+                lastUpdated: new Date().toISOString(),
+                log: [{
+                    timestamp: new Date().toISOString(),
+                    event: 'Resume Uploaded',
+                    details: `Candidate profile created from file: ${file.name}`,
+                    author: 'System'
+                }, {
+                    timestamp: new Date().toISOString(),
+                    event: 'AI Screening Complete',
+                    details: `Automated screening finished. Initial score: ${result.candidateScore}`,
+                    author: 'AI'
+                }]
+            };
+            processedCandidates.push(newCandidate);
+        } catch (error) {
+            console.error(`Failed to process ${file.name}:`, error);
+            failedCount++;
+        }
+    }
+
+    if (processedCandidates.length > 0) {
+        const batch = writeBatch(db);
+        processedCandidates.forEach(candidate => {
+            const docRef = doc(db, "candidates", candidate.id);
+            batch.set(docRef, candidate);
+        });
+        await batch.commit();
+    }
+      
+    setIsLoading(false);
+    toast({ 
+        title: 'Screening Complete', 
+        description: `Successfully processed ${processedCandidates.length} resumes. ${failedCount > 0 ? `${failedCount} failed.` : ''}` 
+    });
   };
   
     const handleStimulateFullPipeline = async () => {
@@ -695,3 +682,5 @@ export function AstraHirePage() {
     </div>
   );
 }
+
+    
