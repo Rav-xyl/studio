@@ -50,6 +50,7 @@ export interface Candidate {
   log?: LogEntry[];
   gauntletStartDate?: string;
   gauntletState?: GauntletState;
+  communicationSent?: boolean;
   // Optional fields from AI processing
   [key: string]: any;
 }

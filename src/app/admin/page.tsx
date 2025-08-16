@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { BarChart2, Briefcase, Users, Loader2, Shield, Bell, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import type { Candidate } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { GauntletMonitorTable } from '@/components/admin/gauntlet-monitor-table';
@@ -64,12 +64,12 @@ export default function AdminDashboardPage() {
         let rejectedCount = 0;
 
         try {
-            const communicationPromises = completedCandidates.map(c => {
+            const communicationPromises = completedCandidates.map(async (c) => {
                 const isHired = c.gauntletState?.finalReview?.finalRecommendation === 'Strong Hire';
                 const stage = isHired ? 'Offer Extended' : 'Rejected';
                 if (isHired) hiredCount++; else rejectedCount++;
 
-                return aiDrivenCandidateEngagement({
+                await aiDrivenCandidateEngagement({
                     candidateName: c.name,
                     candidateStage: stage,
                     jobTitle: c.role,
@@ -78,6 +78,9 @@ export default function AdminDashboardPage() {
                     candidateSkills: c.skills.join(', '),
                     rejectionReason: 'After careful consideration of the final interview, we have decided to move forward with other candidates.'
                 });
+
+                // Mark communication as sent
+                await updateDoc(doc(db, 'candidates', c.id), { communicationSent: true });
             });
             
             await Promise.all(communicationPromises);

@@ -108,7 +108,7 @@ export function GauntletMonitorTable({ candidates }: GauntletMonitorTableProps) 
     };
 
     const getDaysRemaining = (candidate: Candidate) => {
-        if (!candidate.gauntletStartDate || candidate.gauntletState?.phase === 'Complete') return { text: 'N/A', isUrgent: false, isExpired: false };
+        if (!candidate.gauntletStartDate || candidate.gauntletState?.phase === 'Complete' || candidate.gauntletState?.phase === 'Failed') return { text: 'N/A', isUrgent: false, isExpired: false };
         const now = new Date();
         const startDate = new Date(candidate.gauntletStartDate);
         const deadline = new Date(new Date(startDate).setDate(startDate.getDate() + 7));
