@@ -183,7 +183,7 @@ export function CandidateDetailSheet({
             <Tabs defaultValue="profile" className="w-full">
               <TabsList className="grid w-full grid-cols-3 bg-secondary">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
-                <TabsTrigger value="ai-analysis">AI Actions</TabsTrigger>
+                <TabsTrigger value="ai-analysis">AI Analysis</TabsTrigger>
                 <TabsTrigger value="comms">Communication</TabsTrigger>
               </TabsList>
               
