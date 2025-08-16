@@ -1,4 +1,5 @@
 
+
 export type KanbanStatus = 'Sourcing' | 'Screening' | 'Interview' | 'Hired';
 
 export interface Candidate {
@@ -14,9 +15,6 @@ export interface Candidate {
   archived?: boolean;
   // Optional fields from AI processing
   [key: string]: any; 
-  // For rubric refinement
-  aiInitialDecision?: 'Hired' | 'Rejected' | 'Maybe';
-  aiInitialScore?: number;
 }
 
 export interface JobRole {

@@ -14,17 +14,15 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Linkedin, Zap, Brain, Video, Send, Star, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive } from 'lucide-react';
+import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
 import { useState } from 'react';
 import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
-import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
 import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
@@ -49,14 +47,13 @@ export function CandidateDetailSheet({
   onUpdateCandidate,
 }: CandidateDetailSheetProps) {
   const { toast } = useToast();
-  const router = useRouter();
 
   const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
   const [generatedData, setGeneratedData] = useState<Record<string, any>>({});
   
   if (!candidate) return null;
 
-  const handleGenerateClick = async (type: 'review' | 'questions' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'roleMatches') => {
+  const handleGenerateClick = async (type: 'review' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'roleMatches') => {
     if (!candidate) return;
 
     setIsGenerating(prev => ({ ...prev, [type]: true }));
@@ -66,12 +63,6 @@ export function CandidateDetailSheet({
             result = await reviewCandidate({
                 candidateData: candidate.narrative,
                 jobDescription: candidate.role
-            });
-        } else if (type === 'questions') {
-            result = await generateInterviewQuestions({
-                resumeText: candidate.narrative,
-                jobDescription: candidate.role,
-                candidateAnalysis: 'A promising candidate with strong skills in their domain.'
             });
         } else if (type === 'email') {
             result = await aiDrivenCandidateEngagement({
@@ -139,16 +130,15 @@ export function CandidateDetailSheet({
 
   const handleSendInterviewInvite = () => {
     if (!candidate) return;
-    localStorage.setItem('interviewCandidate', JSON.stringify(candidate));
+    const interviewUrl = `${window.location.origin}/candidate/${candidate.id}`;
+    navigator.clipboard.writeText(interviewUrl);
     toast({
-        title: "Navigating to Interview Room...",
-        description: `Preparing the AI video interview for ${candidate.name}.`
+        title: "Gauntlet Link Copied!",
+        description: `The unique interview link for ${candidate.name} has been copied to your clipboard.`
     });
-    router.push(`/interview/${candidate.id}`);
   }
 
   const review = generatedData.review;
-  const questions = generatedData.questions?.questions || [];
   const email = generatedData.email;
   const skillGaps = generatedData.skillGap?.skillGaps || [];
   const offer = generatedData.offer;
@@ -185,7 +175,7 @@ export function CandidateDetailSheet({
               <TabsList className="grid w-full grid-cols-3 bg-secondary">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
                 <TabsTrigger value="ai-analysis">AI Analysis</TabsTrigger>
-                <TabsTrigger value="comms">Communication</TabsTrigger>
+                <TabsTrigger value="actions">Actions</TabsTrigger>
               </TabsList>
               
               <TabsContent value="profile" className="mt-4">
@@ -209,9 +199,9 @@ export function CandidateDetailSheet({
               </TabsContent>
 
               <TabsContent value="ai-analysis" className="mt-4 space-y-4">
-                <div className="text-center">
+                 <div className="text-center">
                     <h3 className="text-lg font-semibold">AI Assessment Modes</h3>
-                    <p className="text-sm text-muted-foreground">Choose how you want the AI to analyze this candidate.</p>
+                    <p className="text-sm text-muted-foreground">Choose how the AI should analyze this candidate.</p>
                 </div>
                 <Card>
                     <CardHeader>
@@ -229,7 +219,7 @@ export function CandidateDetailSheet({
                                 ))}
                             </div>
                         ) : (
-                           <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('roleMatches')} disabled={isGenerating.roleMatches}>
+                           <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('roleMatches')} disabled={isGenerating.roleMatches}>
                               {isGenerating.roleMatches ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                               Find Potential Roles
                             </Button>
@@ -242,9 +232,9 @@ export function CandidateDetailSheet({
                   </CardHeader>
                   <CardContent>
                     {isNewUpload ? (
-                      <p className='text-sm text-muted-foreground text-center p-4 bg-secondary/50 rounded-md'>
+                      <div className='text-sm text-muted-foreground text-center p-4 bg-secondary/50 rounded-md'>
                         Assign a specific role to this candidate on the Kanban board to enable a targeted review.
-                      </p>
+                      </div>
                     ) : (
                       <>
                         <p className='text-sm text-muted-foreground mb-4'>Validate this candidate's fit for the specific role of **{candidate.role}**.</p>
@@ -263,50 +253,19 @@ export function CandidateDetailSheet({
                     )}
                   </CardContent>
                 </Card>
-                 <Card>
-                  <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><Star className='h-5 w-5 text-primary' /> Skill Gap Analysis</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {skillGaps.length > 0 ? (
-                        <ul className='list-disc list-inside space-y-2 text-sm'>
-                            {skillGaps.map((gap: any) => (
-                                <li key={gap.skill}><span className='font-semibold'>{gap.skill}:</span> <span className='text-muted-foreground'>{gap.suggestion}</span></li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <p className='text-sm text-muted-foreground mb-4'>Click the button to analyze skill gaps and get training suggestions.</p>
-                    )}
-                    <Button variant="outline" className="w-full mt-4" onClick={() => handleGenerateClick('skillGap')} disabled={isGenerating.skillGap}>
-                       {isGenerating.skillGap ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                      Analyze Skill Gap
-                    </Button>
-                  </CardContent>
-                </Card>
               </TabsContent>
 
-              <TabsContent value="comms" className="mt-4 space-y-4">
+              <TabsContent value="actions" className="mt-4 space-y-4">
                   <Card>
                     <CardHeader>
-                      <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> AI Interview</CardTitle>
+                      <CardTitle className='flex items-center gap-2 text-xl'><Brain className='h-5 w-5 text-primary' /> AI Interview Gauntlet</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className='text-sm text-muted-foreground mb-4'>Generate AI-powered questions and invite the candidate to an automated AI video interview.</p>
-                       {questions.length > 0 && (
-                          <ol className='list-decimal list-inside space-y-2 text-sm bg-secondary p-4 rounded-md mb-4'>
-                            {questions.map((q: string) => <li key={q}>"{q}"</li>)}
-                          </ol>
-                       )}
-                      <div className='flex gap-2'>
-                        <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('questions')} disabled={isGenerating.questions}>
-                          {isGenerating.questions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                          Generate Questions
+                      <p className='text-sm text-muted-foreground mb-4'>Generate a unique, secure link to the multi-phase AI interview gauntlet for this candidate.</p>
+                       <Button onClick={handleSendInterviewInvite} className="w-full">
+                          <Link className="mr-2 h-4 w-4" />
+                          Copy Secure Gauntlet Link
                         </Button>
-                        <Button onClick={handleSendInterviewInvite} className="w-full" disabled={candidate.status !== 'Interview'}>
-                          <Video className="mr-2 h-4 w-4" />
-                          Start Interview
-                        </Button>
-                      </div>
                     </CardContent>
                   </Card>
                  <Card>
@@ -316,7 +275,7 @@ export function CandidateDetailSheet({
                   <CardContent>
                     <p className='text-sm text-muted-foreground mb-4'>Generate a competitive offer letter or a 30-60-90 day onboarding plan.</p>
                     <div className='flex gap-2'>
-                      <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('offer')} disabled={isGenerating.offer || candidate.status !== 'Interview'}>
+                      <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('offer')} disabled={isGenerating.offer || candidate.status !== 'Hired'}>
                         {isGenerating.offer ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                         Draft Offer
                       </Button>
@@ -340,7 +299,6 @@ export function CandidateDetailSheet({
                   </CardContent>
                 </Card>
               </TabsContent>
-
             </Tabs>
           </div>
         </ScrollArea>
@@ -353,5 +311,3 @@ export function CandidateDetailSheet({
     </Sheet>
   );
 }
-
-    
