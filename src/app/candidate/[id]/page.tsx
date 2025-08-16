@@ -285,16 +285,17 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                         status={stageStatus('FinalInterview')}
                     />
                      {(phase === 'Complete' || phase === 'Failed') && (
-                        <div className={`${phase === 'Complete' ? 'bg-green-100/50 border-green-400' : 'bg-red-100/50 border-red-400'} p-4 rounded-lg`}>
-                           <h4 className={`font-bold ${phase === 'Complete' ? 'text-green-700' : 'text-red-700'}`}>
+                        <div className={`${phase === 'Complete' ? 'bg-green-100/50 border-green-400' : 'bg-red-100/50 border-red-400'} p-4 rounded-lg border`}>
+                           <h4 className={`font-bold text-lg flex items-center gap-2 ${phase === 'Complete' ? 'text-green-700' : 'text-red-700'}`}>
+                                {phase === 'Complete' ? <CheckCircle /> : <XCircle />}
                                 Gauntlet {phase === 'Complete' ? 'Complete!' : 'Ended'}
                            </h4>
-                           <p className={`text-sm ${phase === 'Complete' ? 'text-green-600' : 'text-red-600'}`}>
+                           <p className={`text-sm mt-2 ${phase === 'Complete' ? 'text-green-600' : 'text-red-600'}`}>
                                {phase === 'Complete' 
-                                   ? "Thank you for completing all phases. The hiring team will be in touch shortly." 
-                                   : "Thank you for your time. After careful consideration, we will not be moving forward."}
+                                   ? "Thank you for completing all phases. The hiring team has been notified and will be in touch shortly regarding the next steps." 
+                                   : "Thank you for your time. After careful consideration, we will not be moving forward with your candidacy for this role."}
                            </p>
-                           <Button className="mt-4" onClick={() => {
+                           <Button variant="outline" className="mt-4" onClick={() => {
                                const report = getGrandReport();
                                const blob = new Blob([report], { type: 'text/plain' });
                                const url = URL.createObjectURL(blob);
@@ -346,5 +347,3 @@ const PhaseCard = ({ icon, title, description, status }: { icon: React.ReactNode
         </div>
     )
 }
-
-    
