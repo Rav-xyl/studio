@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from "react";
-import type { Candidate, FinalInterviewReviewOutput } from "@/lib/types";
+import type { Candidate } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";

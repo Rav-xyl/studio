@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BarChart2, Briefcase, Users, Loader2, Shield, Bell, Send } from 'lucide-react';
+import { Loader2, Shield, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, updateDoc, doc } from 'firebase/firestore';
@@ -130,7 +130,6 @@ export default function AdminDashboardPage() {
             
             <main className="space-y-8">
                 <GauntletMonitorTable candidates={candidates} />
-                {/* Other admin components like full reporting, user management etc. can be added here */}
             </main>
         </div>
     );

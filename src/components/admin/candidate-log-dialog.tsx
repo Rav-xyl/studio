@@ -4,7 +4,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import type { Candidate, LogEntry } from "@/lib/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle, FileText, Bot, UserCog } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 interface CandidateLogDialogProps {
     isOpen: boolean;
