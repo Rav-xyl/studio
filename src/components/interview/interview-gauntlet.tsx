@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -6,15 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Mic, Video, Brain, AlertTriangle, Send, CheckCircle, XCircle } from 'lucide-react';
-import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
 import type { Candidate, JobRole } from '@/lib/types';
-import { generateSystemDesignQuestion } from '@/ai/flows/generate-system-design-question';
 import { Textarea } from '../ui/textarea';
 import { proctorTechnicalExam } from '@/ai/flows/proctor-technical-exam';
+import { generateSystemDesignQuestion } from '@/ai/flows/generate-system-design-question';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { FinalInterviewPhase } from './final-interview-phase';
 
 
 type ProctoringLogEntry = {
@@ -22,17 +23,16 @@ type ProctoringLogEntry = {
     event: string;
 };
 
-type InterviewPhase = 'Technical' | 'SystemDesign';
+type InterviewPhase = 'Technical' | 'SystemDesign' | 'FinalInterview';
 type PreFlightStatus = 'Pending' | 'Success' | 'Error';
 
 interface InterviewGauntletProps {
     candidate: Candidate;
     initialPhase: InterviewPhase;
-    onTechnicalComplete: (report: string) => void;
-    onSystemDesignComplete: (report: string) => void;
+    onPhaseComplete: (phase: InterviewPhase, report: string) => void;
 }
 
-export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete, onSystemDesignComplete }: InterviewGauntletProps) {
+export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: InterviewGauntletProps) {
     const { toast } = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
     const recognitionRef = useRef<any>(null);
@@ -45,30 +45,20 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
     const [isProcessing, setIsProcessing] = useState(false);
     
     const [phase, setPhase] = useState<InterviewPhase>(initialPhase);
-    const [questions, setQuestions] = useState<string[]>([]);
-    const [jobDescription, setJobDescription] = useState<string>('');
+    const [technicalQuestion, setTechnicalQuestion] = useState<string>('');
     const [systemDesignQuestion, setSystemDesignQuestion] = useState<string>('');
-    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [writtenAnswer, setWrittenAnswer] = useState('');
     const [proctoringLog, setProctoringLog] = useState<ProctoringLogEntry[]>([]);
     const [ambientTranscript, setAmbientTranscript] = useState('');
 
-    // --- Pre-flight Checks and Permissions ---
     useEffect(() => {
         const runPreFlightChecks = async () => {
-            // Camera Check
             try {
                 const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                if (videoRef.current) {
-                    videoRef.current.srcObject = videoStream;
-                }
+                if (videoRef.current) videoRef.current.srcObject = videoStream;
                 setCameraStatus('Success');
-            } catch (error) {
-                console.error("Camera access failed", error);
-                setCameraStatus('Error');
-            }
+            } catch (error) { setCameraStatus('Error'); }
 
-            // Mic Check & Speech Recognition Setup
             try {
                 await navigator.mediaDevices.getUserMedia({ audio: true });
                 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -76,8 +66,6 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                     const recognition = new SpeechRecognition();
                     recognition.continuous = true;
                     recognition.interimResults = true;
-                    recognition.lang = 'en-US';
-
                     recognition.onresult = (event: any) => {
                         let finalTranscript = '';
                         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -87,18 +75,12 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                     };
                     recognitionRef.current = recognition;
                     setMicStatus('Success');
-                } else {
-                     setMicStatus('Error');
-                }
-            } catch (error) {
-                 console.error("Mic access failed", error);
-                 setMicStatus('Error');
-            }
+                } else { setMicStatus('Error'); }
+            } catch (error) { setMicStatus('Error'); }
         };
         runPreFlightChecks();
     }, []);
 
-    // --- Proctoring Logic ---
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.hidden) {
@@ -111,96 +93,54 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                 });
             }
         };
-
         if(isPreFlightComplete) {
             document.addEventListener('visibilitychange', handleVisibilityChange);
             return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
         }
     }, [isPreFlightComplete, toast]);
 
-    // --- Question Fetching ---
     useEffect(() => {
-        const fetchQuestionsForPhase = async () => {
+        const fetchQuestion = async () => {
             if (!isPreFlightComplete) return;
             setIsLoading(true);
             try {
-                // Fetch job description for the assigned role
-                const rolesRef = collection(db, "roles");
-                const q = query(rolesRef, where("title", "==", candidate.role));
-                const querySnapshot = await getDocs(q);
-                let desc = "No specific job description found for this role.";
-                if (!querySnapshot.empty) {
-                    desc = (querySnapshot.docs[0].data() as JobRole).description;
-                }
-                setJobDescription(desc);
-
                 if (phase === 'Technical') {
-                    const result = await generateInterviewQuestions({
-                        resumeText: candidate.narrative,
-                        jobDescription: desc,
-                        candidateAnalysis: 'A promising candidate with strong skills in their domain.',
-                    });
-                    setQuestions(result.questions);
+                    // In a real scenario, this could be a dynamic question. For now, it's one tough question.
+                    setTechnicalQuestion("Given a list of integers, write a function to find the first missing positive integer. For example, for [3, 4, -1, 1], the answer is 2. For [1, 2, 0], the answer is 3. Your solution should run in O(n) time and use constant extra space.");
                     recognitionRef.current?.start();
                 } else if (phase === 'SystemDesign') {
                     const result = await generateSystemDesignQuestion({ jobTitle: candidate.role });
                     setSystemDesignQuestion(result.question);
                 }
             } catch (error) {
-                console.error("Failed to generate questions", error);
                 toast({ title: 'Error', description: 'Could not generate interview questions.', variant: 'destructive'});
             } finally {
                 setIsLoading(false);
             }
         };
-        fetchQuestionsForPhase();
-    }, [candidate, phase, toast, isPreFlightComplete]);
+        fetchQuestion();
+    }, [candidate.role, phase, toast, isPreFlightComplete]);
 
-
-    // --- Answer Submission ---
     const handleSubmitAnswer = async () => {
-        if (writtenAnswer.trim() === '') {
-            toast({ title: 'No answer provided', description: 'Please write an answer before submitting.', variant: 'destructive' });
-            return;
-        };
-        
+        if (writtenAnswer.trim() === '') return;
         setIsProcessing(true);
         recognitionRef.current?.stop();
 
         try {
             if (phase === 'Technical') {
-                const currentQuestion = questions[currentQuestionIndex];
                 const result = await proctorTechnicalExam({
-                    question: currentQuestion,
+                    question: technicalQuestion,
                     candidateAnswer: writtenAnswer,
                     proctoringLog: proctoringLog.map(log => log.event),
                     ambientAudioTranscript: ambientTranscript,
                 });
-                
-                const report = generateProctoringReport(currentQuestion, writtenAnswer, result);
-
-                if (!result.isPass) {
-                    toast({ variant: 'destructive', title: "Technical Round Failed", description: `Your score was below the passing threshold. Score: ${result.score}/100.` });
-                    onTechnicalComplete(report);
-                    return;
-                }
-
-                if (currentQuestionIndex < questions.length - 1) {
-                    toast({ title: `Question ${currentQuestionIndex + 1} Passed!`, description: `Score: ${result.score}/100. Loading next question.` });
-                    setCurrentQuestionIndex(prev => prev + 1);
-                    setWrittenAnswer('');
-                    setProctoringLog([]);
-                    setAmbientTranscript('');
-                    recognitionRef.current?.start();
-                } else {
-                    onTechnicalComplete(report);
-                }
+                const report = generateProctoringReport(technicalQuestion, writtenAnswer, result);
+                onPhaseComplete('Technical', report);
             } else if (phase === 'SystemDesign') {
                 const report = `SYSTEM DESIGN REPORT\n\nQuestion: ${systemDesignQuestion}\n\nCandidate Answer:\n${writtenAnswer}`;
-                onSystemDesignComplete(report);
+                onPhaseComplete('SystemDesign', report);
             }
         } catch (error) {
-             console.error("Failed to process response", error);
             toast({ title: 'Error', description: 'Could not process your answer.', variant: 'destructive'});
         } finally {
             setIsProcessing(false);
@@ -221,8 +161,6 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
         return reportContent;
     }
 
-    // --- RENDER LOGIC ---
-
     if (!isPreFlightComplete) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-secondary">
@@ -233,47 +171,34 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className={`flex items-center justify-between p-3 rounded-md ${cameraStatus === 'Pending' ? 'bg-secondary' : cameraStatus === 'Success' ? 'bg-green-100' : 'bg-red-100'}`}>
-                            <div className="flex items-center gap-2">
-                                <Video />
-                                <span className="font-medium">Camera</span>
-                            </div>
+                            <div className="flex items-center gap-2"> <Video /> <span className="font-medium">Camera</span> </div>
                             {cameraStatus === 'Pending' && <Loader2 className="animate-spin" />}
                             {cameraStatus === 'Success' && <CheckCircle className="text-green-600" />}
                             {cameraStatus === 'Error' && <XCircle className="text-red-600" />}
                         </div>
                          <div className={`flex items-center justify-between p-3 rounded-md ${micStatus === 'Pending' ? 'bg-secondary' : micStatus === 'Success' ? 'bg-green-100' : 'bg-red-100'}`}>
-                            <div className="flex items-center gap-2">
-                                <Mic />
-                                <span className="font-medium">Microphone</span>
-                            </div>
+                            <div className="flex items-center gap-2"> <Mic /> <span className="font-medium">Microphone</span> </div>
                             {micStatus === 'Pending' && <Loader2 className="animate-spin" />}
                             {micStatus === 'Success' && <CheckCircle className="text-green-600" />}
                             {micStatus === 'Error' && <XCircle className="text-red-600" />}
                         </div>
-                        <Button 
-                            className="w-full" 
-                            disabled={cameraStatus !== 'Success' || micStatus !== 'Success'}
-                            onClick={() => setIsPreFlightComplete(true)}>
-                            Begin Gauntlet
-                        </Button>
+                        <Button className="w-full" disabled={cameraStatus !== 'Success' || micStatus !== 'Success'} onClick={() => setIsPreFlightComplete(true)}> Begin Gauntlet </Button>
                         {(cameraStatus === 'Error' || micStatus === 'Error') && <p className="text-xs text-center text-destructive">Please check your browser permissions and ensure your devices are connected.</p>}
                     </CardContent>
                 </Card>
             </div>
         );
     }
-
-
-    if (isLoading && (questions.length === 0 && phase === 'Technical')) {
-         return (
-            <div className="flex items-center justify-center h-screen bg-background text-foreground">
-                <Loader2 className="animate-spin h-10 w-10 text-primary" />
-                <p className='ml-4'>Preparing Gauntlet Phase: {phase}...</p>
-            </div>
-        )
-    }
     
-    const currentQuestionText = phase === 'Technical' ? questions[currentQuestionIndex] : systemDesignQuestion;
+    if (phase === 'FinalInterview') {
+        return <FinalInterviewPhase candidate={candidate} onComplete={(report) => onPhaseComplete('FinalInterview', report)} />;
+    }
+
+    const currentQuestionText = phase === 'Technical' ? technicalQuestion : systemDesignQuestion;
+
+    if (isLoading && !currentQuestionText) {
+         return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin h-10 w-10 text-primary" /><p className='ml-4'>Preparing Gauntlet Phase: {phase}...</p></div>
+    }
 
     return (
         <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
@@ -295,38 +220,25 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                         <Alert variant="destructive">
                             <AlertTriangle className="h-4 w-4" />
                             <AlertTitle>Proctoring is Active</AlertTitle>
-                            <AlertDescription>
-                                Your camera, microphone, and browser tab are being monitored. Please remain on this tab and ensure no one else is in the room.
-                            </AlertDescription>
+                            <AlertDescription> Your camera, microphone, and browser tab are being monitored. Please remain on this tab and ensure no one else is in the room. </AlertDescription>
                         </Alert>
                     </div>
 
                     <div className="lg:col-span-3 flex flex-col">
                         <div className="flex-grow space-y-4">
                              <div>
-                                <Label htmlFor="question" className="text-sm font-semibold text-muted-foreground">
-                                    Question {phase === 'Technical' ? `${currentQuestionIndex + 1} of ${questions.length}` : ''}
-                                </Label>
-                                <Card id="question" className="p-4 bg-secondary/50 mt-1">
-                                    <p className="font-semibold">{currentQuestionText}</p>
-                                </Card>
+                                <Label htmlFor="question" className="text-sm font-semibold text-muted-foreground"> Question </Label>
+                                <Card id="question" className="p-4 bg-secondary/50 mt-1"> <p className="font-semibold">{currentQuestionText}</p> </Card>
                             </div>
                             <div>
                                 <Label htmlFor="answer" className="text-sm font-semibold text-muted-foreground">Your Answer</Label>
-                                <Textarea 
-                                    id="answer"
-                                    placeholder="Write your code or detailed answer here..."
-                                    className="h-64 font-mono text-sm"
-                                    value={writtenAnswer}
-                                    onChange={(e) => setWrittenAnswer(e.target.value)}
-                                    disabled={isProcessing}
-                                />
+                                <Textarea id="answer" placeholder="Write your code or detailed answer here..." className="h-64 font-mono text-sm" value={writtenAnswer} onChange={(e) => setWrittenAnswer(e.target.value)} disabled={isProcessing} />
                             </div>
                         </div>
                         <div className="mt-4">
-                            <Button onClick={handleSubmitAnswer} disabled={isProcessing} className="w-full h-12 text-lg">
+                            <Button onClick={handleSubmitAnswer} disabled={isProcessing || !currentQuestionText} className="w-full h-12 text-lg">
                                 {isProcessing ? <Loader2 className="animate-spin" /> : <Send className="mr-2 h-5 w-5" />}
-                                Submit Answer
+                                Submit & Complete Phase
                             </Button>
                         </div>
                     </div>

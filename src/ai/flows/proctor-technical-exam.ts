@@ -51,7 +51,9 @@ const prompt = ai.definePrompt({
 
 **Your Task:**
 1.  **Evaluate Answer Quality:** Critically assess the candidate's written answer. Look for correctness, efficiency, clarity of thought, and handling of edge cases.
-2.  **Analyze Proctoring Data:** Review the event log and audio transcript for any signs of cheating. Hearing other human voices in the audio is a major red flag and should result in an automatic failure (score of 0). The presence of another person is an immediate failure. Switching tabs is a potential red flag but should be considered in context; it is not an automatic failure but should be noted in the summary with a minor score deduction if it happens frequently.
+2.  **Analyze Proctoring Data:** Review the event log and audio transcript for any signs of cheating. 
+    - **CRITICAL:** Hearing other human voices in the audio is a major red flag and should result in an automatic failure (score of 0).
+    - **NOTE:** A "tab switched" event is a potential red flag but should be considered in context. It is NOT an automatic failure. Note it in the summary and consider a minor score deduction only if it happens frequently or seems to correlate with the answer's content.
 3.  **Generate a Score:** Based on both the answer quality and the proctoring analysis, provide a score from 0 to 100. Penalize heavily for major proctoring violations like hearing other voices.
 4.  **Determine Pass/Fail:** Set the isPass field to true if the score is 70 or above, otherwise false.
 5.  **Write Summaries:** Provide a concise evaluation of the technical answer and a separate summary of the proctoring findings.

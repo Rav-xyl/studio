@@ -14,11 +14,25 @@ export interface FinalInterviewReviewOutput {
   potentialConcerns: string[];
 }
 
+export type GauntletPhase = 
+  | 'Locked' 
+  | 'Technical' 
+  | 'PendingTechReview' 
+  | 'SystemDesign' 
+  | 'PendingDesignReview'
+  | 'FinalInterview'
+  | 'PendingFinalReview'
+  | 'Complete'
+  | 'Failed';
+
 export interface GauntletState {
-    phase: 'Locked' | 'Technical' | 'PendingReview' | 'SystemDesign' | 'Complete';
+    phase: GauntletPhase;
     technicalReport: string | null;
+    techReview: FinalInterviewReviewOutput | null;
     systemDesignReport: string | null;
-    bossValidation: FinalInterviewReviewOutput | null;
+    designReview: FinalInterviewReviewOutput | null;
+    finalInterviewReport: string | null;
+    finalReview: FinalInterviewReviewOutput | null;
 }
 
 

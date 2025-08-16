@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { Clock, Star, Users, Briefcase, CheckCircle } from 'lucide-react';
+import { Clock, Star, Users, Briefcase, CheckCircle, ShieldAlert } from 'lucide-react';
 import { useDrag } from 'react-dnd';
 
 interface KanbanCardProps {
@@ -22,11 +22,17 @@ const getInitials = (name: string) => {
 }
 
 const StatusInfo = ({ status, candidate }: { status: string, candidate: Candidate }) => {
+    const hasFailedGauntlet = candidate.gauntletState?.phase === 'Failed';
+
+    if (hasFailedGauntlet) {
+        return <><ShieldAlert className="h-3 w-3 text-destructive"/><span>Gauntlet Failed</span></>;
+    }
+
     switch (status) {
         case 'Sourcing': return <><Users className="h-3 w-3"/><span>New Candidate</span></>;
         case 'Screening': return <><CheckCircle className="h-3 w-3 text-green-500"/><span>Screening Passed</span></>;
         case 'Interview': return <><Briefcase className="h-3 w-3 text-blue-500"/><span>Interview Stage</span></>;
-        default: return <><Clock className='h-3 w-3'/><span>{candidate.lastUpdated}</span></>;
+        default: return <><Clock className='h-3 w-3'/><span>{new Date(candidate.lastUpdated).toLocaleDateString()}</span></>;
     }
 };
 
@@ -39,6 +45,8 @@ export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
     }),
   }));
   
+  const hasFailedGauntlet = candidate.gauntletState?.phase === 'Failed';
+  
   return (
     <Card
       ref={drag}
@@ -46,6 +54,7 @@ export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
       className={cn(
         'bg-card cursor-pointer hover:border-primary/50 transition-all border',
         isDragging ? 'opacity-30' : 'opacity-100',
+        hasFailedGauntlet && 'border-destructive/50 bg-destructive/10',
         className
         )}
     >

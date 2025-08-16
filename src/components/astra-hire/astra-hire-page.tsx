@@ -25,6 +25,8 @@ import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, qu
 import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
 import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
+import { findPotentialRoles } from '@/ai/flows/find-potential-roles';
+import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -103,7 +105,7 @@ export function AstraHirePage() {
         const newStageIndex = KANBAN_STAGES.indexOf(updatedCandidate.status);
 
         // --- Validation Logic ---
-        const hasFailedGauntlet = originalCandidate.gauntletState?.bossValidation?.finalRecommendation === 'Do Not Hire';
+        const hasFailedGauntlet = originalCandidate.gauntletState?.finalReview?.finalRecommendation === 'Do Not Hire';
         
         // Block any forward movement if gauntlet is failed
         if (hasFailedGauntlet && newStageIndex > originalStageIndex) {

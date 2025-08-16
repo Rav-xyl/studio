@@ -5,29 +5,22 @@ import { useState, useEffect, use } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, BrainCircuit, FileText, ShieldCheck, Video, CheckCircle, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import type { Candidate } from '@/lib/types';
-import { finalInterviewReview, type FinalInterviewReviewOutput } from '@/ai/flows/final-interview-review';
+import type { Candidate, GauntletPhase, GauntletState } from '@/lib/types';
+import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import dynamic from 'next/dynamic';
-import { BrainCircuit, FileText, ShieldCheck } from 'lucide-react';
+import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
+import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 
 const InterviewGauntlet = dynamic(() => import('@/components/interview/interview-gauntlet').then(mod => mod.InterviewGauntlet), {
     ssr: false,
     loading: () => <div className="flex h-screen items-center justify-center"><Loader2 className="h-10 w-10 animate-spin" /><p className="ml-4">Loading Gauntlet...</p></div>
 });
 
-type GauntletPhase = 'Locked' | 'Technical' | 'PendingReview' | 'SystemDesign' | 'Complete';
-type StageStatus = 'Locked' | 'Unlocked' | 'Pending' | 'Complete';
-
-interface GauntletState {
-    phase: GauntletPhase;
-    technicalReport: string | null;
-    systemDesignReport: string | null;
-    bossValidation: FinalInterviewReviewOutput | null;
-}
+type StageStatus = 'Locked' | 'Unlocked' | 'Pending' | 'Complete' | 'Failed';
 
 export default function CandidatePortalPage({ params }: { params: { id: string } }) {
     const candidateId = use(params).id;
@@ -42,12 +35,14 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     const [gauntletState, setGauntletState] = useState<GauntletState>({
         phase: 'Locked',
         technicalReport: null,
+        techReview: null,
         systemDesignReport: null,
-        bossValidation: null,
+        designReview: null,
+        finalInterviewReport: null,
+        finalReview: null,
     });
     
     useEffect(() => {
-        // This effect handles authentication and initial data fetching.
         const authenticatedId = sessionStorage.getItem('gauntlet-auth-id');
         if (authenticatedId !== candidateId) {
             toast({
@@ -73,7 +68,6 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                     if (candidateData.gauntletState) {
                         setGauntletState(candidateData.gauntletState);
                     } else {
-                        // If no state exists, this is the first entry. Unlock the technical phase.
                         setGauntletState(prev => ({...prev, phase: 'Technical' }));
                     }
                 } else {
@@ -95,7 +89,6 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     }, [candidateId, toast, router]);
 
     useEffect(() => {
-        // This effect handles auto-saving the gauntlet state to Firestore.
         const saveGauntletState = async () => {
             if (candidate && candidate.id && gauntletState.phase !== 'Locked' && isAuthenticated) {
                 try {
@@ -116,58 +109,87 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         saveGauntletState();
     }, [gauntletState, candidate, toast, isAuthenticated]);
 
+    const handleFailure = async (reason: string, report: string) => {
+        if (!candidate) return;
+        setGauntletState(prev => ({ ...prev, phase: 'Failed' }));
 
-    const handleTechnicalComplete = async (report: string) => {
+        // Send email
+        const emailResult = await aiDrivenCandidateEngagement({
+            candidateName: candidate.name,
+            candidateStage: 'Rejected',
+            jobTitle: candidate.role,
+            companyName: 'AstraHire',
+            recruiterName: 'The Hiring Team',
+            candidateSkills: candidate.skills.join(', '),
+            rejectionReason: `After a careful review of the ${reason}, we have decided to move forward with other candidates. A summary of the assessment has been attached for your reference:\n\n${report}`,
+        });
+        console.log("Rejection email generated:", emailResult); // In a real app, you'd send this
+
+        // Archive candidate
+        await updateDoc(doc(db, 'candidates', candidate.id), { archived: true });
+
+        // If it's the final interview, run skill gap analysis
+        if (reason.includes("Final Interview")) {
+            await skillGapAnalysis({
+                candidateSkills: candidate.skills,
+                jobDescription: candidate.role,
+            });
+        }
+        toast({ variant: 'destructive', title: "Gauntlet Ended", description: "After careful review, we will not be proceeding." });
+    };
+
+    const handlePhaseComplete = async (phase: 'Technical' | 'SystemDesign' | 'FinalInterview', report: string) => {
         setIsProcessing(true);
-        toast({ title: "Phase 1 Complete", description: "Submitting report to the BOSS AI for validation." });
+        toast({ title: `Phase Complete: ${phase}`, description: "Submitting report to the BOSS AI for validation." });
         
-        setGauntletState(prev => ({...prev, phase: 'PendingReview', technicalReport: report }));
+        const nextStateKey = phase === 'Technical' ? 'PendingTechReview' : phase === 'SystemDesign' ? 'PendingDesignReview' : 'PendingFinalReview';
+        setGauntletState(prev => ({ ...prev, phase: nextStateKey as GauntletPhase, [`${phase.toLowerCase()}Report`]: report }));
 
         try {
             const result = await finalInterviewReview({ interviewReport: report });
+            const reviewKey = phase === 'Technical' ? 'techReview' : phase === 'SystemDesign' ? 'designReview' : 'finalReview';
             
-            setGauntletState(prev => {
-                const newState = { ...prev, bossValidation: result };
-                if (result.finalRecommendation === "Strong Hire" || result.finalRecommendation === "Proceed with Caution") {
-                    toast({ title: "Validation Successful!", description: "The BOSS AI has approved you for the next phase." });
-                    return { ...newState, phase: 'SystemDesign' };
-                } else {
-                    toast({ variant: 'destructive', title: "Gauntlet Ended", description: "After careful review, we will not be proceeding to the next phase." });
-                    return { ...newState, phase: 'Complete' };
-                }
-            });
+            const isPass = result.finalRecommendation === "Strong Hire" || result.finalRecommendation === "Proceed with Caution";
 
+            if (isPass) {
+                const nextPhase = phase === 'Technical' ? 'SystemDesign' : phase === 'SystemDesign' ? 'FinalInterview' : 'Complete';
+                setGauntletState(prev => ({ ...prev, phase: nextPhase as GauntletPhase, [reviewKey]: result }));
+                 toast({ title: "Validation Successful!", description: "The BOSS AI has approved you for the next phase." });
+            } else {
+                setGauntletState(prev => ({ ...prev, [reviewKey]: result }));
+                await handleFailure(`${phase} Assessment`, report);
+            }
         } catch (error) {
             console.error("BOSS validation failed", error);
             toast({ variant: 'destructive', title: "Error", description: "Could not get validation from the BOSS AI." });
-            setGauntletState(prev => ({...prev, phase: 'Technical'})); 
+            const originalPhase = phase as GauntletPhase;
+            setGauntletState(prev => ({...prev, phase: originalPhase })); 
         } finally {
             setIsProcessing(false);
         }
     };
 
-    const handleSystemDesignComplete = (report: string) => {
-        toast({ title: "Gauntlet Complete!", description: "Thank you for your time. Your full report has been generated." });
-        setGauntletState(prev => ({ ...prev, phase: 'Complete', systemDesignReport: report }));
-    };
 
     const getGrandReport = () => {
         let report = `GRAND REPORT FOR CANDIDATE: ${candidate?.name}\n\n`;
         report += `--- PHASE 1: TECHNICAL GAUNTLET ---\n`;
         report += gauntletState.technicalReport || "No data.";
-        report += `\n\n--- BOSS AI VALIDATION ---\n`;
-        if (gauntletState.bossValidation) {
-            report += `Recommendation: ${gauntletState.bossValidation.finalRecommendation}\n`;
-            report += `Assessment: ${gauntletState.bossValidation.overallAssessment}\n`;
-        } else {
-            report += "No validation data.";
-        }
+        report += `\n\n--- BOSS AI VALIDATION (TECHNICAL) ---\n`;
+        report += gauntletState.techReview ? `Recommendation: ${gauntletState.techReview.finalRecommendation}\nAssessment: ${gauntletState.techReview.overallAssessment}` : "No validation data.";
+        
         report += `\n\n--- PHASE 2: SYSTEM DESIGN CHALLENGE ---\n`;
-        report += gauntletState.systemDesignReport || "Phase not completed or data unavailable.";
+        report += gauntletState.systemDesignReport || "Phase not completed.";
+        report += `\n\n--- BOSS AI VALIDATION (SYSTEM DESIGN) ---\n`;
+        report += gauntletState.designReview ? `Recommendation: ${gauntletState.designReview.finalRecommendation}\nAssessment: ${gauntletState.designReview.overallAssessment}` : "Phase not completed.";
+        
+        report += `\n\n--- PHASE 3: FINAL AI INTERVIEW ---\n`;
+        report += gauntletState.finalInterviewReport || "Phase not completed.";
+        report += `\n\n--- BOSS AI FINAL REVIEW ---\n`;
+        report += gauntletState.finalReview ? `Recommendation: ${gauntletState.finalReview.finalRecommendation}\nAssessment: ${gauntletState.finalReview.overallAssessment}` : "Phase not completed.";
+
         report += `\n\n--- END OF REPORT ---`;
         return report;
     }
-
 
     if (isLoading || !isAuthenticated) {
         return <div className="flex h-screen items-center justify-center"><Loader2 className="h-10 w-10 animate-spin" /><p className="ml-4">Loading Candidate Portal...</p></div>;
@@ -188,22 +210,32 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     }
 
     const { phase } = gauntletState;
-
-    if (phase === 'Technical' || phase === 'SystemDesign') {
+    if (phase === 'Technical' || phase === 'SystemDesign' || phase === 'FinalInterview') {
         return (
             <InterviewGauntlet 
                 candidate={candidate} 
                 initialPhase={phase}
-                onTechnicalComplete={handleTechnicalComplete}
-                onSystemDesignComplete={handleSystemDesignComplete}
+                onPhaseComplete={handlePhaseComplete}
             />
         );
     }
 
     const stageStatus = (stage: GauntletPhase): StageStatus => {
-        if (phase === 'Complete' || (phase === 'SystemDesign' && stage !== 'SystemDesign') || (phase === 'PendingReview' && stage === 'Technical')) return 'Complete';
-        if (phase === stage) return 'Unlocked';
-        if (phase === 'PendingReview' && stage === 'SystemDesign') return 'Pending';
+        const phaseOrder: GauntletPhase[] = ['Technical', 'PendingTechReview', 'SystemDesign', 'PendingDesignReview', 'FinalInterview', 'PendingFinalReview', 'Complete'];
+        const currentPhaseIndex = phaseOrder.indexOf(phase);
+        const stageIndex = phaseOrder.indexOf(stage);
+
+        if (phase === 'Failed') {
+            const failedIndex = phaseOrder.indexOf(gauntletState.phase);
+            if (stageIndex < failedIndex) return 'Complete';
+            if (stageIndex === failedIndex) return 'Failed';
+            return 'Locked';
+        }
+
+        if (currentPhaseIndex > stageIndex) return 'Complete';
+        if (currentPhaseIndex === stageIndex) return 'Unlocked';
+        if (phase.startsWith('Pending') && stageIndex === currentPhaseIndex) return 'Pending';
+        
         return 'Locked';
     }
 
@@ -217,27 +249,31 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                 <CardContent className="space-y-4">
                     <PhaseCard 
                         icon={<BrainCircuit />}
-                        title="Phase 1: Technical Gauntlet"
-                        description="An AI-driven technical deep-dive based on your skills and the role requirements."
+                        title="Phase 1: Technical Exam"
+                        description="An AI-driven technical deep-dive based on your skills."
                         status={stageStatus('Technical')}
                     />
                     <PhaseCard 
-                        icon={<ShieldCheck />}
-                        title="Phase 2: BOSS AI Validation"
-                        description="Our supervisory AI is reviewing your performance to determine eligibility for the next phase."
-                        status={stageStatus('PendingReview')}
-                    />
-                     <PhaseCard 
                         icon={<FileText />}
-                        title="Phase 3: System Design Challenge"
-                        description="A conceptual challenge to assess your architectural and problem-solving abilities."
+                        title="Phase 2: System Design Challenge"
+                        description="A conceptual challenge to assess your architectural abilities."
                         status={stageStatus('SystemDesign')}
                     />
-                     {phase === 'Complete' && (
-                        <div className="bg-green-100/50 border-green-400 p-4 rounded-lg">
-                           <h4 className="font-bold text-green-700">Gauntlet Complete!</h4>
-                           <p className="text-sm text-green-600">
-                               Thank you for completing all phases. The hiring team will be in touch shortly with the next steps.
+                     <PhaseCard 
+                        icon={<Video />}
+                        title="Phase 3: Final AI Interview"
+                        description="A final behavioral and situational interview with our AI."
+                        status={stageStatus('FinalInterview')}
+                    />
+                     {(phase === 'Complete' || phase === 'Failed') && (
+                        <div className={`${phase === 'Complete' ? 'bg-green-100/50 border-green-400' : 'bg-red-100/50 border-red-400'} p-4 rounded-lg`}>
+                           <h4 className={`font-bold ${phase === 'Complete' ? 'text-green-700' : 'text-red-700'}`}>
+                                Gauntlet {phase === 'Complete' ? 'Complete!' : 'Ended'}
+                           </h4>
+                           <p className={`text-sm ${phase === 'Complete' ? 'text-green-600' : 'text-red-600'}`}>
+                               {phase === 'Complete' 
+                                   ? "Thank you for completing all phases. The hiring team will be in touch shortly." 
+                                   : "Thank you for your time. After careful consideration, we will not be moving forward."}
                            </p>
                            <Button className="mt-4" onClick={() => {
                                const report = getGrandReport();
@@ -245,16 +281,16 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                                const url = URL.createObjectURL(blob);
                                const a = document.createElement('a');
                                a.href = url;
-                               a.download = `grand_report_${candidate.name}.txt`;
+                               a.download = `gauntlet_report_${candidate.name}.txt`;
                                a.click();
                                URL.revokeObjectURL(url);
-                           }}>Download Your Grand Report</Button>
+                           }}>Download Your Final Report</Button>
                         </div>
                     )}
-                     {phase !== 'Complete' && isProcessing && (
+                     {phase.startsWith('Pending') && (
                          <div className="flex items-center justify-center p-4 bg-yellow-100/50 rounded-lg">
                             <Loader2 className="h-6 w-6 animate-spin text-yellow-600" />
-                            <p className="ml-3 text-yellow-700 font-medium">Processing your submission...</p>
+                            <p className="ml-3 text-yellow-700 font-medium">Processing your submission... The BOSS AI is reviewing your performance.</p>
                         </div>
                     )}
                 </CardContent>
@@ -270,14 +306,24 @@ const PhaseCard = ({ icon, title, description, status }: { icon: React.ReactNode
         Unlocked: "bg-primary text-primary-foreground",
         Pending: "bg-yellow-500/80 text-white animate-pulse",
         Complete: "bg-green-600/80 text-white",
-    }
+        Failed: "bg-red-600/80 text-white"
+    };
+    
+    let statusIcon = null;
+    if(status === 'Complete') statusIcon = <CheckCircle className="h-4 w-4" />;
+    if(status === 'Failed') statusIcon = <XCircle className="h-4 w-4" />;
+
     return (
         <div className={`p-4 rounded-lg flex items-center gap-4 border ${statusStyles[status]}`}>
             <div className="text-2xl">{icon}</div>
-            <div>
-                <h3 className="font-bold">{title} - <span className="text-sm font-medium opacity-90">{status}</span></h3>
+            <div className="flex-grow">
+                <h3 className="font-bold">{title}</h3>
                 <p className="text-xs opacity-80">{description}</p>
             </div>
+             <div className="flex items-center gap-2">
+                {statusIcon}
+                <span className="text-sm font-medium opacity-90">{status}</span>
+             </div>
         </div>
     )
 }
