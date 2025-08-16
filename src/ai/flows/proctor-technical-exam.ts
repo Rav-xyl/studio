@@ -48,11 +48,10 @@ const prompt = ai.definePrompt({
 **Proctoring & Behavioral Data:**
 - **Event Log:** {{{proctoringLog}}}
 - **Ambient Audio Transcript:** "{{{ambientAudioTranscript}}}"
-- **(Simulated) Video Analysis:** Analyze the logs for any mention of external person presence.
 
 **Your Task:**
 1.  **Evaluate Answer Quality:** Critically assess the candidate's written answer. Look for correctness, efficiency, clarity of thought, and handling of edge cases.
-2.  **Analyze Proctoring Data:** Review the event log and audio transcript for any signs of cheating. Hearing other voices in the audio is a major red flag. The presence of another person is an immediate failure. Switching tabs is a potential red flag but should be considered in context; it is not an automatic failure but should be noted in the summary.
+2.  **Analyze Proctoring Data:** Review the event log and audio transcript for any signs of cheating. Hearing other human voices in the audio is a major red flag and should result in an automatic failure (score of 0). The presence of another person is an immediate failure. Switching tabs is a potential red flag but should be considered in context; it is not an automatic failure but should be noted in the summary with a minor score deduction if it happens frequently.
 3.  **Generate a Score:** Based on both the answer quality and the proctoring analysis, provide a score from 0 to 100. Penalize heavily for major proctoring violations like hearing other voices.
 4.  **Determine Pass/Fail:** Set the isPass field to true if the score is 70 or above, otherwise false.
 5.  **Write Summaries:** Provide a concise evaluation of the technical answer and a separate summary of the proctoring findings.

@@ -47,7 +47,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     });
     
     useEffect(() => {
-        // Authentication Check
+        // This effect handles authentication and initial data fetching.
         const authenticatedId = sessionStorage.getItem('gauntlet-auth-id');
         if (authenticatedId !== candidateId) {
             toast({
@@ -95,8 +95,9 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     }, [candidateId, toast, router]);
 
     useEffect(() => {
+        // This effect handles auto-saving the gauntlet state to Firestore.
         const saveGauntletState = async () => {
-            if (candidate && candidate.id && gauntletState.phase !== 'Locked') {
+            if (candidate && candidate.id && gauntletState.phase !== 'Locked' && isAuthenticated) {
                 try {
                     const candidateDocRef = doc(db, 'candidates', candidate.id);
                     await updateDoc(candidateDocRef, {
@@ -113,7 +114,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
             }
         }
         saveGauntletState();
-    }, [gauntletState, candidate, toast]);
+    }, [gauntletState, candidate, toast, isAuthenticated]);
 
 
     const handleTechnicalComplete = async (report: string) => {
@@ -280,5 +281,3 @@ const PhaseCard = ({ icon, title, description, status }: { icon: React.ReactNode
         </div>
     )
 }
-
-    

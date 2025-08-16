@@ -6,10 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mic, Video, Square, Lightbulb, Brain, AlertTriangle, Send } from 'lucide-react';
+import { Loader2, Mic, Video, Brain, AlertTriangle, Send, CheckCircle, XCircle } from 'lucide-react';
 import { generateInterviewQuestions } from '@/ai/flows/dynamic-interview-question-generation';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import type { Candidate } from '@/lib/types';
 import { generateSystemDesignQuestion } from '@/ai/flows/generate-system-design-question';
 import { Textarea } from '../ui/textarea';
@@ -25,6 +23,7 @@ type ProctoringLogEntry = {
 };
 
 type InterviewPhase = 'Technical' | 'SystemDesign';
+type PreFlightStatus = 'Pending' | 'Success' | 'Error';
 
 interface InterviewGauntletProps {
     candidate: Candidate;
@@ -38,7 +37,10 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
     const videoRef = useRef<HTMLVideoElement>(null);
     const recognitionRef = useRef<any>(null);
     
-    const [hasCameraPermission, setHasCameraPermission] = useState(false);
+    const [cameraStatus, setCameraStatus] = useState<PreFlightStatus>('Pending');
+    const [micStatus, setMicStatus] = useState<PreFlightStatus>('Pending');
+    const [isPreFlightComplete, setIsPreFlightComplete] = useState(false);
+    
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
     
@@ -50,55 +52,52 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
     const [proctoringLog, setProctoringLog] = useState<ProctoringLogEntry[]>([]);
     const [ambientTranscript, setAmbientTranscript] = useState('');
 
-    // --- Proctoring and Permissions ---
+    // --- Pre-flight Checks and Permissions ---
     useEffect(() => {
-        const setupSpeechRecognition = () => {
-            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-            if (SpeechRecognition) {
-                const recognition = new SpeechRecognition();
-                recognition.continuous = true;
-                recognition.interimResults = true;
-                recognition.lang = 'en-US';
+        const runPreFlightChecks = async () => {
+            // Camera Check
+            try {
+                const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                if (videoRef.current) {
+                    videoRef.current.srcObject = videoStream;
+                }
+                setCameraStatus('Success');
+            } catch (error) {
+                console.error("Camera access failed", error);
+                setCameraStatus('Error');
+            }
 
-                recognition.onresult = (event: any) => {
-                    let finalTranscript = '';
-                    for (let i = event.resultIndex; i < event.results.length; ++i) {
-                        if (event.results[i].isFinal) {
-                            finalTranscript += event.results[i][0].transcript;
+            // Mic Check & Speech Recognition Setup
+            try {
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+                const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                if (SpeechRecognition) {
+                    const recognition = new SpeechRecognition();
+                    recognition.continuous = true;
+                    recognition.interimResults = true;
+                    recognition.lang = 'en-US';
+
+                    recognition.onresult = (event: any) => {
+                        let finalTranscript = '';
+                        for (let i = event.resultIndex; i < event.results.length; ++i) {
+                            if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
                         }
-                    }
-                    if (finalTranscript) {
-                        setAmbientTranscript(prev => prev + finalTranscript + '. ');
-                    }
-                };
-                recognitionRef.current = recognition;
+                        if (finalTranscript) setAmbientTranscript(prev => prev + finalTranscript + '. ');
+                    };
+                    recognitionRef.current = recognition;
+                    setMicStatus('Success');
+                } else {
+                     setMicStatus('Error');
+                }
+            } catch (error) {
+                 console.error("Mic access failed", error);
+                 setMicStatus('Error');
             }
         };
+        runPreFlightChecks();
+    }, []);
 
-        const getCameraAndMicPermission = async () => {
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            setHasCameraPermission(true);
-    
-            if (videoRef.current) {
-              videoRef.current.srcObject = stream;
-            }
-            setupSpeechRecognition();
-
-          } catch (error) {
-            console.error('Error accessing media devices:', error);
-            setHasCameraPermission(false);
-            toast({
-              variant: 'destructive',
-              title: 'Permission Denied',
-              description: 'Please enable camera and microphone permissions to continue.',
-            });
-          }
-        };
-    
-        getCameraAndMicPermission();
-      }, [toast]);
-
+    // --- Proctoring Logic ---
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.hidden) {
@@ -112,27 +111,27 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
             }
         };
 
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-        };
-    }, []);
+        if(isPreFlightComplete) {
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+        }
+    }, [isPreFlightComplete, toast]);
 
     // --- Question Fetching ---
     useEffect(() => {
         const fetchQuestionsForPhase = async () => {
+            if (!isPreFlightComplete) return;
             setIsLoading(true);
             try {
-                if (initialPhase === 'Technical') {
+                if (phase === 'Technical') {
                     const result = await generateInterviewQuestions({
                         resumeText: candidate.narrative,
                         jobDescription: DUMMY_JOB_DESCRIPTION,
                         candidateAnalysis: 'A promising candidate with strong skills in their domain.',
                     });
                     setQuestions(result.questions);
-                    // Start listening for ambient audio
                     recognitionRef.current?.start();
-                } else if (initialPhase === 'SystemDesign') {
+                } else if (phase === 'SystemDesign') {
                     const result = await generateSystemDesignQuestion({ jobTitle: candidate.role });
                     setSystemDesignQuestion(result.question);
                 }
@@ -144,7 +143,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
             }
         };
         fetchQuestionsForPhase();
-    }, [candidate, initialPhase, toast]);
+    }, [candidate, phase, toast, isPreFlightComplete]);
 
 
     // --- Answer Submission ---
@@ -171,24 +170,21 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
 
                 if (!result.isPass) {
                     toast({ variant: 'destructive', title: "Technical Round Failed", description: `Your score was below the passing threshold. Score: ${result.score}/100.` });
-                    // Even on failure, we call onTechnicalComplete to log the failure report
                     onTechnicalComplete(report);
-                    return; // Stop the process here
+                    return;
                 }
 
                 if (currentQuestionIndex < questions.length - 1) {
                     toast({ title: `Question ${currentQuestionIndex + 1} Passed!`, description: `Score: ${result.score}/100. Loading next question.` });
                     setCurrentQuestionIndex(prev => prev + 1);
-                    // Reset for next question
                     setWrittenAnswer('');
                     setProctoringLog([]);
                     setAmbientTranscript('');
                     recognitionRef.current?.start();
                 } else {
-                    onTechnicalComplete(report); // Final pass
+                    onTechnicalComplete(report);
                 }
             } else if (phase === 'SystemDesign') {
-                // For system design, we generate a simpler report without proctoring
                 const report = `SYSTEM DESIGN REPORT\n\nQuestion: ${systemDesignQuestion}\n\nCandidate Answer:\n${writtenAnswer}`;
                 onSystemDesignComplete(report);
             }
@@ -209,9 +205,51 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
         reportContent += `PASS/FAIL: ${result.isPass ? 'Pass' : 'Fail'}\n\n`;
         reportContent += `EVALUATION:\n${result.evaluation}\n\n`;
         reportContent += `PROCTORING SUMMARY:\n${result.proctoringSummary}\n\n`;
-        reportContent += `FULL LOG:\n${proctoringLog.map(l => `- ${l.timestamp}: ${l.event}`).join('\n')}\n`;
-        reportContent += `AMBIENT AUDIO TRANSCRIPT:\n${ambientTranscript || 'None'}\n`;
+        reportContent += `FULL LOG:\n${proctoringLog.map(l => `- ${l.timestamp}: ${l.event}`).join('\n') || 'No events logged.'}\n`;
+        reportContent += `AMBIENT AUDIO TRANSCRIPT:\n${ambientTranscript || 'None detected.'}\n`;
         return reportContent;
+    }
+
+    // --- RENDER LOGIC ---
+
+    if (!isPreFlightComplete) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-secondary">
+                <Card className="w-full max-w-lg">
+                    <CardHeader>
+                        <CardTitle>Gauntlet Pre-flight Check</CardTitle>
+                        <CardDescription>We need to check your camera and microphone before we begin.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className={`flex items-center justify-between p-3 rounded-md ${cameraStatus === 'Pending' ? 'bg-secondary' : cameraStatus === 'Success' ? 'bg-green-100' : 'bg-red-100'}`}>
+                            <div className="flex items-center gap-2">
+                                <Video />
+                                <span className="font-medium">Camera</span>
+                            </div>
+                            {cameraStatus === 'Pending' && <Loader2 className="animate-spin" />}
+                            {cameraStatus === 'Success' && <CheckCircle className="text-green-600" />}
+                            {cameraStatus === 'Error' && <XCircle className="text-red-600" />}
+                        </div>
+                         <div className={`flex items-center justify-between p-3 rounded-md ${micStatus === 'Pending' ? 'bg-secondary' : micStatus === 'Success' ? 'bg-green-100' : 'bg-red-100'}`}>
+                            <div className="flex items-center gap-2">
+                                <Mic />
+                                <span className="font-medium">Microphone</span>
+                            </div>
+                            {micStatus === 'Pending' && <Loader2 className="animate-spin" />}
+                            {micStatus === 'Success' && <CheckCircle className="text-green-600" />}
+                            {micStatus === 'Error' && <XCircle className="text-red-600" />}
+                        </div>
+                        <Button 
+                            className="w-full" 
+                            disabled={cameraStatus !== 'Success' || micStatus !== 'Success'}
+                            onClick={() => setIsPreFlightComplete(true)}>
+                            Begin Gauntlet
+                        </Button>
+                        {(cameraStatus === 'Error' || micStatus === 'Error') && <p className="text-xs text-center text-destructive">Please check your browser permissions and ensure your devices are connected.</p>}
+                    </CardContent>
+                </Card>
+            </div>
+        );
     }
 
 
@@ -235,17 +273,12 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                 </CardHeader>
 
                 <CardContent className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                    {/* Left Column: Proctoring & Instructions */}
                     <div className="lg:col-span-2 space-y-4">
                         <div className="aspect-video bg-secondary rounded-lg flex items-center justify-center relative">
                             <video ref={videoRef} className="w-full aspect-video rounded-md" autoPlay muted />
                             <div className="absolute bottom-2 right-2 flex items-center gap-4">
-                                <Badge variant={hasCameraPermission ? "secondary" : "destructive"}>
-                                    <Video className="mr-2 h-3 w-3" /> Camera {hasCameraPermission ? 'ON' : 'OFF'}
-                                </Badge>
-                                 <Badge variant={hasCameraPermission ? "secondary" : "destructive"}>
-                                    <Mic className="mr-2 h-3 w-3" /> Mic {hasCameraPermission ? 'ON' : 'OFF'}
-                                </Badge>
+                                <Badge variant="secondary"><Video className="mr-2 h-3 w-3" /> Camera ON</Badge>
+                                <Badge variant="secondary"><Mic className="mr-2 h-3 w-3" /> Mic ON</Badge>
                             </div>
                         </div>
                         <Alert variant="destructive">
@@ -257,7 +290,6 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                         </Alert>
                     </div>
 
-                    {/* Right Column: Question & Answer */}
                     <div className="lg:col-span-3 flex flex-col">
                         <div className="flex-grow space-y-4">
                              <div>
@@ -281,7 +313,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onTechnicalComplete
                             </div>
                         </div>
                         <div className="mt-4">
-                            <Button onClick={handleSubmitAnswer} disabled={isProcessing || !hasCameraPermission} className="w-full h-12 text-lg">
+                            <Button onClick={handleSubmitAnswer} disabled={isProcessing} className="w-full h-12 text-lg">
                                 {isProcessing ? <Loader2 className="animate-spin" /> : <Send className="mr-2 h-5 w-5" />}
                                 Submit Answer
                             </Button>
