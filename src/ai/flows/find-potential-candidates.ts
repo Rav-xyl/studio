@@ -50,7 +50,7 @@ const prompt = ai.definePrompt({
   input: {schema: FindPotentialCandidatesInputSchema},
   output: {schema: FindPotentialCandidatesOutputSchema},
   config: {
-    temperature: 0.1 // Lower temperature for more deterministic, consistent scoring
+    temperature: 0.1, // Lower temperature for more deterministic, consistent scoring
   },
   prompt: `You are an expert AI recruiter. Your task is to analyze a list of candidates and determine which ones are a good fit for the provided job role.
 
@@ -68,11 +68,11 @@ const prompt = ai.definePrompt({
 {{/each}}
 
 **Instructions:**
-1.  Carefully review the job role's title and description.
-2.  Compare the job role against each of the available candidate profiles.
-3.  Identify the top candidates who are the strongest match for this role. Consider both explicit skills and the experience described in their narrative.
-4.  For each match, provide a brief justification and a confidence score (0-100). A score above 70 indicates a strong match.
-5.  If no candidates are a good fit, return an empty list of matches.
+1.  **Analyze Holistically:** For each candidate, carefully review their skills and their narrative experience. Do not just count keywords; assess the context provided in the narrative.
+2.  **Score with Nuance:** Assign a confidence score from 0-100. Avoid clustering scores around 85. A score of 90+ should be reserved for exceptional candidates who are a near-perfect match. A score of 70-80 is a good, qualified candidate. A score below 60 is a poor match.
+3.  **Justify Clearly:** Provide a brief, specific justification for your score. Mention which skills or experiences are most relevant.
+4.  **Filter Weak Matches:** Only return candidates with a confidence score of 60 or higher.
+5.  **Return Top Matches:** If multiple candidates are found, return a list of the most suitable candidates.
 
 IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
 });
@@ -83,11 +83,14 @@ const findPotentialCandidatesFlow = ai.defineFlow(
     inputSchema: FindPotentialCandidatesInputSchema,
     outputSchema: FindPotentialCandidatesOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input) => {
+    if (input.candidates.length === 0) {
+      return { matches: [] };
+    }
+    const { output } = await prompt(input);
     // Sort the matches by confidence score in descending order
     if (output && output.matches) {
-        output.matches.sort((a, b) => b.confidenceScore - a.confidenceScore);
+      output.matches.sort((a, b) => b.confidenceScore - a.confidenceScore);
     }
     return output!;
   }

@@ -8,7 +8,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { findPotentialRoles } from "@/ai/flows/find-potential-roles";
 import { useState } from "react";
-import { Loader2, Search, UserSearch, Zap } from "lucide-react";
+import { Loader2, Search, Trash2, UserSearch, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -18,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog";
 
 const getInitials = (name: string) => {
     if (!name) return '??';
@@ -29,9 +30,10 @@ interface ProspectingTabProps {
     roles: JobRole[];
     onUpdateCandidate: (candidate: Candidate) => void;
     onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate: Candidate) => void;
+    onDeleteCandidate: (candidateId: string) => void;
 }
 
-export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole }: ProspectingTabProps) {
+export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole, onDeleteCandidate }: ProspectingTabProps) {
     const [matchResults, setMatchResults] = useState<Record<string, any[]>>({});
     const [isLoading, setIsLoading] = useState<Record<string, boolean>>({});
     const [isBulkLoading, setIsBulkLoading] = useState(false);
@@ -115,9 +117,9 @@ export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole
                     <TableHeader>
                         <TableRow>
                             <TableHead className="w-[30%]">Candidate</TableHead>
-                            <TableHead className="w-[20%] text-center">AI Score</TableHead>
+                            <TableHead className="w-[15%] text-center">AI Score</TableHead>
                             <TableHead>Top Skills</TableHead>
-                            <TableHead className="text-center">Role Matches (AI)</TableHead>
+                            <TableHead className="w-[20%]" colSpan={2}>Role Matches (AI)</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -146,7 +148,7 @@ export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole
                                             ))}
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-center">
+                                    <TableCell>
                                         {matches.length > 0 ? (
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -155,7 +157,7 @@ export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuLabel>Top Role Matches</DropdownMenuLabel>
                                                     <DropdownMenuSeparator />
-                                                    {matches.map(match => (
+                                                    {matches.map((match: any) => (
                                                         <DropdownMenuItem key={match.roleId} onClick={() => handleAssignRole(candidate, match.roleTitle)}>
                                                             <div className="flex justify-between w-full items-center gap-2">
                                                                 <span>{match.roleTitle}</span>
@@ -172,11 +174,32 @@ export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole
                                             </Button>
                                         )}
                                     </TableCell>
+                                     <TableCell className="text-right">
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                                                    <Trash2 className="h-4 w-4"/>
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Delete {candidate.name}?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        This will permanently delete the candidate's profile. This action cannot be undone.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => onDeleteCandidate(candidate.id)}>Confirm Delete</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TableCell>
                                 </TableRow>
                             )})
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={4} className="h-48 text-center">
+                                <TableCell colSpan={5} className="h-48 text-center">
                                     <UserSearch className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                                     <h3 className="text-xl font-semibold">No Unassigned Candidates</h3>
                                     <p className="text-muted-foreground mt-1">Upload new resumes to the candidate pool to start prospecting.</p>
