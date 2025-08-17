@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart2, Briefcase, Users, Loader2, Shield, X, Search, HelpCircle, MessageSquare } from 'lucide-react';
+import { BarChart2, Briefcase, Users, Loader2, Shield, X, Search, HelpCircle, MessageSquare, Notebook } from 'lucide-react';
 import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
@@ -25,6 +25,7 @@ import { MatchedCandidatesDialog } from '../roles/matched-candidates-dialog';
 import { ProspectingTab } from '../prospecting/prospecting-tab';
 import { bulkMatchCandidatesToRoles } from '@/ai/flows/bulk-match-candidates';
 import { AssistantChat } from './assistant-chat';
+import { useRouter } from 'next/navigation';
 
 
 // --- Helper Functions ---
@@ -58,6 +59,7 @@ export interface BackgroundTask {
 
 export function AstraHirePage() {
   const [activeTab, setActiveTab] = useState('roles');
+  const router = useRouter();
 
   // --- State Management ---
   const [roles, setRoles] = useState<JobRole[]>([]);
@@ -795,6 +797,13 @@ export function AstraHirePage() {
             >
               <BarChart2 className="inline-block w-4 h-4 mr-2" />
               Analytics
+            </button>
+            <button
+              className={`tab-btn`}
+              onClick={() => router.push('/feedback/login')}
+            >
+              <Notebook className="inline-block w-4 h-4 mr-2" />
+              Feedback Notes
             </button>
           </nav>
         </div>

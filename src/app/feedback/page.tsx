@@ -1,0 +1,212 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, MessageSquare, PlusCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { nanoid } from 'nanoid';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+
+type FeedbackNote = {
+    id: string;
+    author: string;
+    note: string;
+    type: 'Suggestion' | 'Bug' | 'Question' | 'General';
+    status: 'Open' | 'In Progress' | 'Resolved';
+    createdAt: any;
+};
+
+type UserSession = {
+    username: string;
+};
+
+export default function FeedbackPage() {
+    const router = useRouter();
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = useState(true);
+    const [session, setSession] = useState<UserSession | null>(null);
+    const [notes, setNotes] = useState<FeedbackNote[]>([]);
+    
+    const [newNote, setNewNote] = useState('');
+    const [noteType, setNoteType] = useState<FeedbackNote['type']>('General');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        const authData = sessionStorage.getItem('feedback-auth');
+        if (!authData) {
+            toast({
+                variant: 'destructive',
+                title: 'Access Denied',
+                description: 'You must be logged in to view this page.',
+            });
+            router.replace('/feedback/login');
+            return;
+        }
+        setSession(JSON.parse(authData));
+
+        const q = query(collection(db, "feedback"), orderBy("createdAt", "desc"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const notesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as FeedbackNote[];
+            setNotes(notesData);
+            setIsLoading(false);
+        }, (error) => {
+            console.error("Error fetching feedback:", error);
+            toast({ title: "Connection Error", variant: "destructive" });
+        });
+
+        return () => unsubscribe();
+    }, [router, toast]);
+
+    const handleSubmitNote = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newNote.trim() || !session) return;
+
+        setIsSubmitting(true);
+        const noteId = `note-${nanoid(10)}`;
+        const noteRef = doc(db, 'feedback', noteId);
+
+        try {
+            await setDoc(noteRef, {
+                id: noteId,
+                author: session.username,
+                note: newNote,
+                type: noteType,
+                status: 'Open',
+                createdAt: serverTimestamp(),
+            });
+            setNewNote('');
+            setNoteType('General');
+            toast({ title: 'Feedback Submitted', description: 'Thank you for your note!' });
+        } catch (error) {
+            console.error("Error submitting note:", error);
+            toast({ title: "Submission Error", variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    
+    const handleUpdateStatus = async (id: string, status: FeedbackNote['status']) => {
+        if (session?.username !== 'owner') {
+             toast({ title: "Permission Denied", description: "Only the owner can update status.", variant: "destructive" });
+             return;
+        }
+        const noteRef = doc(db, 'feedback', id);
+        await updateDoc(noteRef, { status });
+    };
+
+    const handleDeleteNote = async (id: string) => {
+        if (session?.username !== 'owner') {
+            toast({ title: "Permission Denied", description: "Only the owner can delete notes.", variant: "destructive" });
+            return;
+        }
+        await deleteDoc(doc(db, 'feedback', id));
+        toast({ title: "Note Deleted" });
+    };
+
+    if (isLoading || !session) {
+        return <div className="flex h-screen items-center justify-center"><Loader2 className="h-10 w-10 animate-spin" /></div>;
+    }
+
+    return (
+        <div className="p-4 sm:p-6 lg:p-10 min-h-screen bg-secondary/50">
+            <header className="flex justify-between items-center mb-8">
+                <div className="flex items-center gap-3">
+                    <MessageSquare className="w-10 h-10 text-primary" />
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground tracking-tight">Feedback Notes</h1>
+                        <p className="text-sm text-muted-foreground">Logged in as: <span className="font-semibold">{session.username}</span></p>
+                    </div>
+                </div>
+            </header>
+
+            <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-1">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Leave a New Note</CardTitle>
+                            <CardDescription>Share your thoughts, suggestions, or issues.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleSubmitNote} className="space-y-4">
+                                <Textarea
+                                    placeholder="Type your feedback here..."
+                                    value={newNote}
+                                    onChange={(e) => setNewNote(e.target.value)}
+                                    className="h-40"
+                                    required
+                                />
+                                <Select onValueChange={(v) => setNoteType(v as FeedbackNote['type'])} value={noteType}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select note type..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="General">General Feedback</SelectItem>
+                                        <SelectItem value="Suggestion">Suggestion</SelectItem>
+                                        <SelectItem value="Bug">Bug Report</SelectItem>
+                                        <SelectItem value="Question">Question</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                                    {isSubmitting ? <Loader2 className="animate-spin" /> : <PlusCircle className="mr-2" />}
+                                    Submit Note
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+                <div className="lg:col-span-2 space-y-4">
+                    {notes.map(note => (
+                        <Card key={note.id} className="fade-in">
+                            <CardHeader className="flex flex-row justify-between items-start">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="secondary">{note.type}</Badge>
+                                        <Badge variant={note.status === 'Open' ? 'destructive' : note.status === 'In Progress' ? 'secondary' : 'default'} className={note.status === 'Resolved' ? 'bg-green-600/80' : ''}>
+                                            {note.status}
+                                        </Badge>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground mt-2">
+                                        By <span className="font-semibold text-foreground">{note.author}</span> on {new Date(note.createdAt?.toDate()).toLocaleDateString()}
+                                    </p>
+                                </div>
+                                {session.username === 'owner' && (
+                                     <Select onValueChange={(v) => handleUpdateStatus(note.id, v as FeedbackNote['status'])} defaultValue={note.status}>
+                                        <SelectTrigger className="w-[180px]">
+                                            <SelectValue placeholder="Update status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Open">Open</SelectItem>
+                                            <SelectItem value="In Progress">In Progress</SelectItem>
+                                            <SelectItem value="Resolved">Resolved</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            </CardHeader>
+                            <CardContent>
+                                <Separator className="mb-4" />
+                                <p className="text-foreground">{note.note}</p>
+                                {session.username === 'owner' && (
+                                    <div className="text-right mt-2">
+                                        <Button variant="link" className="text-destructive h-auto p-0" onClick={() => handleDeleteNote(note.id)}>Delete</Button>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    ))}
+                     {notes.length === 0 && (
+                        <div className="text-center text-muted-foreground py-16">
+                            <p>No feedback notes submitted yet.</p>
+                        </div>
+                    )}
+                </div>
+            </main>
+        </div>
+    );
+}
