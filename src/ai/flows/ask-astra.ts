@@ -48,7 +48,6 @@ const deleteCandidateByName = ai.defineTool(
 
 const AskAstraInputSchema = z.object({
   question: z.string().describe('The user\'s question about the TalentFlow app.'),
-  // We don't need to pass candidates/roles in the input, as the tool will fetch them.
 });
 export type AskAstraInput = z.infer<typeof AskAstraInputSchema>;
 
@@ -105,5 +104,3 @@ const askAstraFlow = ai.defineFlow(
     return llmResponse.text;
   }
 );
-
-    
