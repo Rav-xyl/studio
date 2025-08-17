@@ -30,6 +30,7 @@ import { Card, CardContent } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { MatchedCandidatesDialog } from '../roles/matched-candidates-dialog';
 import { ProspectingTab } from '../prospecting/prospecting-tab';
+import { bulkMatchCandidatesToRoles } from '@/ai/flows/bulk-match-candidates';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -53,9 +54,9 @@ const addLog = async (candidateId: string, logEntry: Omit<LogEntry, 'timestamp'>
 
 const KANBAN_STAGES: KanbanStatus[] = ['Sourcing', 'Screening', 'Interview', 'Hired'];
 
-interface BackgroundTask {
+export interface BackgroundTask {
     id: string;
-    type: 'Screening' | 'Simulation' | 'Audit' | 'Matching';
+    type: 'Screening' | 'Simulation' | 'Audit' | 'Matching' | 'BulkMatching';
     status: 'in-progress' | 'complete' | 'error';
     progress: number;
     total: number;
@@ -75,6 +76,7 @@ export function AstraHirePage() {
   const [isMatchesDialogOpen, setIsMatchesDialogOpen] = useState(false);
   const [matchedCandidates, setMatchedCandidates] = useState<RoleMatch[]>([]);
   const [selectedRoleForMatching, setSelectedRoleForMatching] = useState<JobRole | null>(null);
+  const [matchResults, setMatchResults] = useState<Record<string, any[]>>({});
 
 
   // UI State
@@ -633,6 +635,66 @@ export function AstraHirePage() {
         setMatchedCandidates([]);
     };
 
+    const handleRunBulkMatch = async () => {
+        if (roles.length === 0) {
+            toast({ title: "No Roles to Match", description: "Please create a client role before running the match process.", variant: "destructive"});
+            return;
+        }
+
+        const unassignedCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived);
+
+        if (unassignedCandidates.length === 0) {
+            toast({ title: "No Candidates to Match", description: "There are no unassigned candidates in the screening phase."});
+            return;
+        }
+
+        const taskId = `task-bulk-${nanoid(5)}`;
+        setBackgroundTask({
+            id: taskId,
+            type: 'BulkMatching',
+            status: 'in-progress',
+            progress: 0,
+            total: 1,
+            message: `Matching ${unassignedCandidates.length} candidates...`
+        });
+        
+        toast({ title: "AI Sourcing Started", description: `Analyzing ${unassignedCandidates.length} candidates against ${roles.length} roles. This is now a background task.` });
+
+        try {
+            const result = await bulkMatchCandidatesToRoles({
+                candidates: unassignedCandidates.map(c => ({
+                    id: c.id,
+                    skills: c.skills,
+                    narrative: c.narrative
+                })),
+                jobRoles: roles,
+            });
+
+            const newMatchResults: Record<string, any[]> = {};
+            result.results.forEach(res => {
+                newMatchResults[res.candidateId] = res.matches.sort((a, b) => b.confidenceScore - a.confidenceScore);
+            });
+            
+            setMatchResults(prev => ({ ...prev, ...newMatchResults }));
+            toast({ title: "Analysis Complete!", description: "AI role matching has been completed for all unassigned candidates." });
+            setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: 'Bulk matching complete!' }) : null);
+
+        } catch (error) {
+            console.error("Failed to run bulk match:", error);
+            toast({ title: "Bulk Match Error", description: "An error occurred during the bulk analysis. Please check the console.", variant: "destructive"});
+             setBackgroundTask(prev => prev ? ({ ...prev, status: 'error', message: 'Bulk matching failed.' }) : null);
+        } finally {
+            setTimeout(() => { setBackgroundTask(null); }, 5000);
+        }
+    };
+  
+    const handleOpenManual = () => {
+        setLastSaarthiReport({
+            reportType: "User Manual",
+        });
+        setIsSaarthiReportOpen(true);
+    };
+
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
@@ -666,6 +728,9 @@ export function AstraHirePage() {
             onUpdateCandidate={handleUpdateCandidate}
             onAddRole={handleAddRole}
             onDeleteCandidate={handleDeleteCandidate}
+            onRunBulkMatch={handleRunBulkMatch}
+            matchResults={matchResults}
+            setMatchResults={setMatchResults}
         />;
        case 'gauntlet':
         return <GauntletPortalTab candidates={candidates} />;
@@ -704,13 +769,7 @@ export function AstraHirePage() {
       />
 
 
-      <AstraHireHeader onReportClick={() => {
-          if (lastSaarthiReport) {
-              setIsSaarthiReportOpen(true);
-          } else {
-              toast({ title: "No SAARTHI report available yet.", description: "Please run a simulation or audit first." });
-          }
-      }} />
+      <AstraHireHeader onReportClick={handleOpenManual} />
       <main>
         <div className="border-b border-border mb-6">
           <nav className="flex space-x-2">

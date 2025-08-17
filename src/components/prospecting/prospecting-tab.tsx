@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog";
-import { bulkMatchCandidatesToRoles } from "@/ai/flows/bulk-match-candidates";
+
 
 const getInitials = (name: string) => {
     if (!name) return '??';
@@ -32,12 +32,22 @@ interface ProspectingTabProps {
     onUpdateCandidate: (candidate: Candidate) => void;
     onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate: Candidate) => void;
     onDeleteCandidate: (candidateId: string) => void;
+    onRunBulkMatch: () => void;
+    matchResults: Record<string, any[]>;
+    setMatchResults: React.Dispatch<React.SetStateAction<Record<string, any[]>>>;
 }
 
-export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole, onDeleteCandidate }: ProspectingTabProps) {
-    const [matchResults, setMatchResults] = useState<Record<string, any[]>>({});
+export function ProspectingTab({ 
+    candidates, 
+    roles, 
+    onUpdateCandidate, 
+    onAddRole, 
+    onDeleteCandidate,
+    onRunBulkMatch,
+    matchResults,
+    setMatchResults
+}: ProspectingTabProps) {
     const [isLoading, setIsLoading] = useState<Record<string, boolean>>({});
-    const [isBulkLoading, setIsBulkLoading] = useState(false);
     const { toast } = useToast();
     
     const handleFindMatches = async (candidate: Candidate) => {
@@ -58,39 +68,6 @@ export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole
             setIsLoading(prev => ({ ...prev, [candidate.id]: false }));
         }
     };
-
-    const handleFindAllMatches = async () => {
-        if (roles.length === 0) {
-            toast({ title: "No Roles to Match", description: "Please create a client role before running the match process.", variant: "destructive"});
-            return;
-        }
-        setIsBulkLoading(true);
-        toast({ title: "AI Sourcing Started", description: `Analyzing ${candidates.length} candidates against ${roles.length} roles. This may take a moment.` });
-
-        try {
-            const result = await bulkMatchCandidatesToRoles({
-                candidates: candidates.map(c => ({
-                    id: c.id,
-                    skills: c.skills,
-                    narrative: c.narrative
-                })),
-                jobRoles: roles,
-            });
-
-            const newMatchResults: Record<string, any[]> = {};
-            result.results.forEach(res => {
-                newMatchResults[res.candidateId] = res.matches.sort((a, b) => b.confidenceScore - a.confidenceScore);
-            });
-            
-            setMatchResults(prev => ({ ...prev, ...newMatchResults }));
-            toast({ title: "Analysis Complete!", description: "AI role matching has been completed for all unassigned candidates." });
-        } catch (error) {
-            console.error("Failed to run bulk match:", error);
-            toast({ title: "Bulk Match Error", description: "An error occurred during the bulk analysis. Please check the console.", variant: "destructive"});
-        } finally {
-            setIsBulkLoading(false);
-        }
-    };
     
     const handleAssignRole = (candidate: Candidate, roleTitle: string) => {
         onUpdateCandidate({ ...candidate, role: roleTitle });
@@ -106,8 +83,8 @@ export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole
                         Discover and assign your top unassigned talent to open roles.
                     </p>
                 </div>
-                 <Button onClick={handleFindAllMatches} disabled={isBulkLoading || candidates.length === 0}>
-                    {isBulkLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                 <Button onClick={onRunBulkMatch} disabled={candidates.length === 0}>
+                    <Zap className="mr-2 h-4 w-4" />
                     Run AI Match for All
                 </Button>
             </div>
