@@ -108,5 +108,3 @@ export interface RubricChange {
   reason: string;
   status: 'Pending' | 'Approved' | 'Rejected';
 }
-
-    
