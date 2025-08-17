@@ -3,8 +3,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MessageSquare, PlusCircle, Trash2, Edit, Send, LogOut } from 'lucide-react';
+import { Loader2, MessageSquare, PlusCircle, Trash2, Edit, Send, LogOut, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, arrayUnion } from 'firebase/firestore';
@@ -170,10 +171,18 @@ export default function FeedbackPage() {
                         <p className="text-sm text-muted-foreground">Logged in as: <span className="font-semibold">{session.username}</span></p>
                     </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleLogout}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Logout
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Link href="/" passHref>
+                        <Button variant="outline" size="sm">
+                            <Home className="mr-2 h-4 w-4" />
+                            Return to App
+                        </Button>
+                    </Link>
+                    <Button variant="outline" size="sm" onClick={handleLogout}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Logout
+                    </Button>
+                </div>
             </header>
 
             <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
