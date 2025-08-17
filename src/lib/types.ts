@@ -31,6 +31,7 @@ export interface GauntletState {
     techReview: FinalInterviewReviewOutput | null;
     systemDesignReport: string | null;
     designReview: FinalInterviewReviewOutput | null;
+    finalReview?: FinalInterviewReviewOutput | null; // Added for completeness
 }
 
 
