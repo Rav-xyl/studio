@@ -6,7 +6,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { findPotentialCandidates } from "@/ai/flows/find-potential-candidates";
 import { useState } from "react";
 import { Loader2, Search, Trash2, UserSearch, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -30,73 +29,24 @@ interface ProspectingTabProps {
     candidates: Candidate[];
     roles: JobRole[];
     onUpdateCandidate: (candidate: Candidate) => void;
-    onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>, candidateToUpdate: Candidate) => void;
     onDeleteCandidate: (candidateId: string) => void;
     onRunBulkMatch: () => void;
     matchResults: Record<string, any[]>;
-    setMatchResults: React.Dispatch<React.SetStateAction<Record<string, any[]>>>;
 }
 
 export function ProspectingTab({ 
     candidates, 
     roles, 
     onUpdateCandidate, 
-    onAddRole, 
     onDeleteCandidate,
     onRunBulkMatch,
     matchResults,
-    setMatchResults
 }: ProspectingTabProps) {
-    const [isLoading, setIsLoading] = useState<Record<string, boolean>>({});
     const { toast } = useToast();
     
-    const handleFindMatches = async (candidate: Candidate) => {
-        if (roles.length === 0) {
-            toast({ title: "No Roles Available", description: "Please add a client role to find matches.", variant: "destructive" });
-            return;
-        }
-        setIsLoading(prev => ({ ...prev, [candidate.id]: true }));
-        try {
-            const allMatches: any[] = [];
-            // This is now consistent: it evaluates one candidate against all available roles.
-            for (const role of roles) {
-                const result = await findPotentialCandidates({
-                    jobRole: role,
-                    candidates: [{
-                        id: candidate.id,
-                        name: candidate.name,
-                        skills: candidate.skills,
-                        narrative: candidate.narrative,
-                    }],
-                });
-                // We only care about strong matches (score >= 70)
-                if (result.matches && result.matches.length > 0 && result.matches[0].confidenceScore >= 70) {
-                   allMatches.push({
-                       roleId: role.id,
-                       roleTitle: role.title,
-                       ...result.matches[0]
-                   });
-                }
-            }
-            // Sort by the highest score first
-            allMatches.sort((a,b) => b.confidenceScore - a.confidenceScore);
-            setMatchResults(prev => ({ ...prev, [candidate.id]: allMatches }));
-            
-            if(allMatches.length === 0) {
-              toast({ title: "No Strong Matches Found", description: `Could not find any roles with a score of 70+ for ${candidate.name}.` });
-            }
-
-        } catch (error) {
-            console.error("Failed to find potential roles:", error);
-            toast({ title: "Error", description: "Could not fetch AI role matches.", variant: "destructive" });
-        } finally {
-            setIsLoading(prev => ({ ...prev, [candidate.id]: false }));
-        }
-    };
-    
     const handleAssignRole = (candidate: Candidate, roleTitle: string) => {
-        onUpdateCandidate({ ...candidate, role: roleTitle });
-        toast({ title: "Role Assigned!", description: `${candidate.name} has been assigned to ${roleTitle}.` });
+        onUpdateCandidate({ ...candidate, role: roleTitle, status: 'Interview' });
+        toast({ title: "Role Assigned!", description: `${candidate.name} has been assigned to ${roleTitle} and moved to the Interview column.` });
     }
 
     return (
@@ -108,7 +58,7 @@ export function ProspectingTab({
                         Discover and assign your top unassigned talent to open roles.
                     </p>
                 </div>
-                 <Button onClick={onRunBulkMatch} disabled={candidates.length === 0}>
+                 <Button onClick={onRunBulkMatch} disabled={candidates.length === 0 || roles.length === 0}>
                     <Zap className="mr-2 h-4 w-4" />
                     Run AI Match for All
                 </Button>
@@ -121,14 +71,15 @@ export function ProspectingTab({
                             <TableHead className="w-[30%]">Candidate</TableHead>
                             <TableHead className="w-[15%] text-center">AI Score</TableHead>
                             <TableHead>Top Skills</TableHead>
-                            <TableHead className="w-[20%]" colSpan={2}>Role Matches (AI)</TableHead>
+                            <TableHead className="w-[25%]">Best Role Match (AI)</TableHead>
+                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {candidates.length > 0 ? (
                             candidates.map(candidate => {
                                 const matches = matchResults[candidate.id] || [];
-                                const loading = isLoading[candidate.id];
+                                const bestMatch = matches[0];
                                 return (
                                 <TableRow key={candidate.id}>
                                     <TableCell>
@@ -151,29 +102,18 @@ export function ProspectingTab({
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        {matches.length > 0 ? (
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="outline">View Matches ({matches.length})</Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuLabel>Top Role Matches</DropdownMenuLabel>
-                                                    <DropdownMenuSeparator />
-                                                    {matches.map((match: any) => (
-                                                        <DropdownMenuItem key={match.roleId} onClick={() => handleAssignRole(candidate, match.roleTitle)}>
-                                                            <div className="flex justify-between w-full items-center gap-2">
-                                                                <span>{match.roleTitle}</span>
-                                                                <Badge variant="secondary">{match.confidenceScore}</Badge>
-                                                            </div>
-                                                        </DropdownMenuItem>
-                                                    ))}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                        {bestMatch ? (
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="font-semibold">{bestMatch.roleTitle}</p>
+                                                    <p className="text-xs text-muted-foreground">Confidence: {bestMatch.confidenceScore}%</p>
+                                                </div>
+                                                <Button size="sm" variant="outline" onClick={() => handleAssignRole(candidate, bestMatch.roleTitle)}>
+                                                    Assign Role
+                                                </Button>
+                                            </div>
                                         ) : (
-                                            <Button variant="ghost" size="sm" onClick={() => handleFindMatches(candidate)} disabled={loading || roles.length === 0}>
-                                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                                                Find Matches
-                                            </Button>
+                                            <span className="text-xs text-muted-foreground">Run AI Match to find best fit.</span>
                                         )}
                                     </TableCell>
                                      <TableCell className="text-right">

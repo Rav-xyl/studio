@@ -26,8 +26,8 @@ import { useToast } from '@/hooks/use-toast';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
-import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
+import { bulkMatchCandidatesToRoles } from '@/ai/flows/bulk-match-candidates';
 
 interface CandidateDetailSheetProps {
   open: boolean;
@@ -129,27 +129,11 @@ export function CandidateDetailSheet({
                 companyValues: "Innovation, Collaboration, Customer-Centricity, Fast-Paced Growth",
             });
         } else if (type === 'potentialRoles') {
-            const allMatches: any[] = [];
-            for (const role of roles) {
-                 const matchResult = await findPotentialCandidates({
-                    jobRole: role,
-                    candidates: [{
-                        id: candidate.id,
-                        name: candidate.name,
-                        skills: candidate.skills,
-                        narrative: candidate.narrative,
-                    }],
-                });
-                if (matchResult.matches && matchResult.matches.length > 0) {
-                   allMatches.push({
-                       roleId: role.id,
-                       roleTitle: role.title,
-                       ...matchResult.matches[0]
-                   });
-                }
-            }
-            allMatches.sort((a,b) => b.confidenceScore - a.confidenceScore);
-            result = { matches: allMatches };
+             const { results } = await bulkMatchCandidatesToRoles({
+                candidates: [{ id: candidate.id, skills: candidate.skills, narrative: candidate.narrative }],
+                jobRoles: roles,
+            });
+            result = { matches: results[0]?.matches || [] };
         }
         setGeneratedData(prev => ({...prev, [type]: result }));
         toast({ title: `AI ${type} generated successfully!`})
@@ -191,8 +175,8 @@ export function CandidateDetailSheet({
   
   const handleAssignRole = (roleTitle: string) => {
     if(!candidate) return;
-    onUpdateCandidate({...candidate, role: roleTitle});
-    toast({title: "Role Assigned", description: `${candidate.name} has been assigned to ${roleTitle}.`});
+    onUpdateCandidate({...candidate, role: roleTitle, status: 'Interview'});
+    toast({title: "Role Assigned", description: `${candidate.name} has been assigned to ${roleTitle} and moved to Interview.`});
   }
 
   const review = generatedData.review;

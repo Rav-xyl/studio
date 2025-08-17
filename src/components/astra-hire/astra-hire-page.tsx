@@ -19,7 +19,6 @@ import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, arrayUnion, getDoc } from 'firebase/firestore';
 import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
-import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
 import { Card, CardContent } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { MatchedCandidatesDialog } from '../roles/matched-candidates-dialog';
@@ -336,11 +335,6 @@ export function AstraHirePage() {
 
             setBackgroundTask(prev => prev ? ({ ...prev, progress: 2, message: 'Phase 2/5: Synthesizing Role...' }) : null);
             
-            const roleSuggestions = await findPotentialCandidates({
-                jobRole: { id: 'simulated', title: 'Simulated Senior Role', description: `A role for a candidate with skills like ${topCandidate.skills.join(', ')}` },
-                candidates: [topCandidate]
-            });
-
             const targetRoleTitle = "Lead Software Engineer";
             log("Role Suggestion", `AI suggested a role similar to '${targetRoleTitle}' for ${topCandidate.name}.`);
 
@@ -523,47 +517,38 @@ export function AstraHirePage() {
         });
         setSelectedRoleForMatching(role);
         
+        const allUnassigned = candidates.filter(c => 
+            c.role === 'Unassigned' && !c.archived && (c.status === 'Screening')
+        );
+
+        if (allUnassigned.length === 0) {
+            toast({ title: "No Candidates to Match", description: "There are no unassigned candidates available." });
+            setBackgroundTask(null);
+            return;
+        }
+
         try {
-            const roleRef = doc(db, 'roles', role.id);
-            const roleDoc = await getDoc(roleRef);
-            const currentRoleData = roleDoc.data() as JobRole;
-            
-            const lastMatchedDate = currentRoleData.lastMatched ? new Date(currentRoleData.lastMatched) : new Date(0);
-            
-            const allUnassigned = candidates.filter(c => 
-                c.role === 'Unassigned' && !c.archived && (c.status === 'Screening')
-            );
-            
-            const newCandidatesToMatch = allUnassigned.filter(c => new Date(c.lastUpdated) > lastMatchedDate);
-            
-            let finalMatches: RoleMatch[] = currentRoleData.roleMatches || [];
+            const result = await bulkMatchCandidatesToRoles({
+                candidates: allUnassigned.map(c => ({ id: c.id, skills: c.skills, narrative: c.narrative })),
+                jobRoles: [role]
+            });
 
-            // Divine Fix: Validate existing cache before using it
-            const activeUnassignedIds = new Set(allUnassigned.map(c => c.id));
-            const validatedCachedMatches = finalMatches.filter(match => activeUnassignedIds.has(match.candidateId));
-            if (validatedCachedMatches.length !== finalMatches.length) {
-                finalMatches = validatedCachedMatches;
-            }
-
-            if (newCandidatesToMatch.length > 0) {
-                 const result = await findPotentialCandidates({
-                    jobRole: role,
-                    candidates: newCandidatesToMatch.map(c => ({
-                        id: c.id, name: c.name, skills: c.skills, narrative: c.narrative,
-                    })),
-                });
+            let finalMatches: RoleMatch[] = [];
+            if (result.results.length > 0) {
+                // The result is for a single role, so we can extract it directly
+                const candidateMatches = result.results.map(res => res.matches.find(m => m.roleId === role.id)).filter(Boolean);
                 
-                const newMatches = result.matches || []; // Defensive check
-                const existingMatchIds = new Set(finalMatches.map(m => m.candidateId));
-                const uniqueNewMatches = newMatches.filter(m => !existingMatchIds.has(m.candidateId));
-                finalMatches = [...finalMatches, ...uniqueNewMatches].sort((a, b) => b.confidenceScore - a.confidenceScore);
+                finalMatches = candidateMatches.map((match: any) => ({
+                    ...match,
+                    candidateId: result.results.find(r => r.matches.includes(match))!.candidateId,
+                    candidateName: allUnassigned.find(c => c.id === result.results.find(r => r.matches.includes(match))!.candidateId)!.name
+                }));
 
-                await updateDoc(roleRef, {
-                    roleMatches: finalMatches,
-                    lastMatched: new Date().toISOString()
-                });
-            } else if (finalMatches.length > 0) {
-                toast({ title: "Using Cached Results", description: "No new candidates to analyze. Displaying previous matches." });
+                finalMatches.sort((a, b) => b.confidenceScore - a.confidenceScore);
+                
+                // Update the role with the new matches
+                const roleRef = doc(db, 'roles', role.id);
+                await updateDoc(roleRef, { roleMatches: finalMatches, lastMatched: new Date().toISOString() });
             }
 
             let matchesToShow = finalMatches;
@@ -584,27 +569,15 @@ export function AstraHirePage() {
         }
     };
     
-    const handleAssignRole = async (candidateId: string) => {
-        if (!selectedRoleForMatching) return;
+    const handleAssignRole = async (candidateId: string, roleTitle: string) => {
         const candidate = candidates.find(c => c.id === candidateId);
         if (candidate) {
-            // Update candidate state first
-            await handleUpdateCandidate({ ...candidate, role: selectedRoleForMatching.title });
-
-            // Now, update the role's cache to remove the assigned candidate
-            const roleRef = doc(db, 'roles', selectedRoleForMatching.id);
-            const roleDoc = await getDoc(roleRef);
-            const currentRoleData = roleDoc.data() as JobRole;
-            const updatedMatches = (currentRoleData.roleMatches || []).filter(m => m.candidateId !== candidateId);
-            
-            await updateDoc(roleRef, {
-                roleMatches: updatedMatches
-            });
+            await handleUpdateCandidate({ ...candidate, role: roleTitle, status: 'Interview' });
             
             // Update local state for the dialog
             setMatchedCandidates(prev => prev.filter(m => m.candidateId !== candidateId));
             
-            toast({ title: "Role Assigned!", description: `${candidate.name} has been assigned to ${selectedRoleForMatching.title}.` });
+            toast({ title: "Role Assigned!", description: `${candidate.name} has been assigned to ${roleTitle} and moved to Interview.` });
         }
     };
 
@@ -615,7 +588,7 @@ export function AstraHirePage() {
 
         matchesToAssign.forEach(match => {
             const candidateRef = doc(db, 'candidates', match.candidateId);
-            batch.update(candidateRef, { role: selectedRoleForMatching.title });
+            batch.update(candidateRef, { role: selectedRoleForMatching.title, status: 'Interview' });
         });
 
         // Clear the entire cache for this role after bulk assignment
@@ -634,15 +607,9 @@ export function AstraHirePage() {
     };
 
     const handleRunBulkMatch = async () => {
-        if (roles.length === 0) {
-            toast({ title: "No Roles to Match", description: "Please create a client role before running the match process.", variant: "destructive"});
-            return;
-        }
-
         const unassignedCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived);
-
-        if (unassignedCandidates.length === 0) {
-            toast({ title: "No Candidates to Match", description: "There are no unassigned candidates in the screening phase."});
+        if (unassignedCandidates.length === 0 || roles.length === 0) {
+            toast({ title: "Nothing to Match", description: "Ensure there are unassigned candidates and open roles." });
             return;
         }
 
@@ -656,7 +623,7 @@ export function AstraHirePage() {
             message: `Matching ${unassignedCandidates.length} candidates...`
         });
         
-        toast({ title: "AI Sourcing Started", description: `Analyzing ${unassignedCandidates.length} candidates against ${roles.length} roles. This is now a background task.` });
+        toast({ title: "AI Sourcing Started", description: `Analyzing ${unassignedCandidates.length} candidates against ${roles.length} roles. This is a background task.` });
 
         try {
             const result = await bulkMatchCandidatesToRoles({
@@ -732,11 +699,9 @@ export function AstraHirePage() {
             candidates={candidates.filter(c => c.role === 'Unassigned' && !c.archived)}
             roles={roles}
             onUpdateCandidate={handleUpdateCandidate}
-            onAddRole={handleAddRole}
             onDeleteCandidate={handleDeleteCandidate}
             onRunBulkMatch={handleRunBulkMatch}
             matchResults={matchResults}
-            setMatchResults={setMatchResults}
         />;
        case 'gauntlet':
         return <GauntletPortalTab candidates={candidates} />;
