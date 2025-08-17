@@ -34,11 +34,11 @@ export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAd
         setIsMatching(true);
         setSelectedRoleForMatching(role);
         try {
-            const availableCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived && c.status === 'Screening');
+            const availableCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived && (c.status === 'Screening' || c.status === 'Manual Review'));
             if (availableCandidates.length === 0) {
                 toast({
                     title: "No available candidates to match",
-                    description: "No 'Unassigned' candidates were found in the 'Screening' column.",
+                    description: "No 'Unassigned' candidates were found in the 'Screening' or 'Manual Review' columns.",
                     variant: "destructive"
                 });
                 return;
@@ -65,32 +65,48 @@ export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAd
         }
     }
 
-    const handleFindAllQualified = (role: JobRole) => {
+    const handleFindAllQualified = async (role: JobRole) => {
+        setIsMatching(true);
         setSelectedRoleForMatching(role);
-        const qualifiedCandidates = candidates.filter(c =>
-            c.role === 'Unassigned' &&
-            !c.archived &&
-            c.status === 'Screening' &&
-            (c.aiInitialScore || 0) >= 70
-        );
+        try {
+            const availableCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived && (c.status === 'Screening' || c.status === 'Manual Review'));
+            if (availableCandidates.length === 0) {
+                toast({
+                    title: "No available candidates to match",
+                    description: "No 'Unassigned' candidates were found in 'Screening' or 'Manual Review'.",
+                });
+                return;
+            }
 
-        if (qualifiedCandidates.length === 0) {
-            toast({
-                title: "No Qualified Candidates Found",
-                description: "No 'Unassigned' candidates in 'Screening' meet the 70+ score requirement.",
+            const result = await findPotentialCandidates({
+                jobRole: role,
+                candidates: availableCandidates.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    skills: c.skills,
+                    narrative: c.narrative,
+                })),
             });
-            return;
+
+            const qualifiedMatches = result.matches.filter(match => match.confidenceScore >= 70);
+            
+            if (qualifiedMatches.length === 0) {
+                 toast({
+                    title: "No Qualified Candidates Found",
+                    description: "The AI did not find any candidates meeting the 70+ confidence score for this role.",
+                });
+                return;
+            }
+
+            setMatchedCandidates(qualifiedMatches);
+            setIsMatchesDialogOpen(true);
+
+        } catch (error) {
+             console.error("Failed to find qualified candidates:", error);
+            toast({ title: 'Error', description: "An AI error occurred while finding qualified candidates.", variant: 'destructive' });
+        } finally {
+            setIsMatching(false);
         }
-
-        const matches = qualifiedCandidates.map(c => ({
-            candidateId: c.id,
-            candidateName: c.name,
-            justification: `Qualified with AI Score: ${Math.round(c.aiInitialScore || 0)}`,
-            confidenceScore: Math.round(c.aiInitialScore || 0),
-        })).sort((a, b) => b.confidenceScore - a.confidenceScore); // Sort by score descending
-
-        setMatchedCandidates(matches);
-        setIsMatchesDialogOpen(true);
     };
 
     const handleAssignRole = (candidateId: string) => {
