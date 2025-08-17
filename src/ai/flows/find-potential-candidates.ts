@@ -89,10 +89,10 @@ const findPotentialCandidatesFlow = ai.defineFlow(
     }
     const { output } = await prompt(input);
     // Sort the matches by confidence score in descending order
-    if (output && output.matches) {
+    if (output && Array.isArray(output.matches)) {
       output.matches.sort((a, b) => b.confidenceScore - a.confidenceScore);
     } else {
-      // Ensure we always return an object with a matches array
+      // Ensure we always return an object with a matches array if the output is malformed
       return { matches: [] };
     }
     return output!;

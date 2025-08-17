@@ -576,8 +576,8 @@ export function AstraHirePage() {
             setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', progress: 1, message: 'Matching complete!' }) : null);
 
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Could not find potential candidates.";
-            toast({ title: 'Matching Error', description: errorMessage, variant: 'destructive' });
+            console.error("Failed to find potential candidates:", error);
+            toast({ title: "Matching Error", description: "An unexpected response was received from the server.", variant: "destructive" });
             setBackgroundTask(prev => prev ? ({ ...prev, status: 'error', message: 'Matching failed.' }) : null);
         } finally {
             setTimeout(() => { setBackgroundTask(null); }, 5000);
@@ -779,5 +779,3 @@ export function AstraHirePage() {
     </div>
   );
 }
-
-    
