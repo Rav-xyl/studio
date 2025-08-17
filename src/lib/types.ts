@@ -114,7 +114,6 @@ export type FeedbackReply = {
     author: string;
     text: string;
     createdAt: any;
-    attachments?: string[];
 };
 
 export type FeedbackNote = {
@@ -125,5 +124,4 @@ export type FeedbackNote = {
     status: 'Open' | 'In Progress' | 'Resolved';
     createdAt: any;
     replies?: FeedbackReply[];
-    attachments?: string[];
 };
