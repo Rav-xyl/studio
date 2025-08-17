@@ -74,7 +74,7 @@ export default function FeedbackPage() {
     const handleLogout = () => {
         sessionStorage.removeItem('feedback-auth');
         toast({ title: "Logged Out", description: "You have been successfully logged out." });
-        router.push('/feedback/login');
+        router.push('/');
     };
 
     const handleSubmitNote = async (e: React.FormEvent) => {
