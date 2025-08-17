@@ -1,5 +1,6 @@
 
-export type KanbanStatus = 'Sourcing' | 'Screening' | 'Interview' | 'Hired';
+
+export type KanbanStatus = 'Sourcing' | 'Screening' | 'Manual Review' | 'Interview' | 'Hired';
 
 export interface LogEntry {
   timestamp: string;

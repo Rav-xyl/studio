@@ -27,10 +27,10 @@ export function KanbanColumn({ title, candidates, onCardClick, onUpdateCandidate
     }),
   }));
 
-  const canDeleteAll = (title === 'Sourcing' || title === 'Screening') && candidates.length > 0;
+  const canDeleteAll = (title === 'Sourcing' || title === 'Screening' || title === 'Manual Review') && candidates.length > 0;
 
   return (
-    <div ref={drop} className={`flex flex-col rounded-lg flex-shrink-0 w-[300px] transition-colors ${isOver ? 'bg-secondary' : 'bg-secondary/30'}`}>
+    <div ref={drop} className={`flex flex-col rounded-lg bg-secondary/30 transition-colors ${isOver ? 'bg-secondary' : ''}`}>
       <div className="p-3 sticky top-0 bg-background/80 backdrop-blur-sm z-10 border-b flex items-center justify-between">
         <h3 className="font-semibold text-foreground tracking-tight">
           {title} <span className="text-sm font-normal text-muted-foreground">{candidates.length}</span>

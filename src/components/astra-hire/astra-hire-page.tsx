@@ -49,7 +49,7 @@ const addLog = async (candidateId: string, logEntry: Omit<LogEntry, 'timestamp'>
     });
 };
 
-const KANBAN_STAGES: KanbanStatus[] = ['Sourcing', 'Screening', 'Interview', 'Hired'];
+const KANBAN_STAGES: KanbanStatus[] = ['Sourcing', 'Screening', 'Manual Review', 'Interview', 'Hired'];
 
 interface BackgroundTask {
     id: string;
@@ -247,13 +247,26 @@ export function AstraHirePage() {
             const result = await automatedResumeScreening({ resumeDataUri, companyType });
             
             const candidateId = `cand-${nanoid(10)}`;
+            
+            let status: KanbanStatus = 'Screening';
+            let archived = false;
+            if (result.candidateScore >= 70) {
+                status = 'Screening';
+            } else if (result.candidateScore >= 40) {
+                status = 'Manual Review';
+            } else {
+                status = 'Sourcing'; // Will be archived
+                archived = true;
+            }
+
             const newCandidate: Candidate = {
                 id: candidateId,
                 ...result.extractedInformation,
-                status: 'Screening' as KanbanStatus, 
+                status,
                 role: 'Unassigned',
                 aiInitialScore: result.candidateScore,
                 lastUpdated: new Date().toISOString(),
+                archived,
                 log: [{
                     timestamp: new Date().toISOString(),
                     event: 'Resume Uploaded',
@@ -262,7 +275,7 @@ export function AstraHirePage() {
                 }, {
                     timestamp: new Date().toISOString(),
                     event: 'AI Screening Complete',
-                    details: `Automated screening finished. Initial score: ${result.candidateScore}. Context: ${companyType}`,
+                    details: `Automated screening finished. Initial score: ${result.candidateScore}. Context: ${companyType}. Status set to: ${status}.`,
                     author: 'AI'
                 }]
             };
@@ -325,8 +338,8 @@ export function AstraHirePage() {
             const targetRoleTitle = roleSuggestions.roles[0]?.roleTitle || "Lead Software Engineer";
             log("Role Suggestion", `AI suggested role: '${targetRoleTitle}' for ${topCandidate.name}.`);
 
-            const jdResult = await synthesizeJobDescription({ jobTitle: targetRoleTitle, companyInformation: "A fast-growing tech startup in the AI space." });
-            const newRole: JobRole = { id: `role-${nanoid(10)}`, title: targetRoleTitle, description: jdResult.jobDescription, department: "Engineering", openings: 1 };
+            const jdResult = await synthesizeJobDescription({ jobDescriptionText: `Seeking a candidate for ${targetRoleTitle} with skills like ${topCandidate.skills.join(', ')}.` });
+            const newRole: JobRole = { id: `role-${nanoid(10)}`, title: targetRoleTitle, description: jdResult.formattedDescription, department: "Engineering", openings: 1 };
             await setDoc(doc(db, 'roles', newRole.id), newRole);
             log("Role Synthesis Complete", `Created and saved new role: '${newRole.title}'.`);
 

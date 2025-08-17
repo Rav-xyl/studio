@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 const KANBAN_COLUMNS: KanbanStatus[] = [
   'Sourcing',
   'Screening',
+  'Manual Review',
   'Interview',
   'Hired',
 ];
@@ -138,7 +139,7 @@ export function CandidatePoolTab({
             </div>
         </div>
         
-        <div className="flex gap-6 overflow-x-auto pb-4 -mx-10 px-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
             {columns.map((col) => (
             <KanbanColumn
                 key={col.title}

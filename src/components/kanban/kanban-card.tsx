@@ -92,12 +92,12 @@ export function KanbanCard({ candidate, onClick, onDelete, className }: KanbanCa
               <AvatarImage src={candidate.avatarUrl} alt={candidate.name} data-ai-hint="person" />
               <AvatarFallback>{getInitials(candidate.name)}</AvatarFallback>
             </Avatar>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="font-semibold text-foreground truncate">{candidate.name}</p>
-              <p className="text-sm text-muted-foreground">{candidate.role}</p>
+              <p className="text-sm text-muted-foreground truncate">{candidate.role}</p>
             </div>
              {candidate.aiInitialScore && (
-                  <div className="flex items-center gap-1 font-semibold text-amber-500 text-xs">
+                  <div className="flex items-center gap-1 font-semibold text-amber-500 text-xs flex-shrink-0 ml-2">
                       <Star className="h-3 w-3" />
                       <span>{Math.round(candidate.aiInitialScore)}</span>
                   </div>
@@ -121,5 +121,3 @@ export function KanbanCard({ candidate, onClick, onDelete, className }: KanbanCa
     </Card>
   );
 }
-
-    
