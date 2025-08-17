@@ -538,6 +538,13 @@ export function AstraHirePage() {
             
             let finalMatches: RoleMatch[] = currentRoleData.roleMatches || [];
 
+            // Divine Fix: Validate existing cache before using it
+            const activeUnassignedIds = new Set(allUnassigned.map(c => c.id));
+            const validatedCachedMatches = finalMatches.filter(match => activeUnassignedIds.has(match.candidateId));
+            if (validatedCachedMatches.length !== finalMatches.length) {
+                finalMatches = validatedCachedMatches;
+            }
+
             if (newCandidatesToMatch.length > 0) {
                  const result = await findPotentialCandidates({
                     jobRole: role,
@@ -554,7 +561,7 @@ export function AstraHirePage() {
                     roleMatches: finalMatches,
                     lastMatched: new Date().toISOString()
                 });
-            } else {
+            } else if (finalMatches.length > 0) {
                 toast({ title: "Using Cached Results", description: "No new candidates to analyze. Displaying previous matches." });
             }
 
@@ -771,3 +778,5 @@ export function AstraHirePage() {
     </div>
   );
 }
+
+    
