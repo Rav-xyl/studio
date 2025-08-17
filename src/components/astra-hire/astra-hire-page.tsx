@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart2, Briefcase, Users, Loader2, Shield, X } from 'lucide-react';
+import { BarChart2, Briefcase, Users, Loader2, Shield, X, Search } from 'lucide-react';
 import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
@@ -29,6 +29,7 @@ import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
 import { Card, CardContent } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { MatchedCandidatesDialog } from '../roles/matched-candidates-dialog';
+import { ProspectingTab } from '../prospecting/prospecting-tab';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -50,7 +51,7 @@ const addLog = async (candidateId: string, logEntry: Omit<LogEntry, 'timestamp'>
     });
 };
 
-const KANBAN_STAGES: KanbanStatus[] = ['Sourcing', 'Screening', 'Manual Review', 'Interview', 'Hired'];
+const KANBAN_STAGES: KanbanStatus[] = ['Sourcing', 'Screening', 'Interview', 'Hired'];
 
 interface BackgroundTask {
     id: string;
@@ -256,11 +257,7 @@ export function AstraHirePage() {
             
             let status: KanbanStatus = 'Screening';
             let archived = false;
-            if (result.candidateScore >= 70) {
-                status = 'Screening';
-            } else if (result.candidateScore >= 40) {
-                status = 'Manual Review';
-            } else {
+            if (result.candidateScore < 40) {
                 status = 'Sourcing'; // Will be archived
                 archived = true;
             }
@@ -502,7 +499,7 @@ export function AstraHirePage() {
             const lastMatchedDate = role.lastMatched ? new Date(role.lastMatched) : new Date(0);
             
             const allUnassigned = candidates.filter(c => 
-                c.role === 'Unassigned' && !c.archived && (c.status === 'Screening' || c.status === 'Manual Review')
+                c.role === 'Unassigned' && !c.archived && (c.status === 'Screening')
             );
 
             // Find candidates added since the last match
@@ -605,6 +602,13 @@ export function AstraHirePage() {
                 onDeleteCandidate={handleDeleteCandidate}
             />
         );
+       case 'prospecting':
+        return <ProspectingTab 
+            candidates={candidates.filter(c => c.role === 'Unassigned' && !c.archived)}
+            roles={roles}
+            onUpdateCandidate={handleUpdateCandidate}
+            onAddRole={handleAddRole}
+        />;
        case 'gauntlet':
         return <GauntletPortalTab candidates={candidates} />;
       case 'analytics':
@@ -665,6 +669,13 @@ export function AstraHirePage() {
             >
               <Users className="inline-block w-4 h-4 mr-2" />
               Candidate Pool
+            </button>
+             <button
+              className={`tab-btn ${activeTab === 'prospecting' ? 'active' : ''}`}
+              onClick={() => setActiveTab('prospecting')}
+            >
+              <Search className="inline-block w-4 h-4 mr-2" />
+              Prospecting
             </button>
              <button
               className={`tab-btn ${activeTab === 'gauntlet' ? 'active' : ''}`}

@@ -2,21 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Shield, Send } from 'lucide-react';
+import { Loader2, Shield, Send, Bell, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, updateDoc, doc } from 'firebase/firestore';
-import type { Candidate } from '@/lib/types';
+import { collection, onSnapshot, updateDoc, doc, setDoc } from 'firebase/firestore';
+import type { Candidate, JobRole, ProactiveSourcingNotification } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { GauntletMonitorTable } from '@/components/admin/gauntlet-monitor-table';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
+import { proactiveCandidateSourcing } from '@/ai/flows/proactive-candidate-sourcing';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function AdminDashboardPage() {
     const router = useRouter();
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(true);
     const [candidates, setCandidates] = useState<Candidate[]>([]);
+    const [roles, setRoles] = useState<JobRole[]>([]);
+    const [notifications, setNotifications] = useState<ProactiveSourcingNotification[]>([]);
     const [isSendingCommunications, setIsSendingCommunications] = useState(false);
+    const [isSourcing, setIsSourcing] = useState(false);
 
     useEffect(() => {
         const isAdmin = sessionStorage.getItem('admin-auth');
@@ -30,23 +35,74 @@ export default function AdminDashboardPage() {
             return;
         }
 
+        const unsubscribes: (() => void)[] = [];
+
         const candidatesUnsub = onSnapshot(collection(db, "candidates"), (snapshot) => {
-            const candidatesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Candidate[];
-            setCandidates(candidatesData);
+            setCandidates(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Candidate[]);
             setIsLoading(false);
         }, (error) => {
-            console.error("Firestore connection error:", error);
-            toast({
-                title: "Connection Error",
-                description: "Could not connect to the database.",
-                variant: "destructive"
-            });
-            setIsLoading(false);
+            console.error("Firestore connection error (candidates):", error);
+            toast({ title: "Connection Error", description: "Could not connect to candidates.", variant: "destructive" });
         });
+        unsubscribes.push(candidatesUnsub);
 
-        return () => candidatesUnsub();
+        const rolesUnsub = onSnapshot(collection(db, "roles"), (snapshot) => {
+            setRoles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as JobRole[]);
+        });
+        unsubscribes.push(rolesUnsub);
+        
+        const notificationsUnsub = onSnapshot(collection(db, "notifications"), (snapshot) => {
+            setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ProactiveSourcingNotification[]);
+        });
+        unsubscribes.push(notificationsUnsub);
+
+
+        return () => unsubscribes.forEach(unsub => unsub());
 
     }, [router, toast]);
+    
+    const handleProactiveSourcing = async () => {
+        setIsSourcing(true);
+        toast({ title: "AI Sourcing Agent Activated", description: "Scanning for high-potential, unassigned candidates..." });
+        try {
+            const unassignedCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived);
+            const result = await proactiveCandidateSourcing({
+                candidates: unassignedCandidates,
+                roles: roles
+            });
+
+            if (result.notifications.length > 0) {
+                 for (const notification of result.notifications) {
+                    const notificationRef = doc(db, 'notifications', `${notification.candidateId}-${notification.roleId}`);
+                    await setDoc(notificationRef, notification, { merge: true });
+                }
+                toast({ title: "Sourcing Complete", description: `AI identified ${result.notifications.length} new high-value opportunities.` });
+            } else {
+                 toast({ title: "Sourcing Complete", description: "No new high-value opportunities found at this time." });
+            }
+        } catch (error) {
+            console.error("Proactive sourcing failed:", error);
+            toast({ title: "Sourcing Error", description: "The AI agent encountered an error.", variant: "destructive" });
+        } finally {
+            setIsSourcing(false);
+        }
+    }
+    
+    const handleAssignCandidate = async (notification: ProactiveSourcingNotification) => {
+        try {
+            await updateDoc(doc(db, 'candidates', notification.candidateId), {
+                role: notification.roleTitle
+            });
+            await updateDoc(doc(db, 'notifications', notification.id), {
+                status: 'actioned'
+            });
+            toast({ title: "Candidate Assigned!", description: `${notification.candidateName} has been assigned to ${notification.roleTitle}.` });
+        } catch (error) {
+            console.error("Failed to assign candidate:", error);
+            toast({ title: "Assignment Failed", description: "Could not assign the candidate.", variant: "destructive" });
+        }
+    };
+
 
     const handleSendCommunications = async () => {
         setIsSendingCommunications(true);
@@ -108,6 +164,8 @@ export default function AdminDashboardPage() {
         );
     }
     
+    const pendingNotifications = notifications.filter(n => n.status === 'pending');
+
     return (
         <div className="p-4 sm:p-6 lg:p-10 min-h-screen bg-secondary/50">
             <header className="flex flex-wrap justify-between items-center mb-8 gap-4">
@@ -121,6 +179,10 @@ export default function AdminDashboardPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                     <Button onClick={handleProactiveSourcing} variant="outline" disabled={isSourcing}>
+                        {isSourcing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UserCheck className="mr-2 h-4 w-4" />}
+                        Run Sourcing Agent
+                    </Button>
                     <Button onClick={handleSendCommunications} disabled={isSendingCommunications}>
                         {isSendingCommunications ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
                         Send Final Communications
@@ -129,6 +191,32 @@ export default function AdminDashboardPage() {
             </header>
             
             <main className="space-y-8">
+                {pendingNotifications.length > 0 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Bell className="h-5 w-5 text-primary" />
+                                Proactive Sourcing Alerts
+                            </CardTitle>
+                            <CardDescription>
+                                The AI Sourcing Agent has identified high-potential candidates for open roles.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            {pendingNotifications.map(notification => (
+                                <div key={notification.id} className="flex items-center justify-between p-3 bg-secondary rounded-md">
+                                    <p className="text-sm">
+                                        <span className="font-semibold">{notification.candidateName}</span> is a strong match for <span className="font-semibold">{notification.roleTitle}</span> (Score: {notification.confidenceScore})
+                                    </p>
+                                    <Button size="sm" onClick={() => handleAssignCandidate(notification)}>
+                                        <UserCheck className="mr-2 h-4 w-4" />
+                                        Assign Role
+                                    </Button>
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
+                )}
                 <GauntletMonitorTable candidates={candidates} />
             </main>
         </div>

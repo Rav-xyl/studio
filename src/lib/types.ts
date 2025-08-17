@@ -1,6 +1,6 @@
 
 
-export type KanbanStatus = 'Sourcing' | 'Screening' | 'Manual Review' | 'Interview' | 'Hired';
+export type KanbanStatus = 'Sourcing' | 'Screening' | 'Interview' | 'Hired';
 
 export interface LogEntry {
   timestamp: string;
@@ -69,6 +69,18 @@ export interface JobRole {
   roleMatches?: RoleMatch[];
   lastMatched?: string; // ISO date string
 }
+
+export interface ProactiveSourcingNotification {
+    id: string;
+    candidateId: string;
+    candidateName: string;
+    roleId: string;
+    roleTitle: string;
+    justification: string;
+    confidenceScore: number;
+    status: 'pending' | 'actioned';
+}
+
 
 // For Analytics
 export type HistoricalData = {
