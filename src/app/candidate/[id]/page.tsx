@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -22,7 +23,7 @@ const InterviewGauntlet = dynamic(() => import('@/components/interview/interview
 type StageStatus = 'Locked' | 'Unlocked' | 'Pending' | 'Complete' | 'Failed';
 
 export default function CandidatePortalPage({ params }: { params: { id: string } }) {
-    const candidateId = use(params).id;
+    const { id: candidateId } = params;
     const router = useRouter();
     const { toast } = useToast();
     
