@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog";
+import { bulkMatchCandidatesToRoles } from "@/ai/flows/bulk-match-candidates";
 
 const getInitials = (name: string) => {
     if (!name) return '??';
@@ -66,22 +67,21 @@ export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole
         setIsBulkLoading(true);
         toast({ title: "AI Sourcing Started", description: `Analyzing ${candidates.length} candidates against ${roles.length} roles. This may take a moment.` });
 
-        const allMatchPromises = candidates.map(candidate => 
-            findPotentialRoles({
-                candidateProfile: {
-                    skills: candidate.skills,
-                    narrative: candidate.narrative,
-                },
-                jobRoles: roles,
-            }).then(result => ({ candidateId: candidate.id, matches: result.matches }))
-        );
-
         try {
-            const allResults = await Promise.all(allMatchPromises);
-            const newMatchResults: Record<string, any[]> = {};
-            allResults.forEach(result => {
-                newMatchResults[result.candidateId] = result.matches;
+            const result = await bulkMatchCandidatesToRoles({
+                candidates: candidates.map(c => ({
+                    id: c.id,
+                    skills: c.skills,
+                    narrative: c.narrative
+                })),
+                jobRoles: roles,
             });
+
+            const newMatchResults: Record<string, any[]> = {};
+            result.results.forEach(res => {
+                newMatchResults[res.candidateId] = res.matches.sort((a, b) => b.confidenceScore - a.confidenceScore);
+            });
+            
             setMatchResults(prev => ({ ...prev, ...newMatchResults }));
             toast({ title: "Analysis Complete!", description: "AI role matching has been completed for all unassigned candidates." });
         } catch (error) {
