@@ -53,12 +53,21 @@ export interface Candidate {
   [key: string]: any;
 }
 
+export interface RoleMatch {
+  candidateId: string;
+  candidateName: string;
+  justification: string;
+  confidenceScore: number;
+}
+
 export interface JobRole {
   id: string;
   title: string;
   department: string;
   openings: number;
   description: string;
+  roleMatches?: RoleMatch[];
+  lastMatched?: string; // ISO date string
 }
 
 // For Analytics

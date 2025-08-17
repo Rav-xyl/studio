@@ -7,7 +7,7 @@ import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
 import { AnalyticsTab } from '../analytics/analytics-tab';
-import type { Candidate, JobRole, KanbanStatus, LogEntry, RubricChange } from '@/lib/types';
+import type { Candidate, JobRole, KanbanStatus, LogEntry, RubricChange, RoleMatch } from '@/lib/types';
 import { automatedResumeScreening } from '@/ai/flows/automated-resume-screening';
 import { SaarthiReportModal } from './saarthi-report-modal';
 import { useToast } from '@/hooks/use-toast';
@@ -71,9 +71,8 @@ export function AstraHirePage() {
   const [filteredRole, setFilteredRole] = useState<JobRole | null>(null);
   const [suggestedChanges, setSuggestedChanges] = useState<RubricChange[]>([]);
   const [backgroundTask, setBackgroundTask] = useState<BackgroundTask | null>(null);
-  const [isMatching, setIsMatching] = useState(false);
   const [isMatchesDialogOpen, setIsMatchesDialogOpen] = useState(false);
-  const [matchedCandidates, setMatchedCandidates] = useState<any[]>([]);
+  const [matchedCandidates, setMatchedCandidates] = useState<RoleMatch[]>([]);
   const [selectedRoleForMatching, setSelectedRoleForMatching] = useState<JobRole | null>(null);
 
 
@@ -246,6 +245,8 @@ export function AstraHirePage() {
     let processedCount = 0;
     let failedCount = 0;
 
+    const batch = writeBatch(db);
+
     for (const file of filesToProcess) {
         try {
             const resumeDataUri = await convertFileToDataUri(file);
@@ -284,7 +285,9 @@ export function AstraHirePage() {
                     author: 'AI'
                 }]
             };
-            await setDoc(doc(db, "candidates", newCandidate.id), newCandidate);
+            
+            const candidateRef = doc(db, "candidates", newCandidate.id);
+            batch.set(candidateRef, newCandidate);
             processedCount++;
         } catch (error) {
             console.error(`Failed to process ${file.name}:`, error);
@@ -292,12 +295,13 @@ export function AstraHirePage() {
         }
 
         setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount + failedCount }) : null);
-        await new Promise(resolve => setTimeout(resolve, 500)); 
+        await new Promise(resolve => setTimeout(resolve, 200)); 
     }
       
+    await batch.commit();
+
     setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: `Screening complete. ${failedCount > 0 ? `${failedCount} failed.` : ''}` }) : null);
     
-    // Automatically hide the task monitor after a delay
     setTimeout(() => {
         setBackgroundTask(null);
     }, 5000);
@@ -432,18 +436,16 @@ export function AstraHirePage() {
     };
 
     const handleReEngageForRole = async (role: JobRole) => {
-        setIsLoading(true);
+        const taskId = `task-${nanoid(5)}`;
+        setBackgroundTask({ id: taskId, type: 'Matching', status: 'in-progress', progress: 0, total: 1, message: 'Scanning archives...' });
         
         const archivedCandidatesQuery = query(collection(db, 'candidates'), where('archived', '==', true));
         const querySnapshot = await getDocs(archivedCandidatesQuery);
         const archivedCandidates = querySnapshot.docs.map(d => ({id: d.id, ...d.data()} as Candidate));
 
         if (archivedCandidates.length === 0) {
-            toast({
-                title: 'No Archived Candidates',
-                description: 'There are no archived candidates to re-engage.',
-            });
-            setIsLoading(false);
+            toast({ title: 'No Archived Candidates', description: 'There are no archived candidates to re-engage.' });
+            setBackgroundTask(null);
             return;
         }
 
@@ -465,7 +467,7 @@ export function AstraHirePage() {
             if (strongMatches.length > 0) {
                  toast({
                     title: `Found ${strongMatches.length} Potential Matches!`,
-                    description: `Found ${strongMatches.map(m => m.candidate.name).join(', ')}. Check the console for details.`,
+                    description: `Found ${strongMatches.map(m => m.candidate.name).join(', ')}.`,
                 });
                 console.log("Re-engagement opportunities:", strongMatches);
             } else {
@@ -474,50 +476,68 @@ export function AstraHirePage() {
                     description: `The AI did not find any strong matches in the archives for the ${role.title} role.`,
                 });
             }
+            setBackgroundTask(prev => prev ? { ...prev, status: 'complete', progress: 1, message: 'Archive scan complete.' } : null);
         } catch (error) {
             console.error('Re-engagement failed:', error);
-            toast({
-                title: 'Re-engagement Error',
-                description: 'An AI error occurred. Please check the console.',
-                variant: 'destructive',
-            });
+            toast({ title: 'Re-engagement Error', description: 'An AI error occurred. Please check the console.', variant: 'destructive' });
+            setBackgroundTask(prev => prev ? { ...prev, status: 'error', message: 'Error scanning archives.' } : null);
         } finally {
-            setIsLoading(false);
+            setTimeout(() => { setBackgroundTask(null); }, 5000);
         }
     };
   
     const handleFindMatches = async (role: JobRole, mode: 'top' | 'qualified') => {
         const taskId = `task-${nanoid(5)}`;
-        const task: BackgroundTask = {
+        setBackgroundTask({
             id: taskId,
             type: 'Matching',
             status: 'in-progress',
             progress: 0,
             total: 1,
             message: `Finding ${mode === 'top' ? 'top matches' : 'qualified candidates'}...`
-        };
-        setBackgroundTask(task);
+        });
         setSelectedRoleForMatching(role);
         
         try {
-            const availableCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived && (c.status === 'Screening' || c.status === 'Manual Review'));
-            if (availableCandidates.length === 0) {
-                throw new Error("No available candidates in 'Screening' or 'Manual Review' to match.");
-            }
-
-            const result = await findPotentialCandidates({
-                jobRole: role,
-                candidates: availableCandidates.map(c => ({
-                    id: c.id, name: c.name, skills: c.skills, narrative: c.narrative,
-                })),
-            });
+            const lastMatchedDate = role.lastMatched ? new Date(role.lastMatched) : new Date(0);
             
-            let finalMatches = result.matches;
-            if (mode === 'qualified') {
-                finalMatches = result.matches.filter(match => match.confidenceScore >= 70);
+            const allUnassigned = candidates.filter(c => 
+                c.role === 'Unassigned' && !c.archived && (c.status === 'Screening' || c.status === 'Manual Review')
+            );
+
+            // Find candidates added since the last match
+            const newCandidatesToMatch = allUnassigned.filter(c => new Date(c.lastUpdated) > lastMatchedDate);
+            
+            let finalMatches: RoleMatch[] = role.roleMatches || [];
+
+            if (newCandidatesToMatch.length > 0) {
+                 const result = await findPotentialCandidates({
+                    jobRole: role,
+                    candidates: newCandidatesToMatch.map(c => ({
+                        id: c.id, name: c.name, skills: c.skills, narrative: c.narrative,
+                    })),
+                });
+                
+                // Merge new results with existing cached results, preventing duplicates
+                const existingMatchIds = new Set(finalMatches.map(m => m.candidateId));
+                const uniqueNewMatches = result.matches.filter(m => !existingMatchIds.has(m.candidateId));
+                finalMatches = [...finalMatches, ...uniqueNewMatches].sort((a, b) => b.confidenceScore - a.confidenceScore);
+
+                // Update the role in Firestore with the new cache
+                await updateDoc(doc(db, 'roles', role.id), {
+                    roleMatches: finalMatches,
+                    lastMatched: new Date().toISOString()
+                });
+            } else {
+                toast({ title: "Using Cached Results", description: "No new candidates to analyze. Displaying previous matches." });
             }
 
-            setMatchedCandidates(finalMatches);
+            let matchesToShow = finalMatches;
+            if (mode === 'qualified') {
+                matchesToShow = finalMatches.filter(match => match.confidenceScore >= 70);
+            }
+
+            setMatchedCandidates(matchesToShow);
             setIsMatchesDialogOpen(true);
             setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', progress: 1, message: 'Matching complete!' }) : null);
 
@@ -565,7 +585,6 @@ export function AstraHirePage() {
         return <RolesTab 
             roles={roles} 
             candidates={candidates} 
-            onUpdateCandidate={handleUpdateCandidate} 
             onViewCandidates={handleViewCandidatesForRole} 
             onReEngage={handleReEngageForRole} 
             onAddRole={handleAddRole} 

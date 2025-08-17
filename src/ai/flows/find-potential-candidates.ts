@@ -49,6 +49,9 @@ const prompt = ai.definePrompt({
   name: 'findPotentialCandidatesPrompt',
   input: {schema: FindPotentialCandidatesInputSchema},
   output: {schema: FindPotentialCandidatesOutputSchema},
+  config: {
+    temperature: 0.1 // Lower temperature for more deterministic, consistent scoring
+  },
   prompt: `You are an expert AI recruiter. Your task is to analyze a list of candidates and determine which ones are a good fit for the provided job role.
 
 **Job Role:**
