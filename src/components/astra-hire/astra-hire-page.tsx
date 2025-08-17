@@ -738,7 +738,7 @@ export function AstraHirePage() {
             candidates={candidates.filter(c => c.role === 'Unassigned' && !c.archived)}
             roles={roles}
             onUpdateCandidate={handleUpdateCandidate}
-            onAddRole={onAddRole}
+            onAddRole={handleAddRole}
             onDeleteCandidate={handleDeleteCandidate}
             onRunBulkMatch={handleRunBulkMatch}
             matchResults={matchResults}
