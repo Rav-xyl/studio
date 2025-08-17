@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MessageSquare, PlusCircle } from 'lucide-react';
+import { Loader2, MessageSquare, PlusCircle, Trash2, Edit, Send, CornerDownRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -13,15 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-
-type FeedbackNote = {
-    id: string;
-    author: string;
-    note: string;
-    type: 'Suggestion' | 'Bug' | 'Question' | 'General';
-    status: 'Open' | 'In Progress' | 'Resolved';
-    createdAt: any;
-};
+import type { FeedbackNote } from '@/lib/types';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 type UserSession = {
     username: string;
@@ -37,6 +30,14 @@ export default function FeedbackPage() {
     const [newNote, setNewNote] = useState('');
     const [noteType, setNoteType] = useState<FeedbackNote['type']>('General');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // State for editing a note
+    const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+    const [editingNoteText, setEditingNoteText] = useState('');
+    
+    // State for owner replies
+    const [replyingToNoteId, setReplyingToNoteId] = useState<string | null>(null);
+    const [replyText, setReplyText] = useState('');
 
     useEffect(() => {
         const authData = sessionStorage.getItem('feedback-auth');
@@ -80,6 +81,7 @@ export default function FeedbackPage() {
                 type: noteType,
                 status: 'Open',
                 createdAt: serverTimestamp(),
+                ownerReply: '',
             });
             setNewNote('');
             setNoteType('General');
@@ -100,12 +102,35 @@ export default function FeedbackPage() {
         const noteRef = doc(db, 'feedback', id);
         await updateDoc(noteRef, { status });
     };
+    
+    const startEditing = (note: FeedbackNote) => {
+        setEditingNoteId(note.id);
+        setEditingNoteText(note.note);
+    };
+
+    const cancelEditing = () => {
+        setEditingNoteId(null);
+        setEditingNoteText('');
+    };
+
+    const handleUpdateNote = async () => {
+        if (!editingNoteId || !editingNoteText.trim()) return;
+        const noteRef = doc(db, 'feedback', editingNoteId);
+        await updateDoc(noteRef, { note: editingNoteText });
+        toast({ title: "Note Updated" });
+        cancelEditing();
+    };
+    
+    const handleAddReply = async () => {
+        if (!replyingToNoteId || !replyText.trim()) return;
+        const noteRef = doc(db, 'feedback', replyingToNoteId);
+        await updateDoc(noteRef, { ownerReply: replyText });
+        toast({ title: "Reply Added" });
+        setReplyingToNoteId(null);
+        setReplyText('');
+    };
 
     const handleDeleteNote = async (id: string) => {
-        if (session?.username !== 'owner') {
-            toast({ title: "Permission Denied", description: "Only the owner can delete notes.", variant: "destructive" });
-            return;
-        }
         await deleteDoc(doc(db, 'feedback', id));
         toast({ title: "Note Deleted" });
     };
@@ -191,10 +216,61 @@ export default function FeedbackPage() {
                             </CardHeader>
                             <CardContent>
                                 <Separator className="mb-4" />
-                                <p className="text-foreground">{note.note}</p>
-                                {session.username === 'owner' && (
-                                    <div className="text-right mt-2">
-                                        <Button variant="link" className="text-destructive h-auto p-0" onClick={() => handleDeleteNote(note.id)}>Delete</Button>
+                                {editingNoteId === note.id ? (
+                                    <div className="space-y-2">
+                                        <Textarea value={editingNoteText} onChange={(e) => setEditingNoteText(e.target.value)} className="h-24" />
+                                        <div className="flex justify-end gap-2">
+                                            <Button variant="ghost" size="sm" onClick={cancelEditing}>Cancel</Button>
+                                            <Button size="sm" onClick={handleUpdateNote}>Save Changes</Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-foreground whitespace-pre-wrap">{note.note}</p>
+                                )}
+
+                                {note.ownerReply && (
+                                    <div className="mt-4 pl-4 border-l-2 border-primary">
+                                        <p className="text-sm font-semibold text-primary">Owner's Reply:</p>
+                                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{note.ownerReply}</p>
+                                    </div>
+                                )}
+
+                                {(session.username === 'owner' && !note.ownerReply) && (
+                                    replyingToNoteId === note.id ? (
+                                        <div className="mt-4 space-y-2">
+                                            <Textarea placeholder="Type your answer here..." value={replyText} onChange={(e) => setReplyText(e.target.value)} className="h-20" />
+                                            <div className="flex justify-end gap-2">
+                                                <Button variant="ghost" size="sm" onClick={() => setReplyingToNoteId(null)}>Cancel</Button>
+                                                <Button size="sm" onClick={handleAddReply}><Send className="mr-2 h-4 w-4" /> Post Reply</Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <Button variant="outline" size="sm" className="mt-4 w-full" onClick={() => { setReplyingToNoteId(note.id); setReplyText(''); }}>
+                                            <CornerDownRight className="mr-2 h-4 w-4" /> Answer Question
+                                        </Button>
+                                    )
+                                )}
+
+                                {(session.username === note.author || session.username === 'owner') && (
+                                    <div className="text-right mt-2 flex justify-end gap-2">
+                                        {session.username === note.author && editingNoteId !== note.id && (
+                                            <Button variant="link" className="text-muted-foreground h-auto p-0" onClick={() => startEditing(note)}><Edit className="mr-1 h-3 w-3"/> Edit</Button>
+                                        )}
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="link" className="text-destructive h-auto p-0"><Trash2 className="mr-1 h-3 w-3"/> Delete</Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                    <AlertDialogDescription>This action cannot be undone and will permanently delete this note.</AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleDeleteNote(note.id)}>Confirm Deletion</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
                                     </div>
                                 )}
                             </CardContent>

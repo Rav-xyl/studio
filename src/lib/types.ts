@@ -108,3 +108,13 @@ export interface RubricChange {
   reason: string;
   status: 'Pending' | 'Approved' | 'Rejected';
 }
+
+export type FeedbackNote = {
+    id: string;
+    author: string;
+    note: string;
+    type: 'Suggestion' | 'Bug' | 'Question' | 'General';
+    status: 'Open' | 'In Progress' | 'Resolved';
+    createdAt: any;
+    ownerReply?: string;
+};
