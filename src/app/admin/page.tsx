@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2, Shield, Send, Bell, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, updateDoc, doc, setDoc, deleteDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, setDoc, deleteDoc, query, where, getDocs, writeBatch, getDoc } from 'firebase/firestore';
 import type { Candidate, JobRole, ProactiveSourcingNotification } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { GauntletMonitorTable } from '@/components/admin/gauntlet-monitor-table';
@@ -103,7 +103,21 @@ export default function AdminDashboardPage() {
     
     const handleAssignCandidate = async (notification: ProactiveSourcingNotification) => {
         try {
-            await updateDoc(doc(db, 'candidates', notification.candidateId), {
+            // DIVINE FIX: Verify candidate exists before assigning
+            const candidateRef = doc(db, 'candidates', notification.candidateId);
+            const candidateDoc = await getDoc(candidateRef);
+
+            if (!candidateDoc.exists()) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Ghost Candidate Detected',
+                    description: `Candidate ${notification.candidateName} no longer exists. Deleting stale notification.`,
+                });
+                await deleteDoc(doc(db, 'notifications', notification.id));
+                return;
+            }
+
+            await updateDoc(candidateRef, {
                 role: notification.roleTitle
             });
             await updateDoc(doc(db, 'notifications', notification.id), {
@@ -201,7 +215,9 @@ export default function AdminDashboardPage() {
         );
     }
     
-    const pendingNotifications = notifications.filter(n => n.status === 'pending');
+    // DIVINE FIX: Filter out notifications for candidates who no longer exist.
+    const candidateIds = new Set(allCandidates.map(c => c.id));
+    const pendingNotifications = notifications.filter(n => n.status === 'pending' && candidateIds.has(n.candidateId));
 
     return (
         <div className="p-4 sm:p-6 lg:p-10 min-h-screen bg-secondary/50">
