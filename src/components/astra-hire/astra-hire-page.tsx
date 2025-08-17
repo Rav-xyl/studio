@@ -20,7 +20,7 @@ import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, addDoc, serverTimestamp, arrayUnion, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, addDoc, serverTimestamp, arrayUnion, deleteDoc, getDoc } from 'firebase/firestore';
 import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
 import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
@@ -419,24 +419,34 @@ export function AstraHirePage() {
 
     const handleDeleteCandidate = async (candidateId: string) => {
       try {
-          // Delete the candidate document
-          await deleteDoc(doc(db, 'candidates', candidateId));
+          const batch = writeBatch(db);
 
-          // Find and delete all notifications for this candidate
+          // 1. Delete the candidate document
+          const candidateRef = doc(db, 'candidates', candidateId);
+          batch.delete(candidateRef);
+
+          // 2. Find and delete all notifications for this candidate
           const notificationsQuery = query(collection(db, 'notifications'), where('candidateId', '==', candidateId));
-          const querySnapshot = await getDocs(notificationsQuery);
+          const notificationsSnapshot = await getDocs(notificationsQuery);
+          notificationsSnapshot.forEach((doc) => {
+              batch.delete(doc.ref);
+          });
 
-          if (!querySnapshot.empty) {
-              const batch = writeBatch(db);
-              querySnapshot.forEach((doc) => {
-                  batch.delete(doc.ref);
-              });
-              await batch.commit();
-          }
+          // 3. Purge candidate from all role caches
+          const rolesSnapshot = await getDocs(collection(db, 'roles'));
+          rolesSnapshot.forEach(roleDoc => {
+              const roleData = roleDoc.data() as JobRole;
+              if (roleData.roleMatches && roleData.roleMatches.some(m => m.candidateId === candidateId)) {
+                  const updatedMatches = roleData.roleMatches.filter(m => m.candidateId !== candidateId);
+                  batch.update(roleDoc.ref, { roleMatches: updatedMatches });
+              }
+          });
 
-          toast({ title: "Candidate Deleted", description: "The candidate and all related notifications have been permanently removed." });
+          await batch.commit();
+          
+          toast({ title: "Candidate Deleted", description: "The candidate has been permanently removed from all records." });
       } catch (error) {
-          console.error("Failed to delete candidate:", error);
+          console.error("Failed to delete candidate and associated data:", error);
           toast({ title: "Deletion Failed", description: "Could not delete the candidate. See console for details.", variant: 'destructive' });
       }
     };
@@ -510,16 +520,19 @@ export function AstraHirePage() {
         setSelectedRoleForMatching(role);
         
         try {
-            const lastMatchedDate = role.lastMatched ? new Date(role.lastMatched) : new Date(0);
+            const roleRef = doc(db, 'roles', role.id);
+            const roleDoc = await getDoc(roleRef);
+            const currentRoleData = roleDoc.data() as JobRole;
+            
+            const lastMatchedDate = currentRoleData.lastMatched ? new Date(currentRoleData.lastMatched) : new Date(0);
             
             const allUnassigned = candidates.filter(c => 
                 c.role === 'Unassigned' && !c.archived && (c.status === 'Screening')
             );
-
-            // Find candidates added since the last match
+            
             const newCandidatesToMatch = allUnassigned.filter(c => new Date(c.lastUpdated) > lastMatchedDate);
             
-            let finalMatches: RoleMatch[] = role.roleMatches || [];
+            let finalMatches: RoleMatch[] = currentRoleData.roleMatches || [];
 
             if (newCandidatesToMatch.length > 0) {
                  const result = await findPotentialCandidates({
@@ -529,13 +542,11 @@ export function AstraHirePage() {
                     })),
                 });
                 
-                // Merge new results with existing cached results, preventing duplicates
                 const existingMatchIds = new Set(finalMatches.map(m => m.candidateId));
                 const uniqueNewMatches = result.matches.filter(m => !existingMatchIds.has(m.candidateId));
                 finalMatches = [...finalMatches, ...uniqueNewMatches].sort((a, b) => b.confidenceScore - a.confidenceScore);
 
-                // Update the role in Firestore with the new cache
-                await updateDoc(doc(db, 'roles', role.id), {
+                await updateDoc(roleRef, {
                     roleMatches: finalMatches,
                     lastMatched: new Date().toISOString()
                 });
