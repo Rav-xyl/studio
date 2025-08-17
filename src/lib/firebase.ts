@@ -11,6 +11,7 @@ const firebaseConfig = {
   apiKey: 'AIzaSyDwwbVgb6ZpW3qhMz1dRe-3qey8gPvkz1o',
   authDomain: 'talentflow-ai-1lu7m.firebaseapp.com',
   messagingSenderId: '523888981631',
+  measurementId: 'G-XXXXXXXXXX', // This was missing
 };
 
 // Initialize Firebase
