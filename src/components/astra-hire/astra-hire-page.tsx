@@ -664,8 +664,8 @@ export function AstraHirePage() {
             candidates={candidates.filter(c => c.role === 'Unassigned' && !c.archived)}
             roles={roles}
             onUpdateCandidate={handleUpdateCandidate}
-            onAddRole={onAddRole}
-            onDeleteCandidate={onDeleteCandidate}
+            onAddRole={handleAddRole}
+            onDeleteCandidate={handleDeleteCandidate}
         />;
        case 'gauntlet':
         return <GauntletPortalTab candidates={candidates} />;
