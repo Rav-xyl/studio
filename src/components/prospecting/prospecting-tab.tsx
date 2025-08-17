@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Candidate, JobRole } from "@/lib/types";
@@ -17,8 +18,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, PlusCircle } from "lucide-react";
-
 
 const getInitials = (name: string) => {
     if (!name) return '??';
@@ -35,6 +34,7 @@ interface ProspectingTabProps {
 export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole }: ProspectingTabProps) {
     const [matchResults, setMatchResults] = useState<Record<string, any[]>>({});
     const [isLoading, setIsLoading] = useState<Record<string, boolean>>({});
+    const [isBulkLoading, setIsBulkLoading] = useState(false);
     const { toast } = useToast();
     
     const handleFindMatches = async (candidate: Candidate) => {
@@ -55,6 +55,40 @@ export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole
             setIsLoading(prev => ({ ...prev, [candidate.id]: false }));
         }
     };
+
+    const handleFindAllMatches = async () => {
+        if (roles.length === 0) {
+            toast({ title: "No Roles to Match", description: "Please create a client role before running the match process.", variant: "destructive"});
+            return;
+        }
+        setIsBulkLoading(true);
+        toast({ title: "AI Sourcing Started", description: `Analyzing ${candidates.length} candidates against ${roles.length} roles. This may take a moment.` });
+
+        const allMatchPromises = candidates.map(candidate => 
+            findPotentialRoles({
+                candidateProfile: {
+                    skills: candidate.skills,
+                    narrative: candidate.narrative,
+                },
+                jobRoles: roles,
+            }).then(result => ({ candidateId: candidate.id, matches: result.matches }))
+        );
+
+        try {
+            const allResults = await Promise.all(allMatchPromises);
+            const newMatchResults: Record<string, any[]> = {};
+            allResults.forEach(result => {
+                newMatchResults[result.candidateId] = result.matches;
+            });
+            setMatchResults(prev => ({ ...prev, ...newMatchResults }));
+            toast({ title: "Analysis Complete!", description: "AI role matching has been completed for all unassigned candidates." });
+        } catch (error) {
+            console.error("Failed to run bulk match:", error);
+            toast({ title: "Bulk Match Error", description: "An error occurred during the bulk analysis. Please check the console.", variant: "destructive"});
+        } finally {
+            setIsBulkLoading(false);
+        }
+    };
     
     const handleAssignRole = (candidate: Candidate, roleTitle: string) => {
         onUpdateCandidate({ ...candidate, role: roleTitle });
@@ -63,11 +97,17 @@ export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole
 
     return (
         <div className="fade-in-slide-up">
-            <div className="mb-6">
-                <h2 className="text-3xl font-bold tracking-tighter">Prospecting Hub</h2>
-                <p className="text-muted-foreground mt-1">
-                    Discover and assign your top unassigned talent to open roles.
-                </p>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tighter">Prospecting Hub</h2>
+                    <p className="text-muted-foreground mt-1">
+                        Discover and assign your top unassigned talent to open roles.
+                    </p>
+                </div>
+                 <Button onClick={handleFindAllMatches} disabled={isBulkLoading || candidates.length === 0}>
+                    {isBulkLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                    Run AI Match for All
+                </Button>
             </div>
             
             <div className="rounded-lg border">
@@ -117,7 +157,7 @@ export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole
                                                     <DropdownMenuSeparator />
                                                     {matches.map(match => (
                                                         <DropdownMenuItem key={match.roleId} onClick={() => handleAssignRole(candidate, match.roleTitle)}>
-                                                            <div className="flex justify-between w-full">
+                                                            <div className="flex justify-between w-full items-center gap-2">
                                                                 <span>{match.roleTitle}</span>
                                                                 <Badge variant="secondary">{match.confidenceScore}</Badge>
                                                             </div>
@@ -126,7 +166,7 @@ export function ProspectingTab({ candidates, roles, onUpdateCandidate, onAddRole
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         ) : (
-                                            <Button variant="ghost" size="sm" onClick={() => handleFindMatches(candidate)} disabled={loading}>
+                                            <Button variant="ghost" size="sm" onClick={() => handleFindMatches(candidate)} disabled={loading || roles.length === 0}>
                                                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                                                 Find Matches
                                             </Button>
