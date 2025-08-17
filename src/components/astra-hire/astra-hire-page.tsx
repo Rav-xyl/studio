@@ -28,6 +28,7 @@ import { findPotentialRoles } from '@/ai/flows/find-potential-roles';
 import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
 import { Card, CardContent } from '../ui/card';
 import { Progress } from '../ui/progress';
+import { MatchedCandidatesDialog } from '../roles/matched-candidates-dialog';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -53,7 +54,7 @@ const KANBAN_STAGES: KanbanStatus[] = ['Sourcing', 'Screening', 'Manual Review',
 
 interface BackgroundTask {
     id: string;
-    type: 'Screening' | 'Simulation' | 'Audit';
+    type: 'Screening' | 'Simulation' | 'Audit' | 'Matching';
     status: 'in-progress' | 'complete' | 'error';
     progress: number;
     total: number;
@@ -70,6 +71,10 @@ export function AstraHirePage() {
   const [filteredRole, setFilteredRole] = useState<JobRole | null>(null);
   const [suggestedChanges, setSuggestedChanges] = useState<RubricChange[]>([]);
   const [backgroundTask, setBackgroundTask] = useState<BackgroundTask | null>(null);
+  const [isMatching, setIsMatching] = useState(false);
+  const [isMatchesDialogOpen, setIsMatchesDialogOpen] = useState(false);
+  const [matchedCandidates, setMatchedCandidates] = useState<any[]>([]);
+  const [selectedRoleForMatching, setSelectedRoleForMatching] = useState<JobRole | null>(null);
 
 
   // UI State
@@ -481,10 +486,92 @@ export function AstraHirePage() {
         }
     };
   
+    const handleFindMatches = async (role: JobRole, mode: 'top' | 'qualified') => {
+        const taskId = `task-${nanoid(5)}`;
+        const task: BackgroundTask = {
+            id: taskId,
+            type: 'Matching',
+            status: 'in-progress',
+            progress: 0,
+            total: 1,
+            message: `Finding ${mode === 'top' ? 'top matches' : 'qualified candidates'}...`
+        };
+        setBackgroundTask(task);
+        setSelectedRoleForMatching(role);
+        
+        try {
+            const availableCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived && (c.status === 'Screening' || c.status === 'Manual Review'));
+            if (availableCandidates.length === 0) {
+                throw new Error("No available candidates in 'Screening' or 'Manual Review' to match.");
+            }
+
+            const result = await findPotentialCandidates({
+                jobRole: role,
+                candidates: availableCandidates.map(c => ({
+                    id: c.id, name: c.name, skills: c.skills, narrative: c.narrative,
+                })),
+            });
+            
+            let finalMatches = result.matches;
+            if (mode === 'qualified') {
+                finalMatches = result.matches.filter(match => match.confidenceScore >= 70);
+            }
+
+            setMatchedCandidates(finalMatches);
+            setIsMatchesDialogOpen(true);
+            setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', progress: 1, message: 'Matching complete!' }) : null);
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Could not find potential candidates.";
+            toast({ title: 'Matching Error', description: errorMessage, variant: 'destructive' });
+            setBackgroundTask(prev => prev ? ({ ...prev, status: 'error', message: 'Matching failed.' }) : null);
+        } finally {
+            setTimeout(() => { setBackgroundTask(null); }, 5000);
+        }
+    };
+    
+    const handleAssignRole = (candidateId: string) => {
+        if (!selectedRoleForMatching) return;
+        const candidate = candidates.find(c => c.id === candidateId);
+        if (candidate) {
+            handleUpdateCandidate({ ...candidate, role: selectedRoleForMatching.title });
+            toast({ title: "Role Assigned!", description: `${candidate.name} has been assigned to ${selectedRoleForMatching.title}.` });
+        }
+        setMatchedCandidates(prev => prev.filter(m => m.candidateId !== candidateId));
+    };
+
+    const handleAssignAllRoles = (matchesToAssign: any[]) => {
+        if (!selectedRoleForMatching) return;
+        
+        matchesToAssign.forEach(match => {
+            const candidate = candidates.find(c => c.id === match.candidateId);
+            if (candidate) {
+                handleUpdateCandidate({ ...candidate, role: selectedRoleForMatching.title });
+            }
+        });
+
+        toast({
+            title: "Bulk Assignment Complete!",
+            description: `Assigned ${matchesToAssign.length} candidates to the ${selectedRoleForMatching.title} role.`
+        });
+        
+        setIsMatchesDialogOpen(false);
+        setMatchedCandidates([]);
+    };
+
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
-        return <RolesTab roles={roles} candidates={candidates} onUpdateCandidate={handleUpdateCandidate} onViewCandidates={handleViewCandidatesForRole} onReEngage={handleReEngageForRole} onAddRole={handleAddRole} onDeleteRole={handleDeleteRole} />;
+        return <RolesTab 
+            roles={roles} 
+            candidates={candidates} 
+            onUpdateCandidate={handleUpdateCandidate} 
+            onViewCandidates={handleViewCandidatesForRole} 
+            onReEngage={handleReEngageForRole} 
+            onAddRole={handleAddRole} 
+            onDeleteRole={handleDeleteRole} 
+            onFindMatches={handleFindMatches}
+        />;
       case 'pool':
         return (
             <CandidatePoolTab 
@@ -526,6 +613,15 @@ export function AstraHirePage() {
         onClose={() => setIsSaarthiReportOpen(false)}
         reportData={lastSaarthiReport}
       />
+      <MatchedCandidatesDialog
+        isOpen={isMatchesDialogOpen}
+        onClose={() => setIsMatchesDialogOpen(false)}
+        matches={matchedCandidates}
+        roleTitle={selectedRoleForMatching?.title || ''}
+        onAssign={handleAssignRole}
+        onAssignAll={handleAssignAllRoles}
+      />
+
 
       <AstraHireHeader onReportClick={() => {
           if (lastSaarthiReport) {

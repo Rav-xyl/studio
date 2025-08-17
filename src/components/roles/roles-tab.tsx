@@ -8,8 +8,6 @@ import { GenerateJdDialog } from './generate-jd-dialog';
 import { RoleCard } from './role-card';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
-import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
-import { MatchedCandidatesDialog } from './matched-candidates-dialog';
 
 interface RolesTabProps {
     roles: JobRole[];
@@ -19,125 +17,19 @@ interface RolesTabProps {
     onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>) => void;
     onDeleteRole: (roleId: string, roleTitle: string) => void;
     onUpdateCandidate: (candidate: Candidate) => void;
+    onFindMatches: (role: JobRole, mode: 'top' | 'qualified') => void;
 }
 
 
-export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAddRole, onDeleteRole, onUpdateCandidate }: RolesTabProps) {
+export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAddRole, onDeleteRole, onUpdateCandidate, onFindMatches }: RolesTabProps) {
     const [isJdDialogOpen, setIsJdDialogOpen] = useState(false);
-    const [isMatching, setIsMatching] = useState(false);
-    const [isMatchesDialogOpen, setIsMatchesDialogOpen] = useState(false);
-    const [matchedCandidates, setMatchedCandidates] = useState<any[]>([]);
-    const [selectedRoleForMatching, setSelectedRoleForMatching] = useState<JobRole | null>(null);
-    const { toast } = useToast();
-
-    const handleFindTopMatches = async (role: JobRole) => {
-        setIsMatching(true);
-        setSelectedRoleForMatching(role);
-        try {
-            const availableCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived && (c.status === 'Screening' || c.status === 'Manual Review'));
-            if (availableCandidates.length === 0) {
-                toast({
-                    title: "No available candidates to match",
-                    description: "No 'Unassigned' candidates were found in the 'Screening' or 'Manual Review' columns.",
-                    variant: "destructive"
-                });
-                return;
-            }
-
-            const result = await findPotentialCandidates({
-                jobRole: role,
-                candidates: availableCandidates.map(c => ({
-                    id: c.id,
-                    name: c.name,
-                    skills: c.skills,
-                    narrative: c.narrative,
-                })),
-            });
-            
-            setMatchedCandidates(result.matches);
-            setIsMatchesDialogOpen(true);
-
-        } catch (error) {
-            console.error("Failed to find top candidates:", error);
-            toast({ title: 'Error', description: "Could not find potential candidates.", variant: 'destructive' });
-        } finally {
-            setIsMatching(false);
-        }
+    const [matchingRoleId, setMatchingRoleId] = useState<string | null>(null);
+    
+    const handleFindMatches = async (role: JobRole, mode: 'top' | 'qualified') => {
+        setMatchingRoleId(role.id);
+        await onFindMatches(role, mode);
+        setMatchingRoleId(null);
     }
-
-    const handleFindAllQualified = async (role: JobRole) => {
-        setIsMatching(true);
-        setSelectedRoleForMatching(role);
-        try {
-            const availableCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived && (c.status === 'Screening' || c.status === 'Manual Review'));
-            if (availableCandidates.length === 0) {
-                toast({
-                    title: "No available candidates to match",
-                    description: "No 'Unassigned' candidates were found in 'Screening' or 'Manual Review'.",
-                });
-                return;
-            }
-
-            const result = await findPotentialCandidates({
-                jobRole: role,
-                candidates: availableCandidates.map(c => ({
-                    id: c.id,
-                    name: c.name,
-                    skills: c.skills,
-                    narrative: c.narrative,
-                })),
-            });
-
-            const qualifiedMatches = result.matches.filter(match => match.confidenceScore >= 70);
-            
-            if (qualifiedMatches.length === 0) {
-                 toast({
-                    title: "No Qualified Candidates Found",
-                    description: "The AI did not find any candidates meeting the 70+ confidence score for this role.",
-                });
-                return;
-            }
-
-            setMatchedCandidates(qualifiedMatches);
-            setIsMatchesDialogOpen(true);
-
-        } catch (error) {
-             console.error("Failed to find qualified candidates:", error);
-            toast({ title: 'Error', description: "An AI error occurred while finding qualified candidates.", variant: 'destructive' });
-        } finally {
-            setIsMatching(false);
-        }
-    };
-
-    const handleAssignRole = (candidateId: string) => {
-        if (!selectedRoleForMatching) return;
-        const candidate = candidates.find(c => c.id === candidateId);
-        if (candidate) {
-            onUpdateCandidate({ ...candidate, role: selectedRoleForMatching.title });
-            toast({ title: "Role Assigned!", description: `${candidate.name} has been assigned to ${selectedRoleForMatching.title}.` });
-        }
-        // Also remove the assigned candidate from the dialog list
-        setMatchedCandidates(prev => prev.filter(m => m.candidateId !== candidateId));
-    };
-
-    const handleAssignAllRoles = (matchesToAssign: any[]) => {
-        if (!selectedRoleForMatching) return;
-        
-        matchesToAssign.forEach(match => {
-            const candidate = candidates.find(c => c.id === match.candidateId);
-            if (candidate) {
-                onUpdateCandidate({ ...candidate, role: selectedRoleForMatching.title });
-            }
-        });
-
-        toast({
-            title: "Bulk Assignment Complete!",
-            description: `Assigned ${matchesToAssign.length} candidates to the ${selectedRoleForMatching.title} role.`
-        });
-        
-        setIsMatchesDialogOpen(false);
-        setMatchedCandidates([]);
-    };
     
     return (
         <div className="fade-in-slide-up">
@@ -160,9 +52,8 @@ export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAd
                                 role={role} 
                                 onViewCandidates={onViewCandidates} 
                                 onReEngage={onReEngage}
-                                onFindTopMatches={handleFindTopMatches}
-                                onFindAllQualified={handleFindAllQualified}
-                                isMatching={isMatching && selectedRoleForMatching?.id === role.id}
+                                onFindMatches={handleFindMatches}
+                                isMatching={matchingRoleId === role.id}
                                 style={{ '--stagger-index': index } as React.CSSProperties}
                             />
                             <AlertDialog>
@@ -195,14 +86,6 @@ export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAd
                 </div>
             )}
             <GenerateJdDialog open={isJdDialogOpen} onOpenChange={setIsJdDialogOpen} onSave={onAddRole} />
-            <MatchedCandidatesDialog
-                isOpen={isMatchesDialogOpen}
-                onClose={() => setIsMatchesDialogOpen(false)}
-                matches={matchedCandidates}
-                roleTitle={selectedRoleForMatching?.title || ''}
-                onAssign={handleAssignRole}
-                onAssignAll={handleAssignAllRoles}
-            />
         </div>
     )
 }

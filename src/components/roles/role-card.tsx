@@ -8,13 +8,12 @@ interface RoleCardProps {
     role: JobRole
     onViewCandidates: (role: JobRole) => void;
     onReEngage: (role: JobRole) => void;
-    onFindTopMatches: (role: JobRole) => void;
-    onFindAllQualified: (role: JobRole) => void;
+    onFindMatches: (role: JobRole, mode: 'top' | 'qualified') => void;
     isMatching: boolean;
     style?: React.CSSProperties;
 }
 
-export function RoleCard({ role, onViewCandidates, onReEngage, onFindTopMatches, onFindAllQualified, isMatching, style }: RoleCardProps) {
+export function RoleCard({ role, onViewCandidates, onReEngage, onFindMatches, isMatching, style }: RoleCardProps) {
 
     return (
         <Card style={style} className="bg-white flex flex-col border-border/50 hover:border-primary/50 transition-colors">
@@ -39,11 +38,11 @@ export function RoleCard({ role, onViewCandidates, onReEngage, onFindTopMatches,
                  <Button variant="secondary" className='w-full' onClick={() => onReEngage(role)}>
                     <RefreshCw className="mr-2 h-4 w-4" /> Re-engage Archives
                 </Button>
-                <Button variant="secondary" className='w-full' onClick={() => onFindAllQualified(role)}>
-                    <ListChecks className="mr-2 h-4 w-4" />
+                <Button variant="secondary" className='w-full' onClick={() => onFindMatches(role, 'qualified')} disabled={isMatching}>
+                     {isMatching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListChecks className="mr-2 h-4 w-4" />}
                      Find All Qualified
                 </Button>
-                <Button variant="default" className='w-full col-span-2' onClick={() => onFindTopMatches(role)} disabled={isMatching}>
+                <Button variant="default" className='w-full col-span-2' onClick={() => onFindMatches(role, 'top')} disabled={isMatching}>
                     {isMatching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                      Find Top Matches (AI)
                 </Button>
