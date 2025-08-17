@@ -53,8 +53,9 @@ export function ProspectingTab({
     const handleFindMatches = async (candidate: Candidate) => {
         setIsLoading(prev => ({ ...prev, [candidate.id]: true }));
         try {
-            // Re-using the more robust findPotentialCandidates flow
             const allMatches: any[] = [];
+            // This loop iterates through all available roles to find the best matches for a single candidate.
+            // It uses the same unified AI engine as the "Find Top Matches" feature in the Client Roles tab.
             for (const role of roles) {
                 const result = await findPotentialCandidates({
                     jobRole: role,
@@ -199,3 +200,5 @@ export function ProspectingTab({
         </div>
     );
 }
+
+    
