@@ -572,29 +572,46 @@ export function AstraHirePage() {
         }
     };
     
-    const handleAssignRole = (candidateId: string) => {
+    const handleAssignRole = async (candidateId: string) => {
         if (!selectedRoleForMatching) return;
         const candidate = candidates.find(c => c.id === candidateId);
         if (candidate) {
-            handleUpdateCandidate({ ...candidate, role: selectedRoleForMatching.title });
+            // Update candidate state first
+            await handleUpdateCandidate({ ...candidate, role: selectedRoleForMatching.title });
+
+            // Now, update the role's cache to remove the assigned candidate
+            const roleRef = doc(db, 'roles', selectedRoleForMatching.id);
+            const updatedMatches = (selectedRoleForMatching.roleMatches || []).filter(m => m.candidateId !== candidateId);
+            await updateDoc(roleRef, {
+                roleMatches: updatedMatches
+            });
+            
+            // Update local state for the dialog
+            setMatchedCandidates(prev => prev.filter(m => m.candidateId !== candidateId));
+            
             toast({ title: "Role Assigned!", description: `${candidate.name} has been assigned to ${selectedRoleForMatching.title}.` });
         }
-        setMatchedCandidates(prev => prev.filter(m => m.candidateId !== candidateId));
     };
 
-    const handleAssignAllRoles = (matchesToAssign: any[]) => {
+    const handleAssignAllRoles = async (matchesToAssign: any[]) => {
         if (!selectedRoleForMatching) return;
         
+        const batch = writeBatch(db);
+
         matchesToAssign.forEach(match => {
-            const candidate = candidates.find(c => c.id === match.candidateId);
-            if (candidate) {
-                handleUpdateCandidate({ ...candidate, role: selectedRoleForMatching.title });
-            }
+            const candidateRef = doc(db, 'candidates', match.candidateId);
+            batch.update(candidateRef, { role: selectedRoleForMatching.title });
         });
+
+        // Clear the entire cache for this role after bulk assignment
+        const roleRef = doc(db, 'roles', selectedRoleForMatching.id);
+        batch.update(roleRef, { roleMatches: [] });
+
+        await batch.commit();
 
         toast({
             title: "Bulk Assignment Complete!",
-            description: `Assigned ${matchesToAssign.length} candidates to the ${selectedRoleForMatching.title} role.`
+            description: `Assigned ${matchesToAssign.length} candidates to the ${selectedRoleForMatching.title} role and cleared cache.`
         });
         
         setIsMatchesDialogOpen(false);
