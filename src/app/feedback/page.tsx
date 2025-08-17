@@ -5,10 +5,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MessageSquare, PlusCircle, Trash2, Edit, Send, LogOut, Home } from 'lucide-react';
+import { Loader2, MessageSquare, PlusCircle, Trash2, Edit, Send, LogOut, Home, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, arrayUnion } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { nanoid } from 'nanoid';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,6 +19,9 @@ import { Separator } from '@/components/ui/separator';
 import type { FeedbackNote, FeedbackReply } from '@/lib/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import Image from 'next/image';
+import { Input } from '@/components/ui/input';
+
 
 type UserSession = {
     username: string;
@@ -26,6 +30,18 @@ type UserSession = {
 const getInitials = (name: string) => {
     return name ? name.split(' ').map(n => n[0]).join('') : '';
 }
+
+const uploadFiles = async (files: FileList, noteId: string): Promise<string[]> => {
+    const attachmentUrls: string[] = [];
+    for (const file of Array.from(files)) {
+        const filePath = `feedback/${noteId}/${file.name}-${nanoid(5)}`;
+        const fileRef = ref(storage, filePath);
+        await uploadBytes(fileRef, file);
+        const url = await getDownloadURL(fileRef);
+        attachmentUrls.push(url);
+    }
+    return attachmentUrls;
+};
 
 export default function FeedbackPage() {
     const router = useRouter();
@@ -36,6 +52,7 @@ export default function FeedbackPage() {
     
     const [newNote, setNewNote] = useState('');
     const [noteType, setNoteType] = useState<FeedbackNote['type']>('General');
+    const [newNoteFiles, setNewNoteFiles] = useState<FileList | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // State for editing a note
@@ -43,7 +60,8 @@ export default function FeedbackPage() {
     const [editingNoteText, setEditingNoteText] = useState('');
     
     // State for replies
-    const [replyText, setReplyText] = useState('');
+    const [replyText, setReplyText] = useState<Record<string, string>>({});
+    const [replyFiles, setReplyFiles] = useState<Record<string, FileList | null>>({});
 
     useEffect(() => {
         const authData = sessionStorage.getItem('feedback-auth');
@@ -83,9 +101,14 @@ export default function FeedbackPage() {
 
         setIsSubmitting(true);
         const noteId = `note-${nanoid(10)}`;
-        const noteRef = doc(db, 'feedback', noteId);
-
+        
         try {
+            let attachmentUrls: string[] = [];
+            if (newNoteFiles && newNoteFiles.length > 0) {
+                attachmentUrls = await uploadFiles(newNoteFiles, noteId);
+            }
+            
+            const noteRef = doc(db, 'feedback', noteId);
             await setDoc(noteRef, {
                 id: noteId,
                 author: session.username,
@@ -94,9 +117,11 @@ export default function FeedbackPage() {
                 status: 'Open',
                 createdAt: serverTimestamp(),
                 replies: [],
+                attachments: attachmentUrls,
             });
             setNewNote('');
             setNoteType('General');
+            setNewNoteFiles(null);
             toast({ title: 'Feedback Submitted', description: 'Thank you for your note!' });
         } catch (error) {
             console.error("Error submitting note:", error);
@@ -134,22 +159,36 @@ export default function FeedbackPage() {
     };
     
     const handleAddReply = async (noteId: string) => {
-        if (!replyText.trim() || !session) return;
+        const currentReplyText = replyText[noteId] || '';
+        const currentReplyFiles = replyFiles[noteId];
+        if (!currentReplyText.trim() || !session) return;
 
-        const noteRef = doc(db, 'feedback', noteId);
-        const newReply: FeedbackReply = {
-            id: `reply-${nanoid(10)}`,
-            author: session.username,
-            text: replyText,
-            createdAt: serverTimestamp(),
-        };
+        try {
+            let attachmentUrls: string[] = [];
+            if (currentReplyFiles && currentReplyFiles.length > 0) {
+                attachmentUrls = await uploadFiles(currentReplyFiles, noteId);
+            }
+            
+            const noteRef = doc(db, 'feedback', noteId);
+            const newReply: FeedbackReply = {
+                id: `reply-${nanoid(10)}`,
+                author: session.username,
+                text: currentReplyText,
+                createdAt: serverTimestamp(),
+                attachments: attachmentUrls,
+            };
 
-        await updateDoc(noteRef, {
-            replies: arrayUnion(newReply)
-        });
-        
-        toast({ title: "Reply Added" });
-        setReplyText('');
+            await updateDoc(noteRef, {
+                replies: arrayUnion(newReply)
+            });
+            
+            toast({ title: "Reply Added" });
+            setReplyText(prev => ({ ...prev, [noteId]: '' }));
+            setReplyFiles(prev => ({ ...prev, [noteId]: null }));
+        } catch (error) {
+            console.error("Error adding reply:", error);
+            toast({ title: "Reply Error", variant: "destructive" });
+        }
     };
 
     const handleDeleteNote = async (id: string) => {
@@ -201,6 +240,17 @@ export default function FeedbackPage() {
                                     className="h-40"
                                     required
                                 />
+                                <div className="space-y-2">
+                                    <Label htmlFor="attachments-new">Attachments (optional)</Label>
+                                    <Input 
+                                        id="attachments-new" 
+                                        type="file" 
+                                        multiple 
+                                        accept="image/*"
+                                        onChange={(e) => setNewNoteFiles(e.target.files)} 
+                                        className="text-xs"
+                                    />
+                                </div>
                                 <Select onValueChange={(v) => setNoteType(v as FeedbackNote['type'])} value={noteType}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select note type..." />
@@ -262,6 +312,16 @@ export default function FeedbackPage() {
                                     <p className="text-foreground whitespace-pre-wrap">{note.note}</p>
                                 )}
                                 
+                                {note.attachments && note.attachments.length > 0 && (
+                                    <div className="mt-4 grid grid-cols-3 gap-2">
+                                        {note.attachments.map((url, idx) => (
+                                            <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                                                <Image src={url} alt={`Attachment ${idx + 1}`} width={150} height={150} className="rounded-md object-cover aspect-square hover:opacity-80 transition-opacity" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                )}
+                                
                                 {(session.username === note.author || session.username === 'owner') && editingNoteId !== note.id && (
                                     <div className="text-right mt-2 flex justify-end gap-2">
                                         {session.username === note.author && (
@@ -300,6 +360,15 @@ export default function FeedbackPage() {
                                                         <p className="text-xs text-muted-foreground">{new Date(reply.createdAt?.toDate()).toLocaleTimeString()}</p>
                                                     </div>
                                                     <p className="text-sm mt-1 text-muted-foreground">{reply.text}</p>
+                                                     {reply.attachments && reply.attachments.length > 0 && (
+                                                        <div className="mt-2 grid grid-cols-4 gap-2">
+                                                            {reply.attachments.map((url, idx) => (
+                                                                <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                                                                    <Image src={url} alt={`Reply Attachment ${idx + 1}`} width={100} height={100} className="rounded-md object-cover aspect-square hover:opacity-80 transition-opacity" />
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}
@@ -307,19 +376,32 @@ export default function FeedbackPage() {
                                 )}
 
                                 <div className="mt-4">
-                                    <form onSubmit={(e) => { e.preventDefault(); handleAddReply(note.id); }} className="flex items-start gap-3">
-                                        <Avatar className="h-8 w-8">
-                                            <AvatarFallback>{getInitials(session.username)}</AvatarFallback>
-                                        </Avatar>
-                                        <Textarea
-                                            placeholder="Write a reply..."
-                                            value={replyText}
-                                            onChange={(e) => setReplyText(e.target.value)}
-                                            className="h-16"
-                                        />
-                                        <Button type="submit" size="icon" disabled={!replyText.trim()}>
-                                            <Send className="h-4 w-4" />
-                                        </Button>
+                                    <form onSubmit={(e) => { e.preventDefault(); handleAddReply(note.id); }} className="space-y-3">
+                                        <div className="flex items-start gap-3">
+                                            <Avatar className="h-8 w-8">
+                                                <AvatarFallback>{getInitials(session.username)}</AvatarFallback>
+                                            </Avatar>
+                                            <Textarea
+                                                placeholder="Write a reply..."
+                                                value={replyText[note.id] || ''}
+                                                onChange={(e) => setReplyText(prev => ({...prev, [note.id]: e.target.value}))}
+                                                className="h-16"
+                                            />
+                                            <Button type="submit" size="icon" disabled={!(replyText[note.id] || '').trim()}>
+                                                <Send className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                         <div className="flex items-start gap-3">
+                                            <div className="w-8"></div>
+                                            <Input 
+                                                id={`attachments-reply-${note.id}`} 
+                                                type="file" 
+                                                multiple 
+                                                accept="image/*"
+                                                onChange={(e) => setReplyFiles(prev => ({...prev, [note.id]: e.target.files}))}
+                                                className="text-xs flex-1"
+                                            />
+                                        </div>
                                     </form>
                                 </div>
                             </CardContent>
