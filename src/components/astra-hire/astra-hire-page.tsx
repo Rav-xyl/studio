@@ -61,7 +61,7 @@ interface BackgroundTask {
 }
 
 export function AstraHirePage() {
-  const [activeTab, setActiveTab] = useState('pool');
+  const [activeTab, setActiveTab] = useState('roles');
 
   // --- State Management ---
   const [roles, setRoles] = useState<JobRole[]>([]);
@@ -519,6 +519,13 @@ export function AstraHirePage() {
         <div className="border-b border-border mb-6">
           <nav className="flex space-x-2">
             <button
+              className={`tab-btn ${activeTab === 'roles' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('roles'); setFilteredRole(null); }}
+            >
+              <Briefcase className="inline-block w-4 h-4 mr-2" />
+              Client Roles
+            </button>
+            <button
               className={`tab-btn ${activeTab === 'pool' ? 'active' : ''}`}
               onClick={() => setActiveTab('pool')}
             >
@@ -531,13 +538,6 @@ export function AstraHirePage() {
             >
               <Shield className="inline-block w-4 h-4 mr-2" />
               Gauntlet Portal
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'roles' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('roles'); setFilteredRole(null); }}
-            >
-              <Briefcase className="inline-block w-4 h-4 mr-2" />
-              Client Roles
             </button>
             <button
               className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
