@@ -13,16 +13,12 @@ import { SaarthiReportModal } from './saarthi-report-modal';
 import { useToast } from '@/hooks/use-toast';
 import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
 import { nanoid } from 'nanoid';
-import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
-import { analyzeHiringOverride } from '@/ai/flows/self-correcting-rubric';
 import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, addDoc, serverTimestamp, arrayUnion, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, arrayUnion, getDoc } from 'firebase/firestore';
 import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
-import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
-import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
 import { Card, CardContent } from '../ui/card';
 import { Progress } from '../ui/progress';
@@ -51,8 +47,6 @@ const addLog = async (candidateId: string, logEntry: Omit<LogEntry, 'timestamp'>
         })
     });
 };
-
-const KANBAN_STAGES: KanbanStatus[] = ['Sourcing', 'Screening', 'Interview', 'Hired'];
 
 export interface BackgroundTask {
     id: string;
