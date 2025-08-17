@@ -11,6 +11,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import mammoth from 'mammoth';
 
 const AutomatedResumeScreeningInputSchema = z.object({
   resumeDataUri: z
@@ -18,6 +19,7 @@ const AutomatedResumeScreeningInputSchema = z.object({
     .describe(
       "The resume to screen, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'"
     ),
+  resumeText: z.string().optional().describe('Extracted text from the resume, if not a direct media type.'),
   skillMappings: z.record(z.string(), z.string()).optional().describe('A map of candidate skills to company-preferred skills.'),
   companyPreferences: z.string().optional().describe('Any specific company preferences for candidates.'),
   companyType: z.enum(['startup', 'enterprise']).describe('The type of company hiring, which dictates the evaluation criteria.'),
@@ -63,12 +65,17 @@ const prompt = ai.definePrompt({
   {{/if}}
 
   **Execution Steps:**
-  1.  **Parse Systematically:** Analyze the provided resume text. Extract key information with extreme precision.
+  1.  **Parse Systematically:** Analyze the provided resume. Extract key information with extreme precision.
   2.  **Score Candidate:** Score the candidate based on their suitability for a generic role within the specified company context, using the evaluation criteria.
   3.  **Format Output:** Structure your entire response in the required JSON format.
 
-  **Resume:**
+  **Resume Content:**
+  {{#if resumeText}}
+  {{resumeText}}
+  {{else}}
   {{media url=resumeDataUri}}
+  {{/if}}
+
 
   {{#if skillMappings}}
   **Skill Mappings:**
@@ -101,8 +108,21 @@ const automatedResumeScreeningFlow = ai.defineFlow(
     outputSchema: AutomatedResumeScreeningOutputSchema,
   },
   async (input) => {
+    const promptInput = { ...input };
+
+    const docxMimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const docMimeType = 'application/msword';
+    const mimeType = input.resumeDataUri.split(';')[0].split(':')[1];
+
+    if (mimeType === docxMimeType || mimeType === docMimeType) {
+      const base64Data = input.resumeDataUri.split(',')[1];
+      const buffer = Buffer.from(base64Data, 'base64');
+      const { value } = await mammoth.extractRawText({ buffer });
+      promptInput.resumeText = value;
+    }
+
     const { output } = await prompt({
-      ...input,
+      ...promptInput,
       companyType: {
         [input.companyType]: true,
       } as any,
