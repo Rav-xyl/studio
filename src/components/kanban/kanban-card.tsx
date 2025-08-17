@@ -96,6 +96,12 @@ export function KanbanCard({ candidate, onClick, onDelete, className }: KanbanCa
               <p className="font-semibold text-foreground truncate">{candidate.name}</p>
               <p className="text-sm text-muted-foreground">{candidate.role}</p>
             </div>
+             {candidate.aiInitialScore && (
+                  <div className="flex items-center gap-1 font-semibold text-amber-500 text-xs">
+                      <Star className="h-3 w-3" />
+                      <span>{Math.round(candidate.aiInitialScore)}</span>
+                  </div>
+              )}
           </div>
           <div className="mt-3 flex flex-wrap gap-1">
             {candidate.skills.slice(0, 3).map((skill) => (
@@ -109,15 +115,11 @@ export function KanbanCard({ candidate, onClick, onDelete, className }: KanbanCa
               <div className='flex items-center gap-1.5'>
                   <StatusInfo status={candidate.status} candidate={candidate} />
               </div>
-              {candidate.aiInitialScore && (
-                  <div className="flex items-center gap-1 font-semibold text-amber-500">
-                      <Star className="h-3 w-3" />
-                      <span>{Math.round(candidate.aiInitialScore)}</span>
-                  </div>
-              )}
           </div>
         </CardContent>
       </div>
     </Card>
   );
 }
+
+    

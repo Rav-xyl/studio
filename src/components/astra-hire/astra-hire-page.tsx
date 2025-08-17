@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart2, Briefcase, Users, Loader2, Shield } from 'lucide-react';
+import { BarChart2, Briefcase, Users, Loader2, Shield, X } from 'lucide-react';
 import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
@@ -27,6 +27,8 @@ import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { findPotentialRoles } from '@/ai/flows/find-potential-roles';
 import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
+import { Card, CardContent } from '../ui/card';
+import { Progress } from '../ui/progress';
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -50,6 +52,15 @@ const addLog = async (candidateId: string, logEntry: Omit<LogEntry, 'timestamp'>
 
 const KANBAN_STAGES: KanbanStatus[] = ['Sourcing', 'Screening', 'Interview', 'Hired'];
 
+interface BackgroundTask {
+    id: string;
+    type: 'Screening' | 'Simulation' | 'Audit';
+    status: 'in-progress' | 'complete' | 'error';
+    progress: number;
+    total: number;
+    message: string;
+}
+
 export function AstraHirePage() {
   const [activeTab, setActiveTab] = useState('pool');
 
@@ -59,16 +70,16 @@ export function AstraHirePage() {
   const [lastSaarthiReport, setLastSaarthiReport] = useState<any>(null);
   const [filteredRole, setFilteredRole] = useState<JobRole | null>(null);
   const [suggestedChanges, setSuggestedChanges] = useState<RubricChange[]>([]);
+  const [backgroundTask, setBackgroundTask] = useState<BackgroundTask | null>(null);
+
 
   // UI State
   const [isLoading, setIsLoading] = useState(true);
-  const [loadingText, setLoadingText] = useState('Loading...');
   const [isSaarthiReportOpen, setIsSaarthiReportOpen] = useState(false);
   const { toast } = useToast();
 
   // --- Firestore Data Fetching ---
   useEffect(() => {
-    setLoadingText('Connecting to the database...');
     const candidatesUnsub = onSnapshot(collection(db, "candidates"), (snapshot) => {
         const candidatesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Candidate[];
         setCandidates(candidatesData);
@@ -210,13 +221,22 @@ export function AstraHirePage() {
     );
 
     if (filesToProcess.length === 0) {
-        toast({ title: "No new resumes to add", description: "All selected files were already in the pool.", variant: "destructive" });
+        toast({ title: "No new resumes to add", description: "All selected files were already in the pool." });
         return;
     }
     
-    toast({ title: "Upload Successful", description: `${filesToProcess.length} new resumes added. Screening automatically...` });
-    setIsLoading(true);
-    setLoadingText(`Screening 0/${filesToProcess.length} new resumes...`);
+    toast({ title: "Upload Successful", description: `Starting to screen ${filesToProcess.length} new resumes in the background.` });
+    
+    const taskId = `task-${nanoid(5)}`;
+    const task: BackgroundTask = {
+        id: taskId,
+        type: 'Screening',
+        status: 'in-progress',
+        progress: 0,
+        total: filesToProcess.length,
+        message: 'Screening Resumes...'
+    };
+    setBackgroundTask(task);
     
     let processedCount = 0;
     let failedCount = 0;
@@ -252,20 +272,31 @@ export function AstraHirePage() {
             console.error(`Failed to process ${file.name}:`, error);
             failedCount++;
         }
-        setLoadingText(`Screening ${processedCount + failedCount}/${filesToProcess.length} new resumes...`);
-        // Add a delay to avoid hitting rate limits
+
+        setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount + failedCount }) : null);
         await new Promise(resolve => setTimeout(resolve, 500)); 
     }
       
-    setIsLoading(false);
-    toast({ 
-        title: 'Screening Complete', 
-        description: `Successfully processed ${processedCount} resumes. ${failedCount > 0 ? `${failedCount} failed.` : ''}` 
-    });
+    setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: `Screening complete. ${failedCount > 0 ? `${failedCount} failed.` : ''}` }) : null);
+    
+    // Automatically hide the task monitor after a delay
+    setTimeout(() => {
+        setBackgroundTask(null);
+    }, 5000);
   };
   
     const handleStimulateFullPipeline = async () => {
-        setIsLoading(true);
+        const taskId = `task-${nanoid(5)}`;
+        const task: BackgroundTask = {
+            id: taskId,
+            type: 'Simulation',
+            status: 'in-progress',
+            progress: 0,
+            total: 5,
+            message: 'Starting pipeline simulation...'
+        };
+        setBackgroundTask(task);
+
         const currentSimulationLog: any[] = [];
         
         const log = (step: string, description: string) => {
@@ -275,12 +306,11 @@ export function AstraHirePage() {
 
         try {
             log("Start Simulation", "Beginning autonomous pipeline simulation.");
+            setBackgroundTask(prev => prev ? ({ ...prev, progress: 1, message: 'Phase 1/5: Sourcing...' }) : null);
             
-            // --- STEP 1: SOURCING ---
             let candidatesForSim = [...candidates];
             let sourced = false;
             if (candidatesForSim.filter(c => c.status === 'Sourcing' || c.status === 'Screening').length === 0) {
-              setLoadingText("Phase 1/5: No candidates found. Proactively sourcing talent...");
               log("Proactive Sourcing", "Candidate pool is empty. Generating fictional candidates.");
               sourced = true;
               const sourcingResult = await proactiveCandidateSourcing({
@@ -297,8 +327,7 @@ export function AstraHirePage() {
               log("Proactive Sourcing Complete", `Generated and saved ${sourcedCandidates.length} new candidates.`);
             }
 
-            // --- STEP 2: IDENTIFY TOP TALENT & ROLE SYNTHESIS ---
-            setLoadingText("Phase 2/5: Identifying top talent and synthesizing role...");
+            setBackgroundTask(prev => prev ? ({ ...prev, progress: 2, message: 'Phase 2/5: Identifying Talent...' }) : null);
             const topCandidate = candidatesForSim
                 .filter(c => c.status === 'Screening' && !c.archived)
                 .sort((a,b) => (b.aiInitialScore || 0) - (a.aiInitialScore || 0))[0];
@@ -319,8 +348,7 @@ export function AstraHirePage() {
             await setDoc(doc(db, 'roles', newRole.id), newRole);
             log("Role Synthesis Complete", `Created and saved new role: '${newRole.title}'.`);
 
-            // --- STEP 3: SIMULATE GAUNTLET FOR TOP CANDIDATE ---
-            setLoadingText("Phase 3/5: Simulating AI Gauntlet for top candidate...");
+            setBackgroundTask(prev => prev ? ({ ...prev, progress: 3, message: 'Phase 3/5: Simulating Gauntlet...' }) : null);
             log("Gauntlet Simulation", `Simulating technical gauntlet for ${topCandidate.name}.`);
             const bossReview = await finalInterviewReview({interviewReport: "Simulated Technical and System Design phases. The candidate demonstrated exceptional problem-solving skills and a strong grasp of architectural principles."});
             
@@ -330,8 +358,7 @@ export function AstraHirePage() {
             }
             log("BOSS Validation", `BOSS AI approved ${topCandidate.name} with recommendation: ${bossReview.finalRecommendation}.`);
 
-            // --- STEP 4: PROMOTE TO INTERVIEW ---
-            setLoadingText("Phase 4/5: Candidate passed. Promoting to Interview...");
+            setBackgroundTask(prev => prev ? ({ ...prev, progress: 4, message: 'Phase 4/5: Promoting to Interview...' }) : null);
             await updateDoc(doc(db, 'candidates', topCandidate.id), { 
                 status: 'Interview', 
                 role: newRole.title,
@@ -339,8 +366,7 @@ export function AstraHirePage() {
             });
             log("Pipeline Progression", `Moved ${topCandidate.name} to 'Interview' and assigned role '${newRole.title}'.`);
 
-            // --- STEP 5: DRAFT OFFER & HIRE ---
-            setLoadingText("Phase 5/5: Simulating final interview, drafting offer and hiring...");
+            setBackgroundTask(prev => prev ? ({ ...prev, progress: 5, message: 'Phase 5/5: Drafting Offer & Hiring...' }) : null);
             const offer = await draftOfferLetter({
                candidateName: topCandidate.name, roleTitle: newRole.title, candidateSkills: topCandidate.skills, candidateExperience: topCandidate.narrative, companyName: "AstraHire Client", companySalaryBands: "Senior: $120k-$150k", simulatedMarketData: "Market avg: $135k"
             });
@@ -355,18 +381,22 @@ export function AstraHirePage() {
                 detailedProcessLog: currentSimulationLog,
             });
             setIsSaarthiReportOpen(true);
+            setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: 'Simulation complete!' }) : null);
+
 
         } catch (error) {
             console.error("Full pipeline simulation failed:", error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             toast({ title: "Simulation Error", description: errorMessage, variant: "destructive"});
             log("Error", `The simulation was interrupted: ${errorMessage}`);
+            setBackgroundTask(prev => prev ? ({ ...prev, status: 'error', message: 'Simulation failed.' }) : null);
         } finally {
-            setIsLoading(false);
+             setTimeout(() => { setBackgroundTask(null); }, 5000);
         }
     };
   
     const handleSystemAudit = async (files: FileList) => {
+        // This can also be converted to a background task
         setIsLoading(true);
         const auditLog: any[] = [];
         const log = (step: string, description: string, status: 'Success' | 'Failure' | 'Info' = 'Info') => {
@@ -376,7 +406,6 @@ export function AstraHirePage() {
         
         try {
             log("Start Audit", `Starting system audit with ${files.length} resumes.`);
-            setLoadingText("Phase 1: Screening...");
             
             const screeningPromises = Array.from(files).map(async file => {
                 try {
@@ -397,7 +426,6 @@ export function AstraHirePage() {
 
             const topCandidate = auditCandidates.sort((a,b) => (b.aiInitialScore || 0) - (a.aiInitialScore || 0))[0];
             
-            setLoadingText("Phase 2: Role Discovery & Synthesis...");
             try {
                 const roleSuggestions = await suggestRoleMatches({
                     candidateName: topCandidate.name,
@@ -412,14 +440,12 @@ export function AstraHirePage() {
                 log("Job Description Synthesis", `Successfully synthesized JD for '${suggestedRole.roleTitle}'`, "Success");
                 const testRole: JobRole = { id: 'audit-role', title: suggestedRole.roleTitle, description: jdResult.jobDescription, department: "Audit", openings: 1};
 
-                setLoadingText("Phase 3: Targeted Review & Analysis...");
                 const review = await reviewCandidate({ candidateData: topCandidate.narrative, jobDescription: testRole.description, companyType: 'enterprise' });
                 log("AI-Assisted Candidate Review", `Successfully reviewed ${topCandidate.name} for role. Recommendation: ${review.recommendation}`, "Success");
 
                 const skillGap = await skillGapAnalysis({ candidateSkills: topCandidate.skills, jobDescription: testRole.description });
                 log("Skill Gap Analysis", `Successfully analyzed skill gap. Found ${skillGap.skillGaps.length} gaps.`, "Success");
 
-                setLoadingText("Phase 4: Offer & Onboarding...");
                 const offer = await draftOfferLetter({ ...topCandidate, roleTitle: testRole.title, candidateExperience: topCandidate.narrative, companyName: 'Audit Inc', companySalaryBands: '100k-120k', simulatedMarketData: 'Avg 110k' });
                 log("Autonomous Offer Drafting", `Successfully drafted offer with salary ${offer.suggestedSalary}`, "Success");
                 
@@ -486,7 +512,6 @@ export function AstraHirePage() {
 
     const handleReEngageForRole = async (role: JobRole) => {
         setIsLoading(true);
-        setLoadingText(`Scanning for archived candidates for ${role.title}...`);
         
         const archivedCandidatesQuery = query(collection(db, 'candidates'), where('archived', '==', true));
         const querySnapshot = await getDocs(archivedCandidatesQuery);
@@ -543,7 +568,7 @@ export function AstraHirePage() {
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
-        return <RolesTab roles={roles} candidates={candidates} onUpdateCandidate={handleUpdateCandidate} onViewCandidates={handleViewCandidatesForRole} onReEngage={handleReEngageForRole} onAddRole={handleAddRole} onDeleteRole={handleDeleteRole} />;
+        return <RolesTab roles={roles} candidates={candidates} onUpdateCandidate={handleUpdateCandidate} onViewCandidates={handleViewCandidatesForRole} onReEngage={handleReEngageForRole} onAddRole={handleAAddRole} onDeleteRole={handleDeleteRole} />;
       case 'pool':
         return (
             <CandidatePoolTab 
@@ -567,17 +592,19 @@ export function AstraHirePage() {
     }
   };
 
+  if (isLoading && candidates.length === 0) {
+    return (
+      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="flex flex-col items-center gap-4">
+              <Loader2 className="animate-spin h-10 w-10 text-primary" />
+              <p className="text-muted-foreground">Connecting to the Divine Realm...</p>
+          </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 lg:p-10 min-h-screen bg-background text-foreground">
-       {isLoading && (
-            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-                <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="animate-spin h-10 w-10 text-primary" />
-                    <p className="text-muted-foreground">{loadingText}</p>
-                </div>
-            </div>
-        )}
-
       <SaarthiReportModal 
         isOpen={isSaarthiReportOpen}
         onClose={() => setIsSaarthiReportOpen(false)}
@@ -588,7 +615,7 @@ export function AstraHirePage() {
           if (lastSaarthiReport) {
               setIsSaarthiReportOpen(true);
           } else {
-              toast({ title: "No SAARTHI report available yet.", description: "Please run a simulation or audit first.", variant: "destructive" });
+              toast({ title: "No SAARTHI report available yet.", description: "Please run a simulation or audit first." });
           }
       }} />
       <main>
@@ -628,6 +655,30 @@ export function AstraHirePage() {
             {renderActiveTabView()}
         </div>
       </main>
+
+       {backgroundTask && (
+          <Card className="fixed bottom-4 right-4 w-80 shadow-2xl z-50 fade-in-slide-up">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-sm">{backgroundTask.message}</h4>
+                {backgroundTask.status === 'in-progress' ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                ) : (
+                   <button onClick={() => setBackgroundTask(null)} className="text-muted-foreground hover:text-foreground">
+                       <X className="h-5 w-5" />
+                   </button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {backgroundTask.progress} / {backgroundTask.total} completed
+              </p>
+              <Progress value={(backgroundTask.progress / backgroundTask.total) * 100} className="h-2 mt-2" />
+            </CardContent>
+          </Card>
+        )}
     </div>
   );
 }
+
+
+    
