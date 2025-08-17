@@ -121,7 +121,7 @@ export default function AdminDashboardPage() {
 
         try {
             const communicationPromises = completedCandidates.map(async (c) => {
-                const isHired = c.gauntletState?.finalReview?.finalRecommendation === 'Strong Hire';
+                const isHired = c.gauntletState?.designReview?.finalRecommendation === 'Strong Hire';
                 const stage = isHired ? 'Offer Extended' : 'Rejected';
                 if (isHired) hiredCount++; else rejectedCount++;
 
