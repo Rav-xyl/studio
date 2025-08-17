@@ -553,8 +553,9 @@ export function AstraHirePage() {
                     })),
                 });
                 
+                const newMatches = result.matches || []; // Defensive check
                 const existingMatchIds = new Set(finalMatches.map(m => m.candidateId));
-                const uniqueNewMatches = result.matches.filter(m => !existingMatchIds.has(m.candidateId));
+                const uniqueNewMatches = newMatches.filter(m => !existingMatchIds.has(m.candidateId));
                 finalMatches = [...finalMatches, ...uniqueNewMatches].sort((a, b) => b.confidenceScore - a.confidenceScore);
 
                 await updateDoc(roleRef, {
@@ -663,8 +664,8 @@ export function AstraHirePage() {
             candidates={candidates.filter(c => c.role === 'Unassigned' && !c.archived)}
             roles={roles}
             onUpdateCandidate={handleUpdateCandidate}
-            onAddRole={handleAddRole}
-            onDeleteCandidate={handleDeleteCandidate}
+            onAddRole={onAddRole}
+            onDeleteCandidate={onDeleteCandidate}
         />;
        case 'gauntlet':
         return <GauntletPortalTab candidates={candidates} />;
