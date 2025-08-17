@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Loader2, Shield, Send, Bell, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, updateDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import type { Candidate, JobRole, ProactiveSourcingNotification } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { GauntletMonitorTable } from '@/components/admin/gauntlet-monitor-table';
+import { AllCandidatesTable } from '@/components/admin/all-candidates-table';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
 import { proactiveCandidateSourcing } from '@/ai/flows/proactive-candidate-sourcing';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +18,7 @@ export default function AdminDashboardPage() {
     const router = useRouter();
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(true);
-    const [candidates, setCandidates] = useState<Candidate[]>([]);
+    const [allCandidates, setAllCandidates] = useState<Candidate[]>([]);
     const [roles, setRoles] = useState<JobRole[]>([]);
     const [notifications, setNotifications] = useState<ProactiveSourcingNotification[]>([]);
     const [isSendingCommunications, setIsSendingCommunications] = useState(false);
@@ -37,8 +38,9 @@ export default function AdminDashboardPage() {
 
         const unsubscribes: (() => void)[] = [];
 
+        // Fetch ALL candidates, including archived ones
         const candidatesUnsub = onSnapshot(collection(db, "candidates"), (snapshot) => {
-            setCandidates(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Candidate[]);
+            setAllCandidates(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Candidate[]);
             setIsLoading(false);
         }, (error) => {
             console.error("Firestore connection error (candidates):", error);
@@ -65,7 +67,7 @@ export default function AdminDashboardPage() {
         setIsSourcing(true);
         toast({ title: "AI Sourcing Agent Activated", description: "Scanning for high-potential, unassigned candidates..." });
         try {
-            const unassignedCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived);
+            const unassignedCandidates = allCandidates.filter(c => c.role === 'Unassigned' && !c.archived);
             const result = await proactiveCandidateSourcing({
                 candidates: unassignedCandidates,
                 roles: roles
@@ -108,7 +110,7 @@ export default function AdminDashboardPage() {
         setIsSendingCommunications(true);
         toast({ title: 'Initiating Communications', description: 'AI is processing candidates who have completed the Gauntlet...' });
 
-        const completedCandidates = candidates.filter(c => c.gauntletState?.phase === 'Complete' && !c.communicationSent);
+        const completedCandidates = allCandidates.filter(c => c.gauntletState?.phase === 'Complete' && !c.communicationSent);
         
         if (completedCandidates.length === 0) {
             toast({ title: 'No New Communications Needed', description: 'No candidates have recently completed the Gauntlet.' });
@@ -152,6 +154,16 @@ export default function AdminDashboardPage() {
         } finally {
             setIsSendingCommunications(false);
         }
+    };
+
+    const handleDeleteCandidate = async (candidateId: string) => {
+      try {
+          await deleteDoc(doc(db, 'candidates', candidateId));
+          toast({ title: "Candidate Deleted", description: "The candidate has been permanently removed from the database." });
+      } catch (error) {
+          console.error("Failed to delete candidate:", error);
+          toast({ title: "Deletion Failed", description: "Could not delete the candidate. See console for details.", variant: 'destructive' });
+      }
     };
 
 
@@ -217,7 +229,8 @@ export default function AdminDashboardPage() {
                         </CardContent>
                     </Card>
                 )}
-                <GauntletMonitorTable candidates={candidates} />
+                <GauntletMonitorTable candidates={allCandidates} />
+                <AllCandidatesTable candidates={allCandidates} onDeleteCandidate={handleDeleteCandidate} />
             </main>
         </div>
     );
