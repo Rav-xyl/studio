@@ -51,6 +51,10 @@ export function ProspectingTab({
     const { toast } = useToast();
     
     const handleFindMatches = async (candidate: Candidate) => {
+        if (roles.length === 0) {
+            toast({ title: "No Roles Available", description: "Please add a client role to find matches.", variant: "destructive" });
+            return;
+        }
         setIsLoading(prev => ({ ...prev, [candidate.id]: true }));
         try {
             const allMatches: any[] = [];
@@ -65,6 +69,7 @@ export function ProspectingTab({
                         narrative: candidate.narrative,
                     }],
                 });
+                // We only care about strong matches (score >= 70)
                 if (result.matches && result.matches.length > 0 && result.matches[0].confidenceScore >= 70) {
                    allMatches.push({
                        roleId: role.id,
@@ -73,8 +78,10 @@ export function ProspectingTab({
                    });
                 }
             }
+            // Sort by the highest score first
             allMatches.sort((a,b) => b.confidenceScore - a.confidenceScore);
             setMatchResults(prev => ({ ...prev, [candidate.id]: allMatches }));
+            
             if(allMatches.length === 0) {
               toast({ title: "No Strong Matches Found", description: `Could not find any roles with a score of 70+ for ${candidate.name}.` });
             }
