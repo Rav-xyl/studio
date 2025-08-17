@@ -3,22 +3,27 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MessageSquare, PlusCircle, Trash2, Edit, Send, CornerDownRight } from 'lucide-react';
+import { Loader2, MessageSquare, PlusCircle, Trash2, Edit, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, arrayUnion } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import type { FeedbackNote } from '@/lib/types';
+import type { FeedbackNote, FeedbackReply } from '@/lib/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 type UserSession = {
     username: string;
 };
+
+const getInitials = (name: string) => {
+    return name ? name.split(' ').map(n => n[0]).join('') : '';
+}
 
 export default function FeedbackPage() {
     const router = useRouter();
@@ -35,8 +40,7 @@ export default function FeedbackPage() {
     const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
     const [editingNoteText, setEditingNoteText] = useState('');
     
-    // State for owner replies
-    const [replyingToNoteId, setReplyingToNoteId] = useState<string | null>(null);
+    // State for replies
     const [replyText, setReplyText] = useState('');
 
     useEffect(() => {
@@ -81,7 +85,7 @@ export default function FeedbackPage() {
                 type: noteType,
                 status: 'Open',
                 createdAt: serverTimestamp(),
-                ownerReply: '',
+                replies: [],
             });
             setNewNote('');
             setNoteType('General');
@@ -121,12 +125,22 @@ export default function FeedbackPage() {
         cancelEditing();
     };
     
-    const handleAddReply = async () => {
-        if (!replyingToNoteId || !replyText.trim()) return;
-        const noteRef = doc(db, 'feedback', replyingToNoteId);
-        await updateDoc(noteRef, { ownerReply: replyText });
+    const handleAddReply = async (noteId: string) => {
+        if (!replyText.trim() || !session) return;
+
+        const noteRef = doc(db, 'feedback', noteId);
+        const newReply: FeedbackReply = {
+            id: `reply-${nanoid(10)}`,
+            author: session.username,
+            text: replyText,
+            createdAt: serverTimestamp(),
+        };
+
+        await updateDoc(noteRef, {
+            replies: arrayUnion(newReply)
+        });
+        
         toast({ title: "Reply Added" });
-        setReplyingToNoteId(null);
         setReplyText('');
     };
 
@@ -227,33 +241,10 @@ export default function FeedbackPage() {
                                 ) : (
                                     <p className="text-foreground whitespace-pre-wrap">{note.note}</p>
                                 )}
-
-                                {note.ownerReply && (
-                                    <div className="mt-4 pl-4 border-l-2 border-primary">
-                                        <p className="text-sm font-semibold text-primary">Owner's Reply:</p>
-                                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{note.ownerReply}</p>
-                                    </div>
-                                )}
-
-                                {(session.username === 'owner' && !note.ownerReply) && (
-                                    replyingToNoteId === note.id ? (
-                                        <div className="mt-4 space-y-2">
-                                            <Textarea placeholder="Type your answer here..." value={replyText} onChange={(e) => setReplyText(e.target.value)} className="h-20" />
-                                            <div className="flex justify-end gap-2">
-                                                <Button variant="ghost" size="sm" onClick={() => setReplyingToNoteId(null)}>Cancel</Button>
-                                                <Button size="sm" onClick={handleAddReply}><Send className="mr-2 h-4 w-4" /> Post Reply</Button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <Button variant="outline" size="sm" className="mt-4 w-full" onClick={() => { setReplyingToNoteId(note.id); setReplyText(''); }}>
-                                            <CornerDownRight className="mr-2 h-4 w-4" /> Answer Question
-                                        </Button>
-                                    )
-                                )}
-
-                                {(session.username === note.author || session.username === 'owner') && (
+                                
+                                {(session.username === note.author || session.username === 'owner') && editingNoteId !== note.id && (
                                     <div className="text-right mt-2 flex justify-end gap-2">
-                                        {session.username === note.author && editingNoteId !== note.id && (
+                                        {session.username === note.author && (
                                             <Button variant="link" className="text-muted-foreground h-auto p-0" onClick={() => startEditing(note)}><Edit className="mr-1 h-3 w-3"/> Edit</Button>
                                         )}
                                         <AlertDialog>
@@ -273,6 +264,44 @@ export default function FeedbackPage() {
                                         </AlertDialog>
                                     </div>
                                 )}
+
+                                {note.replies && note.replies.length > 0 && (
+                                    <div className="mt-6 space-y-4">
+                                        <Separator />
+                                        <h4 className="text-sm font-semibold">Replies</h4>
+                                        {note.replies.map(reply => (
+                                            <div key={reply.id} className="flex items-start gap-3">
+                                                <Avatar className="h-8 w-8">
+                                                    <AvatarFallback>{getInitials(reply.author)}</AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-1 bg-secondary/50 p-3 rounded-md">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-sm font-semibold">{reply.author}</p>
+                                                        <p className="text-xs text-muted-foreground">{new Date(reply.createdAt?.toDate()).toLocaleTimeString()}</p>
+                                                    </div>
+                                                    <p className="text-sm mt-1 text-muted-foreground">{reply.text}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="mt-4">
+                                    <form onSubmit={(e) => { e.preventDefault(); handleAddReply(note.id); }} className="flex items-start gap-3">
+                                        <Avatar className="h-8 w-8">
+                                            <AvatarFallback>{getInitials(session.username)}</AvatarFallback>
+                                        </Avatar>
+                                        <Textarea
+                                            placeholder="Write a reply..."
+                                            value={replyText}
+                                            onChange={(e) => setReplyText(e.target.value)}
+                                            className="h-16"
+                                        />
+                                        <Button type="submit" size="icon" disabled={!replyText.trim()}>
+                                            <Send className="h-4 w-4" />
+                                        </Button>
+                                    </form>
+                                </div>
                             </CardContent>
                         </Card>
                     ))}

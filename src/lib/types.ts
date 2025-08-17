@@ -109,6 +109,13 @@ export interface RubricChange {
   status: 'Pending' | 'Approved' | 'Rejected';
 }
 
+export type FeedbackReply = {
+    id: string;
+    author: string;
+    text: string;
+    createdAt: any;
+};
+
 export type FeedbackNote = {
     id: string;
     author: string;
@@ -116,5 +123,5 @@ export type FeedbackNote = {
     type: 'Suggestion' | 'Bug' | 'Question' | 'General';
     status: 'Open' | 'In Progress' | 'Resolved';
     createdAt: any;
-    ownerReply?: string;
+    replies?: FeedbackReply[];
 };
