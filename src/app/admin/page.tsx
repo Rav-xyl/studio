@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2, Shield, Send, Bell, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, updateDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, setDoc, deleteDoc, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import type { Candidate, JobRole, ProactiveSourcingNotification } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { GauntletMonitorTable } from '@/components/admin/gauntlet-monitor-table';
@@ -76,7 +76,7 @@ export default function AdminDashboardPage() {
             if (result.notifications.length > 0) {
                  for (const notification of result.notifications) {
                     const notificationRef = doc(db, 'notifications', `${notification.candidateId}-${notification.roleId}`);
-                    await setDoc(notificationRef, notification, { merge: true });
+                    await setDoc(notificationRef, { ...notification, id: notificationRef.id }, { merge: true });
                 }
                 toast({ title: "Sourcing Complete", description: `AI identified ${result.notifications.length} new high-value opportunities.` });
             } else {
@@ -158,8 +158,22 @@ export default function AdminDashboardPage() {
 
     const handleDeleteCandidate = async (candidateId: string) => {
       try {
+          // Delete the candidate document
           await deleteDoc(doc(db, 'candidates', candidateId));
-          toast({ title: "Candidate Deleted", description: "The candidate has been permanently removed from the database." });
+
+          // Find and delete all notifications for this candidate
+          const notificationsQuery = query(collection(db, 'notifications'), where('candidateId', '==', candidateId));
+          const querySnapshot = await getDocs(notificationsQuery);
+
+          if (!querySnapshot.empty) {
+              const batch = writeBatch(db);
+              querySnapshot.forEach((doc) => {
+                  batch.delete(doc.ref);
+              });
+              await batch.commit();
+          }
+
+          toast({ title: "Candidate Deleted", description: "The candidate and all related notifications have been permanently removed." });
       } catch (error) {
           console.error("Failed to delete candidate:", error);
           toast({ title: "Deletion Failed", description: "Could not delete the candidate. See console for details.", variant: 'destructive' });
