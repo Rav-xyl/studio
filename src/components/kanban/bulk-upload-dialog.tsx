@@ -58,7 +58,7 @@ export function BulkUploadDialog({ open, onOpenChange, onUpload }: BulkUploadDia
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="resumes">Resumes (PDF, DOCX)</Label>
+            <Label htmlFor="resumes">Resumes (PDF only)</Label>
             <div className='flex items-center justify-center w-full'>
               <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer bg-secondary/50 hover:bg-secondary/80 border-border">
                   <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -66,7 +66,7 @@ export function BulkUploadDialog({ open, onOpenChange, onUpload }: BulkUploadDia
                       <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span></p>
                       <p className="text-xs text-muted-foreground">or drag and drop</p>
                   </div>
-                  <Input id="dropzone-file" ref={fileInputRef} type="file" className="hidden" multiple />
+                  <Input id="dropzone-file" ref={fileInputRef} type="file" className="hidden" multiple accept="application/pdf" />
               </label>
             </div>
           </div>
