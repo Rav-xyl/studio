@@ -11,7 +11,9 @@ const firebaseConfig = {
   apiKey: 'AIzaSyDwwbVgb6ZpW3qhMz1dRe-3qey8gPvkz1o',
   authDomain: 'talentflow-ai-1lu7m.firebaseapp.com',
   messagingSenderId: '523888981631',
-  measurementId: 'G-XXXXXXXXXX', // This was missing
+  measurementId: 'G-XXXXXXXXXX',
+  // This is the critical addition for region-specific projects
+  databaseURL: 'https://talentflow-ai-1lu7m-default-rtdb.asia-southeast1.firebasedatabase.app',
 };
 
 // Initialize Firebase
