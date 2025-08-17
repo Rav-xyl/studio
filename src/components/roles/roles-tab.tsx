@@ -1,3 +1,4 @@
+
 'use client'
 import type { Candidate, JobRole } from '@/lib/types';
 import { PlusCircle, FolderSearch, Trash2 } from 'lucide-react';
@@ -29,7 +30,7 @@ export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAd
     const [selectedRoleForMatching, setSelectedRoleForMatching] = useState<JobRole | null>(null);
     const { toast } = useToast();
 
-    const handleFindTopCandidates = async (role: JobRole) => {
+    const handleFindTopMatches = async (role: JobRole) => {
         setIsMatching(true);
         setSelectedRoleForMatching(role);
         try {
@@ -63,6 +64,34 @@ export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAd
             setIsMatching(false);
         }
     }
+
+    const handleFindAllQualified = (role: JobRole) => {
+        setSelectedRoleForMatching(role);
+        const qualifiedCandidates = candidates.filter(c =>
+            c.role === 'Unassigned' &&
+            !c.archived &&
+            c.status === 'Screening' &&
+            (c.aiInitialScore || 0) >= 70
+        );
+
+        if (qualifiedCandidates.length === 0) {
+            toast({
+                title: "No Qualified Candidates Found",
+                description: "No 'Unassigned' candidates in 'Screening' meet the 70+ score requirement.",
+            });
+            return;
+        }
+
+        const matches = qualifiedCandidates.map(c => ({
+            candidateId: c.id,
+            candidateName: c.name,
+            justification: `Qualified with AI Score: ${Math.round(c.aiInitialScore || 0)}`,
+            confidenceScore: Math.round(c.aiInitialScore || 0),
+        })).sort((a, b) => b.confidenceScore - a.confidenceScore); // Sort by score descending
+
+        setMatchedCandidates(matches);
+        setIsMatchesDialogOpen(true);
+    };
 
     const handleAssignRole = (candidateId: string) => {
         if (!selectedRoleForMatching) return;
@@ -115,7 +144,8 @@ export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAd
                                 role={role} 
                                 onViewCandidates={onViewCandidates} 
                                 onReEngage={onReEngage}
-                                onFindTopCandidates={handleFindTopCandidates}
+                                onFindTopMatches={handleFindTopMatches}
+                                onFindAllQualified={handleFindAllQualified}
                                 isMatching={isMatching && selectedRoleForMatching?.id === role.id}
                                 style={{ '--stagger-index': index } as React.CSSProperties}
                             />

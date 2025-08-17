@@ -1,6 +1,6 @@
 
 import type { JobRole } from '@/lib/types'
-import { Building, Users, Eye, RefreshCw, Search, Loader2 } from 'lucide-react'
+import { Building, Users, Eye, RefreshCw, Search, Loader2, ListChecks } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
 
@@ -8,12 +8,13 @@ interface RoleCardProps {
     role: JobRole
     onViewCandidates: (role: JobRole) => void;
     onReEngage: (role: JobRole) => void;
-    onFindTopCandidates: (role: JobRole) => void;
+    onFindTopMatches: (role: JobRole) => void;
+    onFindAllQualified: (role: JobRole) => void;
     isMatching: boolean;
     style?: React.CSSProperties;
 }
 
-export function RoleCard({ role, onViewCandidates, onReEngage, onFindTopCandidates, isMatching, style }: RoleCardProps) {
+export function RoleCard({ role, onViewCandidates, onReEngage, onFindTopMatches, onFindAllQualified, isMatching, style }: RoleCardProps) {
 
     return (
         <Card style={style} className="bg-white flex flex-col border-border/50 hover:border-primary/50 transition-colors">
@@ -38,9 +39,13 @@ export function RoleCard({ role, onViewCandidates, onReEngage, onFindTopCandidat
                  <Button variant="secondary" className='w-full' onClick={() => onReEngage(role)}>
                     <RefreshCw className="mr-2 h-4 w-4" /> Re-engage Archives
                 </Button>
-                <Button variant="default" className='w-full' onClick={() => onFindTopCandidates(role)} disabled={isMatching}>
+                <Button variant="secondary" className='w-full' onClick={() => onFindAllQualified(role)}>
+                    <ListChecks className="mr-2 h-4 w-4" />
+                     Find All Qualified
+                </Button>
+                <Button variant="default" className='w-full col-span-2' onClick={() => onFindTopMatches(role)} disabled={isMatching}>
                     {isMatching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                     Find Candidates
+                     Find Top Matches (AI)
                 </Button>
             </CardFooter>
         </Card>
