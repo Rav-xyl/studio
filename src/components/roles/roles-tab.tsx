@@ -16,12 +16,11 @@ interface RolesTabProps {
     onReEngage: (role: JobRole) => void;
     onAddRole: (newRole: Omit<JobRole, 'id' | 'openings'>) => void;
     onDeleteRole: (roleId: string, roleTitle: string) => void;
-    onUpdateCandidate: (candidate: Candidate) => void;
     onFindMatches: (role: JobRole, mode: 'top' | 'qualified') => void;
 }
 
 
-export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAddRole, onDeleteRole, onUpdateCandidate, onFindMatches }: RolesTabProps) {
+export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAddRole, onDeleteRole, onFindMatches }: RolesTabProps) {
     const [isJdDialogOpen, setIsJdDialogOpen] = useState(false);
     const [matchingRoleId, setMatchingRoleId] = useState<string | null>(null);
     
