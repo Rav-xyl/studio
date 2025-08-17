@@ -608,6 +608,7 @@ export function AstraHirePage() {
             roles={roles}
             onUpdateCandidate={handleUpdateCandidate}
             onAddRole={handleAddRole}
+            onDeleteCandidate={handleDeleteCandidate}
         />;
        case 'gauntlet':
         return <GauntletPortalTab candidates={candidates} />;
