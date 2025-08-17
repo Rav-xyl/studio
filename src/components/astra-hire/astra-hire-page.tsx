@@ -276,130 +276,91 @@ export function AstraHirePage() {
         try {
             log("Start Simulation", "Beginning autonomous pipeline simulation.");
             
+            // --- STEP 1: SOURCING ---
             let candidatesForSim = [...candidates];
+            let sourced = false;
             if (candidatesForSim.filter(c => c.status === 'Sourcing' || c.status === 'Screening').length === 0) {
               setLoadingText("Phase 1/5: No candidates found. Proactively sourcing talent...");
-              log("Proactive Sourcing", "Candidate pool is empty. Generating fictional candidates to demonstrate pipeline.");
+              log("Proactive Sourcing", "Candidate pool is empty. Generating fictional candidates.");
+              sourced = true;
               const sourcingResult = await proactiveCandidateSourcing({
                   openRoles: roles.length > 0 ? roles : [{ title: "Senior Software Engineer", description: "Lead development of our core platform." }],
                   numberOfCandidates: 5
               });
-
               const sourcedCandidates: Candidate[] = sourcingResult.sourcedCandidates.map(sc => ({
-                  id: `cand-${nanoid(10)}`,
-                  name: sc.name,
-                  role: sc.role,
-                  skills: sc.skills,
-                  narrative: sc.narrative,
-                  inferredSkills: sc.inferredSkills,
-                  status: 'Screening',
-                  aiInitialScore: Math.floor(Math.random() * 20) + 75,
-                  avatarUrl: '',
-                  lastUpdated: new Date().toISOString()
+                  id: `cand-${nanoid(10)}`, name: sc.name, role: sc.role, skills: sc.skills, narrative: sc.narrative, inferredSkills: sc.inferredSkills, status: 'Screening', aiInitialScore: Math.floor(Math.random() * 20) + 75, avatarUrl: '', lastUpdated: new Date().toISOString()
               }));
-              
               const batch = writeBatch(db);
-              sourcedCandidates.forEach(c => {
-                  const docRef = doc(db, 'candidates', c.id);
-                  batch.set(docRef, c);
-              });
+              sourcedCandidates.forEach(c => batch.set(doc(db, 'candidates', c.id), c));
               await batch.commit();
               candidatesForSim = [...candidatesForSim, ...sourcedCandidates];
-
               log("Proactive Sourcing Complete", `Generated and saved ${sourcedCandidates.length} new candidates.`);
             }
 
-            setLoadingText("Phase 2/5: Synthesizing role and matching candidates...");
-            const topCandidate = candidatesForSim.filter(c => c.status === 'Screening').sort((a,b) => (b.aiInitialScore || 0) - (a.aiInitialScore || 0))[0];
-            
-            if(topCandidate) {
-                const roleSuggestions = await suggestRoleMatches({
-                    candidateName: topCandidate.name,
-                    candidateSkills: topCandidate.skills.join(', '),
-                    candidateNarrative: topCandidate.narrative,
-                    candidateInferredSkills: topCandidate.inferredSkills.join(', '),
-                });
+            // --- STEP 2: IDENTIFY TOP TALENT & ROLE SYNTHESIS ---
+            setLoadingText("Phase 2/5: Identifying top talent and synthesizing role...");
+            const topCandidate = candidatesForSim
+                .filter(c => c.status === 'Screening' && !c.archived)
+                .sort((a,b) => (b.aiInitialScore || 0) - (a.aiInitialScore || 0))[0];
 
-                const targetRoleTitle = roleSuggestions.roles[0]?.roleTitle || "Lead Software Engineer";
-                log("Role Synthesis", `Identified top talent. Synthesizing role for: '${targetRoleTitle}'`);
-
-                const jdResult = await synthesizeJobDescription({
-                    jobTitle: targetRoleTitle,
-                    companyInformation: "A fast-growing tech startup in the AI space, focused on innovation and agile development."
-                });
-                const newRoleRef = doc(collection(db, 'roles'));
-                const newRole: JobRole = { id: newRoleRef.id, title: targetRoleTitle, description: jdResult.jobDescription, department: "Engineering", openings: 1 };
-                await setDoc(newRoleRef, newRole);
-                
-                log("Role Synthesis Complete", `Created and saved new role: '${newRole.title}'.`);
-                
-                const candidatesToReview = candidatesForSim.filter(c => c.status === 'Screening');
-                const reviewPromises = candidatesToReview.map(async (c) => {
-                    const review = await reviewCandidate({ candidateData: c.narrative, jobDescription: newRole.description, companyType: 'startup' });
-                    if (review.recommendation === 'Hire' || review.recommendation === 'Maybe') {
-                        return { ...c, status: 'Interview' as KanbanStatus, role: newRole.title };
-                    }
-                    return c;
-                });
-
-                const reviewedCandidates = await Promise.all(reviewPromises);
-                
-                const batch = writeBatch(db);
-                reviewedCandidates.forEach(c => {
-                    if (c.id) {
-                        const { id, ...data } = c;
-                        batch.update(doc(db, 'candidates', id), data);
-                    }
-                });
-                await batch.commit();
-                
-                const matchedCount = reviewedCandidates.filter(c => c.status === 'Interview').length;
-                log("Candidate Review Complete", `Matched ${matchedCount} candidates to '${newRole.title}' and moved to 'Interview'.`);
-
-                const interviewCandidate = reviewedCandidates.find(c => c.status === 'Interview');
-                if (interviewCandidate) {
-                    setLoadingText("Phase 3/5: Simulating AI Gauntlet...");
-                    log("Gauntlet Simulation", `Simulating gauntlet for ${interviewCandidate.name}.`);
-                    const bossReview = await finalInterviewReview({interviewReport: "Simulated Technical and System Design phases."});
-
-                    if (bossReview.finalRecommendation === "Strong Hire") {
-                        setLoadingText("Phase 4/5: BOSS AI approved. Drafting offer...");
-                        log("BOSS Validation", `BOSS AI approved ${interviewCandidate.name} with recommendation: ${bossReview.finalRecommendation}.`);
-                        
-                        const offer = await draftOfferLetter({
-                           candidateName: interviewCandidate.name,
-                           roleTitle: interviewCandidate.role,
-                           candidateSkills: interviewCandidate.skills,
-                           candidateExperience: interviewCandidate.narrative,
-                           companyName: "AstraHire Client",
-                           companySalaryBands: "For a senior role, the band is typically between $120,000 and $150,000.",
-                           simulatedMarketData: "Market analysis indicates the average salary for this role with this experience is around $135,000."
-                        });
-
-                        log("Offer Drafted", `Market-aware offer drafted for ${interviewCandidate.name} with salary ${offer.suggestedSalary}.`);
-                        setLoadingText("Phase 5/5: Hiring candidate...");
-                        await updateDoc(doc(db, 'candidates', interviewCandidate.id), { status: 'Hired' });
-                        log("Hiring Decision", `Autonomously hired ${interviewCandidate.name} for the role of ${interviewCandidate.role}.`);
-                    } else {
-                        log("BOSS Validation", `BOSS AI rejected ${interviewCandidate.name}. Ending simulation.`);
-                    }
-                }
-            } else {
-                 log("Role Synthesis", "Not enough qualified candidates to synthesize a new role. Ending simulation.");
-                 throw new Error("Simulation ended early: No qualified candidates found.");
+            if(!topCandidate) {
+                throw new Error("Simulation ended: No qualified candidates found in 'Screening'.");
             }
+            log("Talent Identification", `Identified top talent: ${topCandidate.name} (Score: ${topCandidate.aiInitialScore}).`);
+            
+            const roleSuggestions = await suggestRoleMatches({
+                candidateName: topCandidate.name, candidateSkills: topCandidate.skills.join(', '), candidateNarrative: topCandidate.narrative, candidateInferredSkills: topCandidate.inferredSkills.join(', '),
+            });
+            const targetRoleTitle = roleSuggestions.roles[0]?.roleTitle || "Lead Software Engineer";
+            log("Role Suggestion", `AI suggested role: '${targetRoleTitle}' for ${topCandidate.name}.`);
+
+            const jdResult = await synthesizeJobDescription({ jobTitle: targetRoleTitle, companyInformation: "A fast-growing tech startup in the AI space." });
+            const newRole: JobRole = { id: `role-${nanoid(10)}`, title: targetRoleTitle, description: jdResult.jobDescription, department: "Engineering", openings: 1 };
+            await setDoc(doc(db, 'roles', newRole.id), newRole);
+            log("Role Synthesis Complete", `Created and saved new role: '${newRole.title}'.`);
+
+            // --- STEP 3: SIMULATE GAUNTLET FOR TOP CANDIDATE ---
+            setLoadingText("Phase 3/5: Simulating AI Gauntlet for top candidate...");
+            log("Gauntlet Simulation", `Simulating technical gauntlet for ${topCandidate.name}.`);
+            const bossReview = await finalInterviewReview({interviewReport: "Simulated Technical and System Design phases. The candidate demonstrated exceptional problem-solving skills and a strong grasp of architectural principles."});
+            
+            if (bossReview.finalRecommendation !== "Strong Hire") {
+                await updateDoc(doc(db, 'candidates', topCandidate.id), { archived: true, 'gauntletState.phase': 'Failed' });
+                throw new Error(`Simulation ended: Top candidate ${topCandidate.name} did not pass the Gauntlet. Recommendation: ${bossReview.finalRecommendation}.`);
+            }
+            log("BOSS Validation", `BOSS AI approved ${topCandidate.name} with recommendation: ${bossReview.finalRecommendation}.`);
+
+            // --- STEP 4: PROMOTE TO INTERVIEW ---
+            setLoadingText("Phase 4/5: Candidate passed. Promoting to Interview...");
+            await updateDoc(doc(db, 'candidates', topCandidate.id), { 
+                status: 'Interview', 
+                role: newRole.title,
+                'gauntletState.phase': 'Complete'
+            });
+            log("Pipeline Progression", `Moved ${topCandidate.name} to 'Interview' and assigned role '${newRole.title}'.`);
+
+            // --- STEP 5: DRAFT OFFER & HIRE ---
+            setLoadingText("Phase 5/5: Simulating final interview, drafting offer and hiring...");
+            const offer = await draftOfferLetter({
+               candidateName: topCandidate.name, roleTitle: newRole.title, candidateSkills: topCandidate.skills, candidateExperience: topCandidate.narrative, companyName: "AstraHire Client", companySalaryBands: "Senior: $120k-$150k", simulatedMarketData: "Market avg: $135k"
+            });
+            log("Offer Drafted", `Market-aware offer drafted for ${topCandidate.name} with salary ${offer.suggestedSalary}.`);
+            
+            await updateDoc(doc(db, 'candidates', topCandidate.id), { status: 'Hired' });
+            log("Hiring Decision", `Autonomously hired ${topCandidate.name} for the role of ${newRole.title}.`);
             
             setLastSaarthiReport({
                 reportType: "Pipeline Simulation",
-                simulationSummary: `The end-to-end simulation autonomously processed the pipeline. It sourced/screened candidates, created a role, and moved the top candidate through a full gauntlet, validation, and offer process.`,
+                simulationSummary: `The end-to-end simulation successfully processed the pipeline. ${sourced ? `It proactively sourced new talent, then identified` : 'It identified'} ${topCandidate.name} as a top candidate, synthesized the role of '${newRole.title}', validated them through the Gauntlet, and autonomously hired them.`,
                 detailedProcessLog: currentSimulationLog,
             });
             setIsSaarthiReportOpen(true);
 
         } catch (error) {
             console.error("Full pipeline simulation failed:", error);
-            toast({ title: "Simulation Error", description: "An error occurred. Check the console.", variant: "destructive"});
-            log("Error", `The simulation was interrupted by an error: ${error instanceof Error ? error.message : 'Unknown'}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            toast({ title: "Simulation Error", description: errorMessage, variant: "destructive"});
+            log("Error", `The simulation was interrupted: ${errorMessage}`);
         } finally {
             setIsLoading(false);
         }
@@ -670,5 +631,3 @@ export function AstraHirePage() {
     </div>
   );
 }
-
-    
