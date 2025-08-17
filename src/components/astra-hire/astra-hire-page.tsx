@@ -398,15 +398,19 @@ export function AstraHirePage() {
 
     const handleDeleteRole = async (roleId: string, roleTitle: string) => {
         try {
-            await deleteDoc(doc(db, "roles", roleId));
+            const batch = writeBatch(db);
 
+            // 1. Unassign all candidates from this role
             const q = query(collection(db, 'candidates'), where('role', '==', roleTitle));
             const querySnapshot = await getDocs(q);
-
-            const batch = writeBatch(db);
             querySnapshot.forEach((doc) => {
                 batch.update(doc.ref, { role: "Unassigned" });
             });
+
+            // 2. Delete the role document itself
+            const roleRef = doc(db, "roles", roleId);
+            batch.delete(roleRef);
+            
             await batch.commit();
             
             toast({ title: "Role Deleted", description: `"${roleTitle}" has been deleted and associated candidates are now 'Unassigned'.` });
@@ -581,7 +585,10 @@ export function AstraHirePage() {
 
             // Now, update the role's cache to remove the assigned candidate
             const roleRef = doc(db, 'roles', selectedRoleForMatching.id);
-            const updatedMatches = (selectedRoleForMatching.roleMatches || []).filter(m => m.candidateId !== candidateId);
+            const roleDoc = await getDoc(roleRef);
+            const currentRoleData = roleDoc.data() as JobRole;
+            const updatedMatches = (currentRoleData.roleMatches || []).filter(m => m.candidateId !== candidateId);
+            
             await updateDoc(roleRef, {
                 roleMatches: updatedMatches
             });
