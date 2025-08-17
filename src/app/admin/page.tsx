@@ -67,6 +67,17 @@ export default function AdminDashboardPage() {
         setIsSourcing(true);
         toast({ title: "AI Sourcing Agent Activated", description: "Scanning for high-potential, unassigned candidates..." });
         try {
+            // Clear existing pending notifications before generating new ones
+            const pendingNotificationsQuery = query(collection(db, "notifications"), where("status", "==", "pending"));
+            const pendingNotificationsSnapshot = await getDocs(pendingNotificationsQuery);
+            if (!pendingNotificationsSnapshot.empty) {
+                const batch = writeBatch(db);
+                pendingNotificationsSnapshot.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+            }
+
             const unassignedCandidates = allCandidates.filter(c => c.role === 'Unassigned' && !c.archived);
             const result = await proactiveCandidateSourcing({
                 candidates: unassignedCandidates,
