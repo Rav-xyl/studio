@@ -10,8 +10,8 @@ This project uses Firestore to store data. To allow the application to read from
 
 **Run the following command in your terminal:**
 
-` + "```bash" + `
+```bash
 firebase deploy --only firestore:rules
-` + "```" + `
+```
 
 This will apply the permissive rules defined in `firestore.rules`, which are necessary for the application to function correctly in this development environment.
