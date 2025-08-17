@@ -20,7 +20,6 @@ import '@/ai/flows/re-engage-candidate.ts';
 import '@/ai/flows/final-interview-review.ts';
 import '@/ai/flows/generate-system-design-question.ts';
 import '@/ai/flows/proctor-technical-exam.ts';
-import '@/ai/flows/find-potential-roles.ts';
 import '@/ai/flows/find-potential-candidates.ts';
 import '@/ai/flows/final-interview.ts';
 import '@/ai/flows/proactive-candidate-sourcing.ts';

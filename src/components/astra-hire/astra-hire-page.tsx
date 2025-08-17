@@ -24,7 +24,6 @@ import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, qu
 import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
 import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
-import { findPotentialRoles } from '@/ai/flows/find-potential-roles';
 import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
 import { Card, CardContent } from '../ui/card';
 import { Progress } from '../ui/progress';

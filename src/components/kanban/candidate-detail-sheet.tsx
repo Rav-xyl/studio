@@ -26,7 +26,7 @@ import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
 import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
-import { findPotentialRoles } from '@/ai/flows/find-potential-roles';
+import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 
 interface CandidateDetailSheetProps {
@@ -136,13 +136,27 @@ export function CandidateDetailSheet({
               candidateInferredSkills: candidate.inferredSkills.join(', '),
             });
         } else if (type === 'potentialRoles') {
-            result = await findPotentialRoles({
-                candidateProfile: {
-                    skills: candidate.skills,
-                    narrative: candidate.narrative,
-                },
-                jobRoles: roles,
-            });
+            const allMatches: any[] = [];
+            for (const role of roles) {
+                 const matchResult = await findPotentialCandidates({
+                    jobRole: role,
+                    candidates: [{
+                        id: candidate.id,
+                        name: candidate.name,
+                        skills: candidate.skills,
+                        narrative: candidate.narrative,
+                    }],
+                });
+                if (matchResult.matches && matchResult.matches.length > 0) {
+                   allMatches.push({
+                       roleId: role.id,
+                       roleTitle: role.title,
+                       ...matchResult.matches[0]
+                   });
+                }
+            }
+            allMatches.sort((a,b) => b.confidenceScore - a.confidenceScore);
+            result = { matches: allMatches };
         }
         setGeneratedData(prev => ({...prev, [type]: result }));
         toast({ title: `AI ${type} generated successfully!`})
