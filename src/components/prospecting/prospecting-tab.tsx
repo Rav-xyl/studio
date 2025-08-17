@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { findPotentialRoles } from "@/ai/flows/find-potential-roles";
+import { findPotentialCandidates } from "@/ai/flows/find-potential-candidates";
 import { useState } from "react";
 import { Loader2, Search, Trash2, UserSearch, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -53,14 +53,24 @@ export function ProspectingTab({
     const handleFindMatches = async (candidate: Candidate) => {
         setIsLoading(prev => ({ ...prev, [candidate.id]: true }));
         try {
-            const result = await findPotentialRoles({
-                candidateProfile: {
-                    skills: candidate.skills,
-                    narrative: candidate.narrative,
-                },
-                jobRoles: roles,
-            });
-            setMatchResults(prev => ({ ...prev, [candidate.id]: result.matches }));
+            // Re-using the more robust findPotentialCandidates flow
+            const allMatches: any[] = [];
+            for (const role of roles) {
+                const result = await findPotentialCandidates({
+                    jobRole: role,
+                    candidates: [candidate],
+                });
+                if (result.matches && result.matches.length > 0) {
+                   allMatches.push({
+                       roleId: role.id,
+                       roleTitle: role.title,
+                       ...result.matches[0] // Since we only passed one candidate
+                   });
+                }
+            }
+            allMatches.sort((a,b) => b.confidenceScore - a.confidenceScore);
+            setMatchResults(prev => ({ ...prev, [candidate.id]: allMatches }));
+
         } catch (error) {
             console.error("Failed to find potential roles:", error);
             toast({ title: "Error", description: "Could not fetch AI role matches.", variant: "destructive" });

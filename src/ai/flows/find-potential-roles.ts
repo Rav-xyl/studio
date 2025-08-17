@@ -23,7 +23,7 @@ const CandidateProfileSchema = z.object({
     narrative: z.string(),
 });
 
-const FindPotentialRolesInputSchema = z.object({
+export const FindPotentialRolesInputSchema = z.object({
   candidateProfile: CandidateProfileSchema.describe('The profile of the candidate to match.'),
   jobRoles: z.array(JobRoleSchema).describe('A list of available job roles to match against.'),
 });
@@ -36,7 +36,7 @@ const MatchedRoleSchema = z.object({
     confidenceScore: z.number().describe('A score from 0 to 100 indicating the confidence in the match.'),
 });
 
-const FindPotentialRolesOutputSchema = z.object({
+export const FindPotentialRolesOutputSchema = z.object({
   matches: z.array(MatchedRoleSchema).describe('A list of suitable roles for the candidate, sorted by confidence score.'),
 });
 export type FindPotentialRolesOutput = z.infer<typeof FindPotentialRolesOutputSchema>;
