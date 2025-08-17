@@ -419,13 +419,27 @@ export function AstraHirePage() {
 
     const handleDeleteCandidate = async (candidateId: string) => {
       try {
+          // Delete the candidate document
           await deleteDoc(doc(db, 'candidates', candidateId));
-          toast({ title: "Candidate Deleted", description: "The candidate has been permanently removed." });
+
+          // Find and delete all notifications for this candidate
+          const notificationsQuery = query(collection(db, 'notifications'), where('candidateId', '==', candidateId));
+          const querySnapshot = await getDocs(notificationsQuery);
+
+          if (!querySnapshot.empty) {
+              const batch = writeBatch(db);
+              querySnapshot.forEach((doc) => {
+                  batch.delete(doc.ref);
+              });
+              await batch.commit();
+          }
+
+          toast({ title: "Candidate Deleted", description: "The candidate and all related notifications have been permanently removed." });
       } catch (error) {
           console.error("Failed to delete candidate:", error);
           toast({ title: "Deletion Failed", description: "Could not delete the candidate. See console for details.", variant: 'destructive' });
       }
-    }
+    };
 
     const handleViewCandidatesForRole = (role: JobRole) => {
         setFilteredRole(role);

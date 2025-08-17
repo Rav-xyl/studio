@@ -89,15 +89,9 @@ export function CandidatePoolTab({
     }
 
     try {
-      const batch = writeBatch(db);
-      const candidatesToDeleteIds = candidatesToDelete.map(c => c.id);
+      const deletePromises = candidatesToDelete.map(c => onDeleteCandidate(c.id));
+      await Promise.all(deletePromises);
       
-      candidatesToDeleteIds.forEach(id => {
-          const docRef = doc(db, "candidates", id);
-          batch.delete(docRef);
-      });
-
-      await batch.commit();
       toast({ title: 'Success', description: `Successfully deleted ${candidatesToDelete.length} candidates from "${status}".` });
     } catch (error) {
       console.error(`Failed to delete candidates from ${status}:`, error);
