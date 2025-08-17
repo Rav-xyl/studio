@@ -14,7 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
 import { nanoid } from 'nanoid';
 import { reviewCandidate } from '@/ai/flows/ai-assisted-candidate-review';
-import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
 import { analyzeHiringOverride } from '@/ai/flows/self-correcting-rubric';
 import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
@@ -342,11 +341,14 @@ export function AstraHirePage() {
             log("Talent Identification", `Identified top talent: ${topCandidate.name} (Score: ${topCandidate.aiInitialScore}).`);
 
             setBackgroundTask(prev => prev ? ({ ...prev, progress: 2, message: 'Phase 2/5: Synthesizing Role...' }) : null);
-            const roleSuggestions = await suggestRoleMatches({
-                candidateName: topCandidate.name, candidateSkills: topCandidate.skills.join(', '), candidateNarrative: topCandidate.narrative, candidateInferredSkills: topCandidate.inferredSkills.join(', '),
+            
+            const roleSuggestions = await findPotentialCandidates({
+                jobRole: { id: 'simulated', title: 'Simulated Senior Role', description: `A role for a candidate with skills like ${topCandidate.skills.join(', ')}` },
+                candidates: [topCandidate]
             });
-            const targetRoleTitle = roleSuggestions.roles[0]?.roleTitle || "Lead Software Engineer";
-            log("Role Suggestion", `AI suggested role: '${targetRoleTitle}' for ${topCandidate.name}.`);
+
+            const targetRoleTitle = "Lead Software Engineer";
+            log("Role Suggestion", `AI suggested a role similar to '${targetRoleTitle}' for ${topCandidate.name}.`);
 
             const jdResult = await synthesizeJobDescription({ jobDescriptionText: `Seeking a candidate for ${targetRoleTitle} with skills like ${topCandidate.skills.join(', ')}.` });
             const newRole: JobRole = { id: `role-${nanoid(10)}`, title: targetRoleTitle, description: jdResult.formattedDescription, department: "Engineering", openings: 1 };
@@ -736,7 +738,7 @@ export function AstraHirePage() {
             candidates={candidates.filter(c => c.role === 'Unassigned' && !c.archived)}
             roles={roles}
             onUpdateCandidate={handleUpdateCandidate}
-            onAddRole={handleAddRole}
+            onAddRole={onAddRole}
             onDeleteCandidate={handleDeleteCandidate}
             onRunBulkMatch={handleRunBulkMatch}
             matchResults={matchResults}

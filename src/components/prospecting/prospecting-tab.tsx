@@ -54,6 +54,7 @@ export function ProspectingTab({
         setIsLoading(prev => ({ ...prev, [candidate.id]: true }));
         try {
             const allMatches: any[] = [];
+            // This is now consistent: it evaluates one candidate against all available roles.
             for (const role of roles) {
                 const result = await findPotentialCandidates({
                     jobRole: role,
@@ -74,6 +75,9 @@ export function ProspectingTab({
             }
             allMatches.sort((a,b) => b.confidenceScore - a.confidenceScore);
             setMatchResults(prev => ({ ...prev, [candidate.id]: allMatches }));
+            if(allMatches.length === 0) {
+              toast({ title: "No Strong Matches Found", description: `Could not find any roles with a score of 70+ for ${candidate.name}.` });
+            }
 
         } catch (error) {
             console.error("Failed to find potential roles:", error);

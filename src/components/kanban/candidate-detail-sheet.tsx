@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -25,7 +26,6 @@ import { useToast } from '@/hooks/use-toast';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { generateOnboardingPlan } from '@/ai/flows/automated-onboarding-plan';
 import { cultureFitSynthesis } from '@/ai/flows/culture-fit-synthesis';
-import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches';
 import { findPotentialCandidates } from '@/ai/flows/find-potential-candidates';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 
@@ -78,7 +78,7 @@ export function CandidateDetailSheet({
   
   if (!candidate) return null;
 
-  const handleGenerateClick = async (type: 'review' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'roleMatches' | 'potentialRoles') => {
+  const handleGenerateClick = async (type: 'review' | 'email' | 'skillGap' | 'offer' | 'onboarding' | 'cultureFit' | 'potentialRoles') => {
     if (!candidate) return;
 
     setIsGenerating(prev => ({ ...prev, [type]: true }));
@@ -127,13 +127,6 @@ export function CandidateDetailSheet({
                 candidateNarrative: candidate.narrative,
                 inferredSoftSkills: candidate.inferredSkills,
                 companyValues: "Innovation, Collaboration, Customer-Centricity, Fast-Paced Growth",
-            });
-        } else if (type === 'roleMatches') {
-            result = await suggestRoleMatches({
-              candidateName: candidate.name,
-              candidateSkills: candidate.skills.join(', '),
-              candidateNarrative: candidate.narrative,
-              candidateInferredSkills: candidate.inferredSkills.join(', '),
             });
         } else if (type === 'potentialRoles') {
             const allMatches: any[] = [];
@@ -196,15 +189,6 @@ export function CandidateDetailSheet({
     });
   }
   
-  const handleAddSuggestedRole = (role: { roleTitle: string; rationale: string; }) => {
-    if (!candidate) return;
-    onAddRole({
-      title: role.roleTitle,
-      description: role.rationale,
-      department: 'AI Suggested',
-    }, candidate);
-  };
-  
   const handleAssignRole = (roleTitle: string) => {
     if(!candidate) return;
     onUpdateCandidate({...candidate, role: roleTitle});
@@ -217,7 +201,6 @@ export function CandidateDetailSheet({
   const offer = generatedData.offer;
   const onboardingPlan = generatedData.onboarding;
   const cultureFit = generatedData.cultureFit;
-  const roleMatches = generatedData.roleMatches?.roles || [];
   const potentialRoles = generatedData.potentialRoles?.matches || [];
   const isUnassigned = candidate.role === 'Unassigned';
 
@@ -271,35 +254,9 @@ export function CandidateDetailSheet({
               </TabsContent>
 
               <TabsContent value="ai-analysis" className="mt-4 space-y-4">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className='flex items-center gap-2 text-lg'><GitMerge className='h-5 w-5 text-primary' /> Mode 1: Suggest New Roles</CardTitle>
-                        <CardDescription>Use AI to discover brand new roles this candidate might be a fit for.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                         {roleMatches.length > 0 ? (
-                            <div className='space-y-3'>
-                                {roleMatches.map((match: any, index: number) => (
-                                    <div key={index} className="p-3 rounded-md border border-dashed border-border flex items-center justify-between">
-                                        <div>
-                                            <p className="font-semibold text-primary">{match.roleTitle}</p>
-                                            <p className="text-xs text-muted-foreground">{match.rationale}</p>
-                                        </div>
-                                        <Button size="sm" variant="ghost" onClick={() => handleAddSuggestedRole(match)}><PlusCircle className="mr-2 h-4 w-4" />Add & Assign</Button>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                           <Button variant="outline" className="w-full" onClick={() => handleGenerateClick('roleMatches')} disabled={isGenerating.roleMatches}>
-                              {isGenerating.roleMatches ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                              Suggest & Create New Roles
-                            </Button>
-                        )}
-                    </CardContent>
-                </Card>
                  <Card>
                     <CardHeader>
-                        <CardTitle className='flex items-center gap-2 text-lg'><Search className='h-5 w-5 text-primary' /> Mode 2: Match to Existing Roles</CardTitle>
+                        <CardTitle className='flex items-center gap-2 text-lg'><Search className='h-5 w-5 text-primary' /> Match to Existing Roles</CardTitle>
                         <CardDescription>Scan all available client roles to find the best fit for this candidate.</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -326,7 +283,7 @@ export function CandidateDetailSheet({
                 </Card>
                 <Card>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-lg'><ShieldCheck className='h-5 w-5 text-primary' /> Mode 3: Targeted Review</CardTitle>
+                    <CardTitle className='flex items-center gap-2 text-lg'><ShieldCheck className='h-5 w-5 text-primary' /> Targeted Review</CardTitle>
                      <CardDescription>Validate this candidate's fit for their currently assigned role.</CardDescription>
                   </CardHeader>
                   <CardContent>
