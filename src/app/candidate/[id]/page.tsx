@@ -65,10 +65,16 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                     if (candidateData.gauntletState) {
                         setGauntletState(candidateData.gauntletState);
                     } else {
+                        // Start at technical phase if no state exists
                         setGauntletState(prev => ({...prev, phase: 'Technical' }));
                     }
                 } else {
                     console.error("No such candidate!");
+                    toast({
+                        title: "Candidate Not Found",
+                        description: "The provided ID does not match any candidate.",
+                        variant: "destructive",
+                    });
                     setCandidate(null); 
                 }
             } catch (error) {
@@ -85,6 +91,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         fetchCandidateData();
     }, [candidateId, toast, router]);
 
+    // This effect is the source of truth for saving state to the DB.
     useEffect(() => {
         const saveGauntletState = async () => {
             if (candidate && candidate.id && gauntletState.phase !== 'Locked' && isAuthenticated) {
@@ -109,7 +116,6 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
     const handleFailure = async (reason: string) => {
         if (!candidate) return;
         
-        // This is the final state update for failure
         const finalFailedState = { ...gauntletState, phase: 'Failed' as GauntletPhase };
         setGauntletState(finalFailedState);
 
@@ -123,7 +129,6 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
             rejectionReason: `After a careful review of the ${reason}, we have decided to move forward with other candidates.`,
         });
 
-        // Archive and set final state in one go
         await updateDoc(doc(db, 'candidates', candidate.id), { 
             archived: true, 
             gauntletState: finalFailedState 
@@ -138,7 +143,6 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         
         const reportKey = `${phase.charAt(0).toLowerCase() + phase.slice(1)}Report` as keyof GauntletState;
         
-        // Temporarily set a pending state while the BOSS AI reviews
         const pendingState = phase === 'Technical' ? 'PendingTechReview' : 'PendingDesignReview';
         setGauntletState(prev => ({ ...prev, phase: pendingState as GauntletPhase, [reportKey]: report }));
 
@@ -146,26 +150,37 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
             const result = await finalInterviewReview({ interviewReport: report });
             const reviewKey = phase === 'Technical' ? 'techReview' : 'designReview';
             
-            const isPass = result.finalRecommendation === "Strong Hire" || result.finalRecommendation === "Proceed with Caution";
+            const isPass = result.finalRecommendation === "Strong Hire";
 
+            // Update state with the review result FIRST
+            const reviewedState: GauntletState = {
+                ...gauntletState,
+                phase: pendingState as GauntletPhase,
+                [reportKey]: report,
+                [reviewKey]: result
+            };
+            
             if (isPass) {
-                const nextPhase = phase === 'Technical' ? 'SystemDesign' : 'Complete';
-                const newState: Partial<GauntletState> = { phase: nextPhase as GauntletPhase, [reviewKey]: result };
-                const finalStateForDb = { ...gauntletState, ...newState, [reportKey]: report };
-                 
-                 setGauntletState(prev => ({ ...prev, ...newState }));
-
-                if (nextPhase === 'Complete' && candidate) {
-                    // Final, definitive update for passing the entire gauntlet
-                    await updateDoc(doc(db, 'candidates', candidate.id), { status: 'Interview', gauntletState: finalStateForDb });
-                    toast({ title: "Gauntlet Passed!", description: "You have passed the technical assessment and will be invited to the final interview stage shortly." });
-                } else {
-                     toast({ title: "Validation Successful!", description: "The BOSS AI has approved you for the next phase." });
+                if (phase === 'Technical') {
+                    setGauntletState({ ...reviewedState, phase: 'SystemDesign' });
+                    toast({ title: "Validation Successful!", description: "The BOSS AI has approved you for the next phase." });
+                } else { // Passed System Design
+                    const finalState: GauntletState = { ...reviewedState, phase: 'Complete' };
+                    setGauntletState(finalState);
+                    
+                    if (candidate) {
+                        // This is the FINAL update for a successful Gauntlet run
+                        await updateDoc(doc(db, 'candidates', candidate.id), { 
+                            status: 'Interview', 
+                            gauntletState: finalState 
+                        });
+                        toast({ title: "Gauntlet Passed!", description: "You have passed the technical assessment. The hiring team has been notified." });
+                    }
                 }
             } else {
-                setGauntletState(prev => ({ ...prev, [reviewKey]: result }));
-                // handleFailure will set the final state to 'Failed'
+                // Failure at any stage
                 await handleFailure(`${phase} Assessment`);
+                setGauntletState({ ...reviewedState, phase: 'Failed' });
             }
         } catch (error) {
             console.error("BOSS validation failed", error);
@@ -229,23 +244,27 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         );
     }
 
-    const stageStatus = (stage: GauntletPhase): StageStatus => {
-        const phaseOrder: GauntletPhase[] = ['Technical', 'PendingTechReview', 'SystemDesign', 'PendingDesignReview', 'Complete'];
-        const currentPhaseIndex = phaseOrder.indexOf(phase);
-        const stageIndex = phaseOrder.indexOf(stage);
-
+    const stageStatus = (stage: 'Technical' | 'SystemDesign'): StageStatus => {
         if (phase === 'Failed') {
-            const techFailed = gauntletState.techReview && (gauntletState.techReview.finalRecommendation === 'Do Not Hire');
+            const techFailed = gauntletState.techReview && gauntletState.techReview.finalRecommendation !== 'Strong Hire';
+            const designFailed = gauntletState.designReview && gauntletState.designReview.finalRecommendation !== 'Strong Hire';
+
             if (stage === 'Technical' && techFailed) return 'Failed';
             if (stage === 'Technical' && !techFailed) return 'Complete';
-            if (stage === 'SystemDesign' && !techFailed) return 'Locked';
-            if (stage === 'SystemDesign' && techFailed) return 'Failed';
+            if (stage === 'SystemDesign' && designFailed) return 'Failed';
+            if (stage === 'SystemDesign' && !designFailed && techFailed) return 'Locked';
+            if (stage === 'SystemDesign' && !designFailed && !techFailed) return 'Complete';
             return 'Failed';
         }
+        
+        if(phase === 'Complete') return 'Complete';
 
-        if (currentPhaseIndex > stageIndex) return 'Complete';
-        if (currentPhaseIndex === stageIndex) return 'Unlocked';
-        if (phase.startsWith('Pending') && stageIndex === currentPhaseIndex -1) return 'Pending';
+        if(phase === 'Technical' || phase === 'PendingTechReview') {
+            return stage === 'Technical' ? 'Unlocked' : 'Locked';
+        }
+        if(phase === 'SystemDesign' || phase === 'PendingDesignReview') {
+             return stage === 'Technical' ? 'Complete' : 'Unlocked';
+        }
         
         return 'Locked';
     }
@@ -300,7 +319,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                             </Button>
                         </div>
                     )}
-                     {phase.startsWith('Pending') && (
+                     {(phase.startsWith('Pending')) && (
                          <div className="flex items-center justify-center p-4 bg-yellow-100/50 rounded-lg">
                             <Loader2 className="h-6 w-6 animate-spin text-yellow-600" />
                             <p className="ml-3 text-yellow-700 font-medium">Processing your submission... The BOSS AI is reviewing your performance.</p>

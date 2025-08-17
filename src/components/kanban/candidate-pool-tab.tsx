@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -15,7 +16,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { BulkUploadDialog } from './bulk-upload-dialog';
 import { db } from '@/lib/firebase';
-import { deleteDoc, doc } from 'firebase/firestore';
+import { writeBatch, collection, query, where, getDocs } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 const KANBAN_COLUMNS: KanbanStatus[] = [
@@ -86,6 +87,32 @@ export function CandidatePoolTab({
     candidates: displayedCandidates.filter((c) => c.status === status),
   }));
 
+  const handleDeleteAllInStatus = async (status: KanbanStatus) => {
+    const candidatesToDelete = columns.find(col => col.title === status)?.candidates;
+    if (!candidatesToDelete || candidatesToDelete.length === 0) {
+      toast({ title: 'Nothing to delete', description: `There are no candidates in the "${status}" column.` });
+      return;
+    }
+
+    try {
+      const batch = writeBatch(db);
+      const candidatesCollection = collection(db, 'candidates');
+      const q = query(candidatesCollection, where('status', '==', status));
+      const querySnapshot = await getDocs(q);
+      
+      querySnapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      await batch.commit();
+      toast({ title: 'Success', description: `Successfully deleted ${querySnapshot.size} candidates from "${status}".` });
+    } catch (error) {
+      console.error(`Failed to delete candidates from ${status}:`, error);
+      toast({ title: 'Error', description: 'Could not delete candidates. See console for details.', variant: 'destructive' });
+    }
+  };
+
+
   return (
     <DndProvider backend={HTML5Backend}>
         <div className="fade-in-slide-up">
@@ -130,6 +157,8 @@ export function CandidatePoolTab({
                 candidates={col.candidates}
                 onCardClick={handleCardClick}
                 onUpdateCandidate={onUpdateCandidate}
+                onDeleteCandidate={onDeleteCandidate}
+                onDeleteAll={handleDeleteAllInStatus}
             />
             ))}
         </div>

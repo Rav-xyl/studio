@@ -3,12 +3,15 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { Clock, Star, Users, Briefcase, CheckCircle, ShieldAlert, Video } from 'lucide-react';
+import { Clock, Star, Users, Briefcase, CheckCircle, ShieldAlert, Video, Trash2 } from 'lucide-react';
 import { useDrag } from 'react-dnd';
+import { Button } from '../ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
 
 interface KanbanCardProps {
   candidate: Candidate;
   onClick: () => void;
+  onDelete: (candidateId: string) => void;
   className?: string;
 }
 
@@ -36,7 +39,7 @@ const StatusInfo = ({ status, candidate }: { status: string, candidate: Candidat
     }
 };
 
-export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
+export function KanbanCard({ candidate, onClick, onDelete, className }: KanbanCardProps) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'candidate',
     item: { candidate },
@@ -50,45 +53,71 @@ export function KanbanCard({ candidate, onClick, className }: KanbanCardProps) {
   return (
     <Card
       ref={drag}
-      onClick={onClick}
       className={cn(
-        'bg-card cursor-pointer hover:border-primary/50 transition-all border',
+        'bg-card group relative cursor-pointer hover:border-primary/50 transition-all border',
         isDragging ? 'opacity-30' : 'opacity-100',
         hasFailedGauntlet && 'border-destructive/50 bg-destructive/10',
         className
         )}
     >
-      <CardContent className="p-3">
-        <div className="flex items-start gap-3">
-          <Avatar className="h-10 w-10 border">
-            <AvatarImage src={candidate.avatarUrl} alt={candidate.name} data-ai-hint="person" />
-            <AvatarFallback>{getInitials(candidate.name)}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1">
-            <p className="font-semibold text-foreground truncate">{candidate.name}</p>
-            <p className="text-sm text-muted-foreground">{candidate.role}</p>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-1">
-          {candidate.skills.slice(0, 3).map((skill) => (
-            <Badge key={skill} variant="secondary">{skill}</Badge>
-          ))}
-          {candidate.skills.length > 3 && (
-            <Badge variant="secondary">+{candidate.skills.length - 3}</Badge>
-          )}
-        </div>
-        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-            <div className='flex items-center gap-1.5'>
-                <StatusInfo status={candidate.status} candidate={candidate} />
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-1 right-1 h-6 w-6 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This will permanently delete {candidate.name}'s profile. This action cannot be undone.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={(e) => { e.stopPropagation(); onDelete(candidate.id); }}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div onClick={onClick}>
+        <CardContent className="p-3">
+          <div className="flex items-start gap-3">
+            <Avatar className="h-10 w-10 border">
+              <AvatarImage src={candidate.avatarUrl} alt={candidate.name} data-ai-hint="person" />
+              <AvatarFallback>{getInitials(candidate.name)}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <p className="font-semibold text-foreground truncate">{candidate.name}</p>
+              <p className="text-sm text-muted-foreground">{candidate.role}</p>
             </div>
-             {candidate.aiInitialScore && (
-                <div className="flex items-center gap-1 font-semibold text-amber-500">
-                    <Star className="h-3 w-3" />
-                    <span>{Math.round(candidate.aiInitialScore)}</span>
-                </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1">
+            {candidate.skills.slice(0, 3).map((skill) => (
+              <Badge key={skill} variant="secondary">{skill}</Badge>
+            ))}
+            {candidate.skills.length > 3 && (
+              <Badge variant="secondary">+{candidate.skills.length - 3}</Badge>
             )}
-        </div>
-      </CardContent>
+          </div>
+          <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+              <div className='flex items-center gap-1.5'>
+                  <StatusInfo status={candidate.status} candidate={candidate} />
+              </div>
+              {candidate.aiInitialScore && (
+                  <div className="flex items-center gap-1 font-semibold text-amber-500">
+                      <Star className="h-3 w-3" />
+                      <span>{Math.round(candidate.aiInitialScore)}</span>
+                  </div>
+              )}
+          </div>
+        </CardContent>
+      </div>
     </Card>
   );
 }
