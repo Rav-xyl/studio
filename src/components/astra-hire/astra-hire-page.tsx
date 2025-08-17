@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart2, Briefcase, Users, Loader2, Shield, X, Search } from 'lucide-react';
+import { BarChart2, Briefcase, Users, Loader2, Shield, X, Search, HelpCircle, MessageSquare } from 'lucide-react';
 import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
@@ -31,6 +31,8 @@ import { Progress } from '../ui/progress';
 import { MatchedCandidatesDialog } from '../roles/matched-candidates-dialog';
 import { ProspectingTab } from '../prospecting/prospecting-tab';
 import { bulkMatchCandidatesToRoles } from '@/ai/flows/bulk-match-candidates';
+import { AssistantChat } from './assistant-chat';
+
 
 // --- Helper Functions ---
 function convertFileToDataUri(file: File): Promise<string> {
@@ -82,6 +84,7 @@ export function AstraHirePage() {
   // UI State
   const [isLoading, setIsLoading] = useState(true);
   const [isSaarthiReportOpen, setIsSaarthiReportOpen] = useState(false);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const { toast } = useToast();
 
   // --- Firestore Data Fetching ---
@@ -695,6 +698,14 @@ export function AstraHirePage() {
         setIsSaarthiReportOpen(true);
     };
 
+    const handleOpenReport = () => {
+         setLastSaarthiReport({
+            reportType: "No Report",
+            simulationSummary: "No simulation has been run yet. Click 'Stimulate Pipeline' in the Candidate Pool tab to generate a report."
+        });
+        setIsSaarthiReportOpen(true);
+    }
+
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
@@ -759,6 +770,19 @@ export function AstraHirePage() {
         onClose={() => setIsSaarthiReportOpen(false)}
         reportData={lastSaarthiReport}
       />
+      <AssistantChat
+        open={isAssistantOpen}
+        onOpenChange={setIsAssistantOpen}
+        onActionHandled={() => {
+          // A simple way to refresh data after an action.
+          // In a real app, you might get more specific data from the tool call.
+          const unsub = onSnapshot(collection(db, "candidates"), (snapshot) => {
+              setCandidates(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Candidate[]);
+              unsub(); // Unsubscribe after the refresh
+          });
+        }}
+       />
+
       <MatchedCandidatesDialog
         isOpen={isMatchesDialogOpen}
         onClose={() => setIsMatchesDialogOpen(false)}
@@ -769,7 +793,11 @@ export function AstraHirePage() {
       />
 
 
-      <AstraHireHeader onReportClick={handleOpenManual} />
+      <AstraHireHeader 
+        onReportClick={handleOpenReport}
+        onManualClick={handleOpenManual}
+        onAssistantClick={() => setIsAssistantOpen(true)}
+      />
       <main>
         <div className="border-b border-border mb-6">
           <nav className="flex space-x-2">

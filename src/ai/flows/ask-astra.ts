@@ -1,0 +1,96 @@
+
+'use server';
+/**
+ * @fileOverview The "Astra" AI assistant flow for providing in-app help and performing actions.
+ *
+ * This flow is designed to answer questions about the TalentFlow application and use tools
+ * to perform actions on behalf of the user, such as deleting a candidate.
+ */
+
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
+// Tool to delete a candidate by name
+const deleteCandidateByName = ai.defineTool(
+  {
+    name: 'deleteCandidateByName',
+    description: 'Deletes a candidate record from the database based on their full name.',
+    inputSchema: z.object({
+      fullName: z.string().describe("The full name of the candidate to delete."),
+    }),
+    outputSchema: z.string(),
+  },
+  async ({ fullName }) => {
+    try {
+      const q = query(collection(db, 'candidates'), where('name', '==', fullName));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        return `Candidate "${fullName}" not found.`;
+      }
+
+      const batch = writeBatch(db);
+      querySnapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+
+      return `Successfully deleted candidate: ${fullName}.`;
+    } catch (error) {
+      console.error("Tool execution failed:", error);
+      return `An error occurred while trying to delete ${fullName}.`;
+    }
+  }
+);
+
+
+const AskAstraInputSchema = z.object({
+  question: z.string().describe('The user\'s question about the TalentFlow app.'),
+  // We don't need to pass candidates/roles in the input, as the tool will fetch them.
+});
+export type AskAstraInput = z.infer<typeof AskAstraInputSchema>;
+
+const AskAstraOutputSchema = z.string().describe("Astra's response to the user's question.");
+export type AskAstraOutput = z.infer<typeof AskAstraOutputSchema>;
+
+export async function askAstra(input: AskAstraInput): Promise<AskAstraOutput> {
+  return askAstraFlow(input);
+}
+
+const astraPrompt = ai.definePrompt({
+  name: 'askAstraPrompt',
+  input: { schema: AskAstraInputSchema },
+  output: { format: 'text' },
+  tools: [deleteCandidateByName],
+  system: `You are Astra, a helpful AI assistant embedded within the TalentFlow application.
+Your primary purpose is to assist users by answering their questions about the app's features and functionality.
+You can also perform actions for them if they ask you to.
+Your tone should be helpful, concise, and professional.
+If asked to perform an action, use the available tools.
+If you use a tool, your final answer should be a confirmation of the action taken, based on the tool's output.
+If asked a question you cannot answer or a request you cannot fulfill, politely say so.
+Do not answer questions that are not related to the TalentFlow application.
+
+Here is a summary of the application's features to help you answer questions:
+- **Client Roles Tab:** Manage job roles. Users can add new roles, and the AI will format the description and suggest titles. Each role card has actions to find candidate matches (Top Matches, All Qualified), re-engage archived candidates, or view assigned candidates.
+- **Candidate Pool Tab:** A Kanban board (Sourcing, Screening, Interview, Hired) to visualize the hiring pipeline. Users can add candidates via bulk resume upload. The "Stimulate Pipeline" button runs an AI simulation to demonstrate the platform's autonomous capabilities.
+- **Prospecting Hub:** A table of all unassigned candidates. Users can find role matches for a single candidate or run a bulk match for all candidates against all roles.
+- **Gauntlet Portal:** A view for managing candidates who are eligible for the AI-proctored technical interview (score >= 70). Recruiters can copy credentials from here to send to candidates.
+- **Analytics Tab:** A dashboard with charts for hiring velocity, role distribution, and predictive forecasts.
+- **Admin Command Center (/admin):** A separate portal for admins to monitor interviews, manage all candidates (including permanent deletion), and act on proactive sourcing alerts.
+`,
+});
+
+const askAstraFlow = ai.defineFlow(
+  {
+    name: 'askAstraFlow',
+    inputSchema: AskAstraInputSchema,
+    outputSchema: AskAstraOutputSchema,
+  },
+  async ({ question }) => {
+    const response = await astraPrompt({ question });
+    return response.text;
+  }
+);

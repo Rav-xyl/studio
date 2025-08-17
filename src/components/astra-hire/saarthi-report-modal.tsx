@@ -3,7 +3,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "../ui/badge";
-import { Brain, CheckCircle, X, XCircle } from "lucide-react";
+import { Brain, CheckCircle, HelpCircle, X, XCircle } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
 import { Separator } from "../ui/separator";
 
@@ -23,7 +23,6 @@ const statusIcon = (status: 'Success' | 'Failure' | 'Info') => {
 
 const UserManualContent = () => (
     <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground">
-        <h2 className="text-2xl font-bold text-foreground">TalentFlow AI - User Manual</h2>
         <p>Welcome to TalentFlow AI, your intelligent, autonomous recruitment partner. This guide will walk you through the core features of the platform.</p>
         
         <Separator className="my-4" />
@@ -92,7 +91,16 @@ export function SaarthiReportModal({ isOpen, onClose, reportData }: SaarthiRepor
 
     const isAudit = reportData.reportType === "System Audit";
     const isManual = reportData.reportType === "User Manual";
-    const title = isManual ? "User Manual" : isAudit ? "SAARTHI's System Audit" : "SAARTHI's Simulation Overview";
+    
+    let title = "SAARTHI's Simulation Overview";
+    let icon = <Brain className="w-8 h-8 text-primary"/>;
+
+    if (isManual) {
+        title = "User Manual";
+        icon = <HelpCircle className="w-8 h-8 text-primary"/>
+    } else if (isAudit) {
+        title = "SAARTHI's System Audit";
+    }
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -100,7 +108,7 @@ export function SaarthiReportModal({ isOpen, onClose, reportData }: SaarthiRepor
                  <button onClick={onClose} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"><X className="w-6 h-6" /></button>
                 <DialogHeader>
                     <DialogTitle className="text-3xl font-bold text-foreground mb-6 flex items-center gap-3">
-                       <Brain className="w-8 h-8 text-primary"/> {title}
+                       {icon} {title}
                     </DialogTitle>
                 </DialogHeader>
                 <ScrollArea className="max-h-[70vh] pr-4">
@@ -137,5 +145,3 @@ export function SaarthiReportModal({ isOpen, onClose, reportData }: SaarthiRepor
         </Dialog>
     );
 }
-
-    
