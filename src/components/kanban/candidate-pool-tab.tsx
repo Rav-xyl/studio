@@ -4,6 +4,7 @@
 import {
   FilterX,
   PlusCircle,
+  Trash2,
   Zap,
 } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -15,7 +16,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { BulkUploadDialog } from './bulk-upload-dialog';
 import { db } from '@/lib/firebase';
-import { writeBatch, collection, query, where, getDocs } from 'firebase/firestore';
+import { writeBatch, collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 const KANBAN_COLUMNS: KanbanStatus[] = [
@@ -89,16 +90,15 @@ export function CandidatePoolTab({
 
     try {
       const batch = writeBatch(db);
-      const candidatesCollection = collection(db, 'candidates');
-      const q = query(candidatesCollection, where('status', '==', status));
-      const querySnapshot = await getDocs(q);
+      const candidatesToDeleteIds = candidatesToDelete.map(c => c.id);
       
-      querySnapshot.forEach((doc) => {
-        batch.delete(doc.ref);
+      candidatesToDeleteIds.forEach(id => {
+          const docRef = doc(db, "candidates", id);
+          batch.delete(docRef);
       });
 
       await batch.commit();
-      toast({ title: 'Success', description: `Successfully deleted ${querySnapshot.size} candidates from "${status}".` });
+      toast({ title: 'Success', description: `Successfully deleted ${candidatesToDelete.length} candidates from "${status}".` });
     } catch (error) {
       console.error(`Failed to delete candidates from ${status}:`, error);
       toast({ title: 'Error', description: 'Could not delete candidates. See console for details.', variant: 'destructive' });
