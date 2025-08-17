@@ -1,65 +1,24 @@
-'use server';
-/**
- * @fileOverview A Genkit flow for proactively sourcing potential candidates.
- *
- * - proactiveCandidateSourcing - A function that generates fictional candidate profiles based on open roles.
- * - ProactiveCandidateSourcingInput - The input type for the proactiveCandidateSourcing function.
- * - ProactiveCandidateSourcingOutput - The return type for the proactiveCandidateSourcing function.
- */
+import { config } from 'dotenv';
+config();
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-
-const ProactiveCandidateSourcingInputSchema = z.object({
-  openRoles: z.array(z.object({
-    title: z.string(),
-    description: z.string(),
-  })).describe('A list of open job roles to source candidates for.'),
-  numberOfCandidates: z.number().describe('The number of candidate profiles to generate.'),
-});
-export type ProactiveCandidateSourcingInput = z.infer<typeof ProactiveCandidateSourcingInputSchema>;
-
-const SourcedCandidateSchema = z.object({
-  name: z.string().describe("A plausible-sounding full name for the fictional candidate that is fit for the Indian market."),
-  role: z.string().describe("A job title for the fictional candidate, closely matching one of the open roles."),
-  skills: z.array(z.string()).describe("A list of 5-7 relevant skills for the role."),
-  narrative: z.string().describe("A 2-3 sentence fictional summary of the candidate's experience and career goals."),
-  inferredSkills: z.array(z.string()).describe("A list of 2-3 inferred soft skills or related technical skills."),
-});
-
-const ProactiveCandidateSourcingOutputSchema = z.object({
-  sourcedCandidates: z.array(SourcedCandidateSchema).describe('A list of generated fictional candidate profiles.'),
-});
-export type ProactiveCandidateSourcingOutput = z.infer<typeof ProactiveCandidateSourcingOutputSchema>;
-
-export async function proactiveCandidateSourcing(input: ProactiveCandidateSourcingInput): Promise<ProactiveCandidateSourcingOutput> {
-  return proactiveCandidateSourcingFlow(input);
-}
-
-const prompt = ai.definePrompt({
-  name: 'proactiveCandidateSourcingPrompt',
-  input: {schema: ProactiveCandidateSourcingInputSchema},
-  output: {schema: ProactiveCandidateSourcingOutputSchema},
-  prompt: `You are a proactive AI sourcing agent for the Indian job market. Your task is to generate {{{numberOfCandidates}}} fictional, yet realistic, candidate profiles that would be a strong fit for the following open roles.
-
-Open Roles:
-{{#each openRoles}}
-- **{{title}}**: {{description}}
-{{/each}}
-
-For each generated candidate, create a plausible name that is fit for the Indian market, assign them to one of the roles, and generate a relevant set of skills, a brief narrative summary, and some inferred skills. The profiles should be diverse and reflect the talent pool in India.
-
-IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object.`,
-});
-
-const proactiveCandidateSourcingFlow = ai.defineFlow(
-  {
-    name: 'proactiveCandidateSourcingFlow',
-    inputSchema: ProactiveCandidateSourcingInputSchema,
-    outputSchema: ProactiveCandidateSourcingOutputSchema,
-  },
-  async input => {
-    const {output} = await prompt(input);
-    return output!;
-  }
-);
+import '@/ai/flows/ai-assisted-candidate-review.ts';
+import '@/ai/flows/suggest-role-matches.ts';
+import '@/ai/flows/automated-resume-screening.ts';
+import '@/ai/flows/dynamic-interview-question-generation.ts';
+import '@/ai/flows/automated-job-description-synthesis.ts';
+import '@/ai/flows/ai-driven-candidate-engagement.ts';
+import '@/ai/flows/skill-gap-analysis.ts';
+import '@/ai/flows/evaluate-interview-response.ts';
+import '@/ai/flows/autonomous-offer-drafting.ts';
+import '@/ai/flows/self-correcting-rubric.ts';
+import '@/ai/flows/automated-onboarding-plan.ts';
+import '@/ai/flows/predictive-analytics.ts';
+import '@/ai/flows/talent-mapping.ts';
+import '@/ai/flows/culture-fit-synthesis.ts';
+import '@/ai/flows/re-engage-candidate.ts';
+import '@/ai/flows/final-interview-review.ts';
+import '@/ai/flows/generate-system-design-question.ts';
+import '@/ai/flows/proctor-technical-exam.ts';
+import '@/ai/flows/find-potential-roles.ts';
+import '@/ai/flows/find-potential-candidates.ts';
+import '@/ai/flows/final-interview.ts';

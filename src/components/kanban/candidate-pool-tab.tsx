@@ -5,7 +5,6 @@ import {
   FilterX,
   PlusCircle,
   Zap,
-  TestTube2,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useState, useMemo } from 'react';
@@ -29,7 +28,7 @@ const KANBAN_COLUMNS: KanbanStatus[] = [
 interface CandidatePoolTabProps {
     candidates: Candidate[];
     roles: JobRole[];
-    onUpload: (files: FileList | null, isAudit?: boolean) => void;
+    onUpload: (files: FileList | null) => void;
     onStimulateFullPipeline: () => void;
     filteredRole: JobRole | null;
     onClearFilter: () => void;
@@ -53,7 +52,6 @@ export function CandidatePoolTab({
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [isSheetOpen, setSheetOpen] = useState(false);
   const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [isAuditMode, setIsAuditMode] = useState(false);
   const { toast } = useToast();
 
   const handleCardClick = (candidate: Candidate) => {
@@ -66,11 +64,6 @@ export function CandidatePoolTab({
     if (!open) {
       setSelectedCandidate(null);
     }
-  }
-
-  const handleOpenUploadDialog = (auditMode = false) => {
-      setIsAuditMode(auditMode);
-      setUploadDialogOpen(true);
   }
 
   const displayedCandidates = useMemo(() => {
@@ -135,16 +128,12 @@ export function CandidatePoolTab({
             </div>
             
             <div className="flex items-center gap-2">
-                <Button onClick={() => handleOpenUploadDialog(false)} variant="outline">
+                <Button onClick={() => setUploadDialogOpen(true)} variant="outline">
                   <PlusCircle className="w-4 h-4 mr-2" /> Add Candidates
                 </Button>
                 
                 <Button onClick={onStimulateFullPipeline} variant="secondary">
                   <Zap className="w-4 h-4 mr-2" /> Stimulate Pipeline
-                </Button>
-
-                <Button onClick={() => handleOpenUploadDialog(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                  <TestTube2 className="w-4 h-4 mr-2" /> Run SAARTHI Audit
                 </Button>
             </div>
         </div>
@@ -163,7 +152,7 @@ export function CandidatePoolTab({
             ))}
         </div>
 
-        <BulkUploadDialog open={isUploadDialogOpen} onOpenChange={setUploadDialogOpen} onUpload={onUpload} isAudit={isAuditMode} />
+        <BulkUploadDialog open={isUploadDialogOpen} onOpenChange={setUploadDialogOpen} onUpload={onUpload} />
 
         <CandidateDetailSheet 
             open={isSheetOpen} 

@@ -18,30 +18,25 @@ import { useRef } from 'react';
 interface BulkUploadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUpload: (files: FileList | null, isAudit?: boolean) => void;
-  isAudit?: boolean;
+  onUpload: (files: FileList | null) => void;
 }
 
-export function BulkUploadDialog({ open, onOpenChange, onUpload, isAudit = false }: BulkUploadDialogProps) {
+export function BulkUploadDialog({ open, onOpenChange, onUpload }: BulkUploadDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = () => {
-    onUpload(fileInputRef.current?.files || null, isAudit);
+    onUpload(fileInputRef.current?.files || null);
     onOpenChange(false);
   }
-
-  const title = isAudit ? "System Audit: Upload Resumes" : "Bulk Resume Upload";
-  const description = isAudit 
-    ? "Upload resumes to be used as test data for the full system audit." 
-    : "Upload multiple resumes at once. The AI will screen them and add them to the pipeline.";
-  const buttonText = isAudit ? "Start Audit" : "Upload & Add to Pool";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogTitle>Bulk Resume Upload</DialogTitle>
+          <DialogDescription>
+            Upload multiple resumes at once. The AI will screen them and add them to the pipeline.
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -60,11 +55,9 @@ export function BulkUploadDialog({ open, onOpenChange, onUpload, isAudit = false
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit}>{buttonText}</Button>
+          <Button onClick={handleSubmit}>Upload & Add to Pool</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
-    
