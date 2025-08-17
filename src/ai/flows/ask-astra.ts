@@ -90,7 +90,15 @@ const askAstraFlow = ai.defineFlow(
     outputSchema: AskAstraOutputSchema,
   },
   async ({ question }) => {
-    const response = await astraPrompt({ question });
-    return response.text;
+    const llmResponse = await ai.generate({
+      prompt: question,
+      model: astraPrompt.model,
+      tools: astraPrompt.tools,
+      config: {
+        ...astraPrompt.config,
+        system: astraPrompt.system,
+      },
+    });
+    return llmResponse.text;
   }
 );
