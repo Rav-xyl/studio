@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -12,13 +13,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Zap, Loader2, Lightbulb } from 'lucide-react';
+import { Zap, Loader2 } from 'lucide-react';
 import { Textarea } from '../ui/textarea';
-import { ScrollArea } from '../ui/scroll-area';
 import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
 import type { JobRole } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { suggestRoleMatches } from '@/ai/flows/suggest-role-matches'; // This is a bit of a hack, but it can extract titles.
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 interface GenerateJdDialogProps {
   open: boolean;
@@ -29,32 +29,33 @@ interface GenerateJdDialogProps {
 export function GenerateJdDialog({ open, onOpenChange, onSave }: GenerateJdDialogProps) {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
-    const [isSuggesting, setIsSuggesting] = useState(false);
     const [jobTitle, setJobTitle] = useState("");
     const [jd, setJd] = useState("");
+    const [suggestedTitles, setSuggestedTitles] = useState<string[]>([]);
 
-    const handleSuggestTitle = async () => {
-        if(!jd) return;
-        setIsSuggesting(true);
+    const handleGenerate = async () => {
+        if(!jd) {
+            toast({title: "Job Description Required", description: "Please paste a job description to be analyzed.", variant: "destructive"});
+            return;
+        };
+        setIsLoading(true);
+        setSuggestedTitles([]);
+        setJobTitle("");
         try {
-            // We use suggestRoleMatches as a proxy to get a title from a description.
-            const result = await suggestRoleMatches({
-                candidateName: "Fictional Candidate",
-                candidateSkills: "",
-                candidateNarrative: jd,
-                candidateInferredSkills: "",
+            const result = await synthesizeJobDescription({
+                jobDescriptionText: jd
             });
-            if(result.roles.length > 0) {
-                setJobTitle(result.roles[0].roleTitle);
-                toast({title: "AI Suggestion", description: "Job title has been suggested based on the description."});
-            } else {
-                toast({title: "Could not suggest a title.", variant: "destructive"});
+            setJd(result.formattedDescription);
+            setSuggestedTitles(result.suggestedTitles);
+            if (result.suggestedTitles.length > 0) {
+                setJobTitle(result.suggestedTitles[0]); // pre-select the first suggestion
             }
+            toast({title: "AI Analysis Complete", description: "Job description has been formatted and titles have been suggested."});
         } catch (error) {
-            console.error("Failed to suggest title:", error);
-            toast({title: "Error", description: "Could not suggest a title.", variant: "destructive"});
+            console.error("Failed to synthesize JD:", error);
+            toast({title: "Error", description: "Could not analyze the job description.", variant: "destructive"});
         } finally {
-            setIsSuggesting(false);
+            setIsLoading(false);
         }
     }
 
@@ -71,6 +72,7 @@ export function GenerateJdDialog({ open, onOpenChange, onSave }: GenerateJdDialo
         // Reset state and close
         setJobTitle("");
         setJd("");
+        setSuggestedTitles([]);
         onOpenChange(false);
     }
     
@@ -78,9 +80,9 @@ export function GenerateJdDialog({ open, onOpenChange, onSave }: GenerateJdDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Add New Client Role</DialogTitle>
+          <DialogTitle>Add New Client Role with AI</DialogTitle>
           <DialogDescription>
-            Provide a job description to create a new role. You can use the AI to suggest a title.
+            Paste a job description below. The AI will standardize it and suggest relevant titles.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
@@ -94,26 +96,29 @@ export function GenerateJdDialog({ open, onOpenChange, onSave }: GenerateJdDialo
                     onChange={(e) => setJd(e.target.value)} 
                 />
             </div>
-            <div className='space-y-2'>
-                <div className="flex items-center justify-between">
-                    <Label htmlFor="job-title">Job Title</Label>
-                    <Button variant="ghost" size="sm" onClick={handleSuggestTitle} disabled={isSuggesting || !jd}>
-                         {isSuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lightbulb className="mr-2 h-4 w-4" />}
-                        Suggest Title from JD
-                    </Button>
+             <Button className="w-full" onClick={handleGenerate} disabled={isLoading}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                Analyze & Format JD
+            </Button>
+            {suggestedTitles.length > 0 && (
+                <div className='space-y-2'>
+                    <Label htmlFor="job-title">Suggested Job Titles</Label>
+                    <Select onValueChange={setJobTitle} value={jobTitle}>
+                        <SelectTrigger id="job-title">
+                            <SelectValue placeholder="Select an AI-suggested title..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {suggestedTitles.map((title, index) => (
+                                <SelectItem key={index} value={title}>{title}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
-                <Input 
-                    id="job-title" 
-                    placeholder="e.g., Senior Frontend Developer" 
-                    value={jobTitle} 
-                    onChange={(e) => setJobTitle(e.target.value)} 
-                />
-            </div>
+            )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={isLoading}>
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          <Button onClick={handleSave} disabled={!jobTitle || !jd}>
             Save New Role
           </Button>
         </DialogFooter>
