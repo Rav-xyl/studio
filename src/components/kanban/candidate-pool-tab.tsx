@@ -28,7 +28,7 @@ const KANBAN_COLUMNS: KanbanStatus[] = [
 interface CandidatePoolTabProps {
     candidates: Candidate[];
     roles: JobRole[];
-    onUpload: (files: FileList | null) => void;
+    onUpload: (files: FileList | null, companyType: 'startup' | 'enterprise') => void;
     onStimulateFullPipeline: () => void;
     filteredRole: JobRole | null;
     onClearFilter: () => void;

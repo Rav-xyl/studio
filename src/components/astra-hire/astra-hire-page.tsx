@@ -207,12 +207,18 @@ export function AstraHirePage() {
   };
 
 
-  const handleBulkUpload = async (files: FileList | null) => {
+  const handleBulkUpload = async (files: FileList | null, companyType: 'startup' | 'enterprise') => {
     if (!files) return;
 
+    const existingCandidateNames = new Set(candidates.map(c => c.name));
     const filesToProcess = Array.from(files).filter(file => 
-        !candidates.some(c => c.name === file.name.split('.').slice(0, -1).join('.'))
+        !existingCandidateNames.has(file.name.split('.').slice(0, -1).join('.'))
     );
+    
+    const skippedCount = files.length - filesToProcess.length;
+    if (skippedCount > 0) {
+        toast({ title: "Duplicates Skipped", description: `${skippedCount} resume(s) were skipped as they already exist in the pool.` });
+    }
 
     if (filesToProcess.length === 0) {
         toast({ title: "No new resumes to add", description: "All selected files were already in the pool." });
@@ -238,7 +244,7 @@ export function AstraHirePage() {
     for (const file of filesToProcess) {
         try {
             const resumeDataUri = await convertFileToDataUri(file);
-            const result = await automatedResumeScreening({ resumeDataUri, companyType: 'startup' });
+            const result = await automatedResumeScreening({ resumeDataUri, companyType });
             
             const candidateId = `cand-${nanoid(10)}`;
             const newCandidate: Candidate = {
@@ -256,7 +262,7 @@ export function AstraHirePage() {
                 }, {
                     timestamp: new Date().toISOString(),
                     event: 'AI Screening Complete',
-                    details: `Automated screening finished. Initial score: ${result.candidateScore}`,
+                    details: `Automated screening finished. Initial score: ${result.candidateScore}. Context: ${companyType}`,
                     author: 'AI'
                 }]
             };
