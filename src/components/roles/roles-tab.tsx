@@ -22,13 +22,6 @@ interface RolesTabProps {
 
 export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAddRole, onDeleteRole, onFindMatches }: RolesTabProps) {
     const [isJdDialogOpen, setIsJdDialogOpen] = useState(false);
-    const [matchingRoleId, setMatchingRoleId] = useState<string | null>(null);
-    
-    const handleFindMatches = async (role: JobRole, mode: 'top' | 'qualified') => {
-        setMatchingRoleId(role.id);
-        await onFindMatches(role, mode);
-        setMatchingRoleId(null);
-    }
     
     return (
         <div className="fade-in-slide-up">
@@ -51,8 +44,7 @@ export function RolesTab({ roles, candidates, onViewCandidates, onReEngage, onAd
                                 role={role} 
                                 onViewCandidates={onViewCandidates} 
                                 onReEngage={onReEngage}
-                                onFindMatches={handleFindMatches}
-                                isMatching={matchingRoleId === role.id}
+                                onFindMatches={onFindMatches}
                                 style={{ '--stagger-index': index } as React.CSSProperties}
                             />
                             <AlertDialog>

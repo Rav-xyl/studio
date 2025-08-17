@@ -507,68 +507,29 @@ export function AstraHirePage() {
         }
     };
   
-    const handleFindMatches = async (role: JobRole, mode: 'top' | 'qualified') => {
-        const taskId = `task-${nanoid(5)}`;
-        setBackgroundTask({
-            id: taskId,
-            type: 'Matching',
-            status: 'in-progress',
-            progress: 0,
-            total: 1,
-            message: `Finding ${mode === 'top' ? 'top matches' : 'qualified candidates'}...`
-        });
+    const handleFindMatches = (role: JobRole, mode: 'top' | 'qualified') => {
         setSelectedRoleForMatching(role);
-        
-        const allUnassigned = candidates.filter(c => 
-            c.role === 'Unassigned' && !c.archived && (c.status === 'Screening')
-        );
 
-        if (allUnassigned.length === 0) {
-            toast({ title: "No Candidates to Match", description: "There are no unassigned candidates available." });
-            setBackgroundTask(null);
+        // Instantly get matches from the role's cache
+        const cachedMatches = role.roleMatches || [];
+
+        if (cachedMatches.length === 0) {
+            toast({
+                title: "Cache is Empty",
+                description: "Run the 'AI Match for All' in the Prospecting Hub first to generate matches."
+            });
             return;
         }
 
-        try {
-            const result = await bulkMatchCandidatesToRoles({
-                candidates: allUnassigned.map(c => ({ id: c.id, skills: c.skills, narrative: c.narrative })),
-                jobRoles: [role]
-            });
-
-            let finalMatches: RoleMatch[] = [];
-            if (result.results.length > 0) {
-                // The result is for a single role, so we can extract it directly
-                const candidateMatches = result.results.map(res => res.matches.find(m => m.roleId === role.id)).filter(Boolean);
-                
-                finalMatches = candidateMatches.map((match: any) => ({
-                    ...match,
-                    candidateId: result.results.find(r => r.matches.includes(match))!.candidateId,
-                    candidateName: allUnassigned.find(c => c.id === result.results.find(r => r.matches.includes(match))!.candidateId)!.name
-                }));
-
-                finalMatches.sort((a, b) => b.confidenceScore - a.confidenceScore);
-                
-                // Update the role with the new matches
-                const roleRef = doc(db, 'roles', role.id);
-                await updateDoc(roleRef, { roleMatches: finalMatches, lastMatched: new Date().toISOString() });
-            }
-
-            let matchesToShow = finalMatches;
-            if (mode === 'qualified') {
-                matchesToShow = finalMatches.filter(match => match.confidenceScore >= 70);
-            }
-
-            setMatchedCandidates(matchesToShow);
-            setIsMatchesDialogOpen(true);
-            setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', progress: 1, message: 'Matching complete!' }) : null);
-
-        } catch (error) {
-            console.error("Failed to find potential candidates:", error);
-            toast({ title: "Matching Error", description: "An unexpected response was received from the server.", variant: "destructive" });
-            setBackgroundTask(prev => prev ? ({ ...prev, status: 'error', message: 'Matching failed.' }) : null);
-        } finally {
-            setTimeout(() => { setBackgroundTask(null); }, 5000);
+        let matchesToShow = cachedMatches;
+        if (mode === 'qualified') {
+            matchesToShow = cachedMatches.filter(match => match.confidenceScore >= 70);
+        } else { // 'top'
+            matchesToShow = cachedMatches.slice(0, 10); // Show top 10 for 'top matches'
         }
+
+        setMatchedCandidates(matchesToShow);
+        setIsMatchesDialogOpen(true);
     };
     
     const handleAssignRole = async (candidateId: string, roleTitle: string) => {
@@ -637,13 +598,45 @@ export function AstraHirePage() {
                 jobRoles: roles,
             });
 
+            // This structure will hold all matches grouped by role ID
+            const matchesByRole: Record<string, RoleMatch[]> = roles.reduce((acc, role) => ({ ...acc, [role.id]: [] }), {});
+
+            // This structure will hold the best match for each candidate
             const newMatchResults: Record<string, any[]> = {};
-            result.results.forEach(res => {
-                newMatchResults[res.candidateId] = res.matches.sort((a, b) => b.confidenceScore - a.confidenceScore);
+
+            result.results.forEach(candidateResult => {
+                 const bestMatchForCandidate = candidateResult.matches
+                    .sort((a, b) => b.confidenceScore - a.confidenceScore)[0];
+
+                if(bestMatchForCandidate) {
+                     newMatchResults[candidateResult.candidateId] = [bestMatchForCandidate];
+                }
+
+                candidateResult.matches.forEach(match => {
+                    if (matchesByRole[match.roleId]) {
+                        matchesByRole[match.roleId].push({
+                            candidateId: candidateResult.candidateId,
+                            candidateName: unassignedCandidates.find(c => c.id === candidateResult.candidateId)?.name || 'Unknown',
+                            justification: match.justification,
+                            confidenceScore: match.confidenceScore,
+                        });
+                    }
+                });
             });
-            
-            setMatchResults(prev => ({ ...prev, ...newMatchResults }));
-            toast({ title: "Analysis Complete!", description: "AI role matching has been completed for all unassigned candidates." });
+
+            // Update the local state for the Prospecting Hub display
+            setMatchResults(newMatchResults);
+
+            // Update the cache on each role document in Firestore
+            const batch = writeBatch(db);
+            roles.forEach(role => {
+                const roleRef = doc(db, 'roles', role.id);
+                const sortedMatches = matchesByRole[role.id].sort((a, b) => b.confidenceScore - a.confidenceScore);
+                batch.update(roleRef, { roleMatches: sortedMatches, lastMatched: new Date().toISOString() });
+            });
+            await batch.commit();
+
+            toast({ title: "Analysis Complete!", description: "AI role matching has been completed for all candidates and results are cached." });
             setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: 'Bulk matching complete!' }) : null);
 
         } catch (error) {
