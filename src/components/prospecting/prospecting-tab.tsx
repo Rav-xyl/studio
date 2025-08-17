@@ -54,18 +54,21 @@ export function ProspectingTab({
         setIsLoading(prev => ({ ...prev, [candidate.id]: true }));
         try {
             const allMatches: any[] = [];
-            // This loop iterates through all available roles to find the best matches for a single candidate.
-            // It uses the same unified AI engine as the "Find Top Matches" feature in the Client Roles tab.
             for (const role of roles) {
                 const result = await findPotentialCandidates({
                     jobRole: role,
-                    candidates: [candidate],
+                    candidates: [{
+                        id: candidate.id,
+                        name: candidate.name,
+                        skills: candidate.skills,
+                        narrative: candidate.narrative,
+                    }],
                 });
-                if (result.matches && result.matches.length > 0) {
+                if (result.matches && result.matches.length > 0 && result.matches[0].confidenceScore >= 70) {
                    allMatches.push({
                        roleId: role.id,
                        roleTitle: role.title,
-                       ...result.matches[0] // Since we only passed one candidate
+                       ...result.matches[0]
                    });
                 }
             }
