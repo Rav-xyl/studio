@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Key, Loader2, MessageSquare, User } from 'lucide-react';
+import { Key, Loader2, MessageSquare, User, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 const FEEDBACK_USERNAME = 'tester';
 const FEEDBACK_PASSWORD = 'feedback1234';
@@ -85,9 +86,16 @@ export default function FeedbackLoginPage() {
                 />
               </div>
             </div>
-            <Button type="submit" className="w-full h-11 text-lg" disabled={isLoading}>
-              {isLoading ? <Loader2 className="animate-spin" /> : 'Enter Portal'}
-            </Button>
+            <div className="flex flex-col-reverse sm:flex-row gap-2">
+                 <Link href="/" passHref className="w-full">
+                    <Button variant="outline" className="w-full">
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to App
+                    </Button>
+                 </Link>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? <Loader2 className="animate-spin" /> : 'Enter Portal'}
+                </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
