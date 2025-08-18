@@ -27,7 +27,7 @@ export default function AdminLoginPage() {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      sessionStorage.setItem('admin-auth', 'true');
+      localStorage.setItem('admin-auth', JSON.stringify({ username: 'admin', role: 'admin' }));
       toast({
         title: 'Login Successful',
         description: 'Welcome, Admin. Redirecting to the dashboard...',

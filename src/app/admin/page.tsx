@@ -25,8 +25,8 @@ export default function AdminDashboardPage() {
     const [isSourcing, setIsSourcing] = useState(false);
 
     useEffect(() => {
-        const isAdmin = sessionStorage.getItem('admin-auth');
-        if (isAdmin !== 'true') {
+        const authData = localStorage.getItem('admin-auth');
+        if (!authData) {
             toast({
                 variant: 'destructive',
                 title: 'Access Denied',

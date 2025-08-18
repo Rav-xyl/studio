@@ -21,18 +21,34 @@ type Message = {
     content: string;
 };
 
+type UserContext = {
+    username: string;
+    role: string;
+} | null;
+
 export function AssistantChat({ open, onOpenChange, onActionHandled }: AssistantChatProps) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [userContext, setUserContext] = useState<UserContext>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (open && messages.length === 0) {
-        setMessages([
-            { role: 'assistant', content: "Hello! I'm Astra, your AI assistant. How can I help you with TalentFlow today? You can ask me questions about features or ask me to perform actions, like 'delete the candidate named John Doe'." }
-        ]);
+    if (open) {
+        // Check for admin context from localStorage
+        const adminAuth = localStorage.getItem('admin-auth');
+        if (adminAuth) {
+            setUserContext(JSON.parse(adminAuth));
+        } else {
+            setUserContext(null);
+        }
+
+        if (messages.length === 0) {
+            setMessages([
+                { role: 'assistant', content: "Hello! I'm Astra, your AI assistant. How can I help you with TalentFlow today? You can ask me questions about features or ask me to perform actions, like 'delete the candidate named John Doe'." }
+            ]);
+        }
     }
   }, [open, messages.length]);
 
@@ -56,7 +72,10 @@ export function AssistantChat({ open, onOpenChange, onActionHandled }: Assistant
     setIsLoading(true);
 
     try {
-        const response = await askAstra({ question: input });
+        const response = await askAstra({ 
+            question: input,
+            userContext: userContext ? { role: userContext.role } : undefined
+        });
         const assistantMessage: Message = { role: 'assistant', content: response };
         setMessages(prev => [...prev, assistantMessage]);
 
@@ -87,7 +106,8 @@ export function AssistantChat({ open, onOpenChange, onActionHandled }: Assistant
                 Ask Astra
             </SheetTitle>
             <SheetDescription>
-                Your intelligent assistant for the TalentFlow app.
+                Your intelligent assistant for the TalentFlow app. 
+                {userContext?.role === 'admin' && <span className="font-semibold text-primary"> (Admin Mode)</span>}
             </SheetDescription>
         </SheetHeader>
         <div className="flex-1 flex flex-col">

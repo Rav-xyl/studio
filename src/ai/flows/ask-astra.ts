@@ -48,6 +48,9 @@ const deleteCandidateByName = ai.defineTool(
 
 const AskAstraInputSchema = z.object({
   question: z.string().describe('The user\'s question about the TalentFlow app.'),
+  userContext: z.object({
+    role: z.string().optional().describe("The role of the user asking the question, e.g., 'admin'."),
+  }).optional(),
 });
 export type AskAstraInput = z.infer<typeof AskAstraInputSchema>;
 
@@ -72,6 +75,7 @@ Your tone should be helpful, concise, and professional.
 - When asked to perform an action, use the available tools. Your final answer should be a confirmation of the action taken, based on the tool's output.
 - If asked a question you cannot answer or a request you cannot fulfill with your tools or knowledge base, politely say so.
 - When asked for a link or URL to a specific part of the application, provide it. The base URL is the current page the user is on.
+- If you are speaking to an 'admin', you can be more direct and technical. For regular users, be more guiding.
 
 Your entire knowledge base about the application is provided below. Do not invent features.
 
@@ -94,14 +98,19 @@ const askAstraFlow = ai.defineFlow(
     inputSchema: AskAstraInputSchema,
     outputSchema: AskAstraOutputSchema,
   },
-  async ({ question }) => {
+  async ({ question, userContext }) => {
+    let systemPrompt = astraPrompt.system;
+    if(userContext?.role === 'admin') {
+      systemPrompt += "\n**User Context:** You are currently speaking with an Administrator. You have access to all tools and can perform destructive actions like deletion if requested."
+    }
+
     const llmResponse = await ai.generate({
       prompt: question,
       model: astraPrompt.model,
       tools: astraPrompt.tools,
       config: {
         ...astraPrompt.config,
-        system: astraPrompt.system,
+        system: systemPrompt,
       },
     });
     return llmResponse.text;
