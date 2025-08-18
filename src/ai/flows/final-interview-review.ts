@@ -14,6 +14,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
 
 const FinalInterviewReviewInputSchema = z.object({
   interviewReport: z.string().describe('The full text report from the AI video interview, including transcript and initial evaluations.'),
@@ -58,7 +59,7 @@ const finalInterviewReviewFlow = ai.defineFlow(
     outputSchema: FinalInterviewReviewOutputSchema,
   },
   async input => {
-    const {output} = await finalReviewPrompt(input);
+    const {output} = await finalReviewPrompt(input, { model: googleAI.model('gemini-1.5-pro-latest') });
     return output!;
   }
 );
