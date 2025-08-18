@@ -1,0 +1,19 @@
+{
+  "name": "functions",
+  "private": true,
+  "dependencies": {
+    "@genkit-ai/firebase": "^1.16.1",
+    "@genkit-ai/googleai": "^1.16.1",
+    "firebase-admin": "^12.1.1",
+    "firebase-functions": "^5.0.1",
+    "genkit": "^1.16.1",
+    "zod": "^3.24.2"
+  },
+  "main": "dist/gpu-inference-endpoint-deploy.js",
+  "devDependencies": {
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": "18"
+  }
+}
