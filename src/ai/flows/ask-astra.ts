@@ -46,6 +46,21 @@ const deleteCandidateByName = ai.defineTool(
   }
 );
 
+// New tool for formatting responses
+const formatResponse = ai.defineTool(
+  {
+      name: 'formatResponse',
+      description: 'Use this tool to format your final answer for the user. Use it for any response that is not a simple confirmation.',
+      inputSchema: z.object({
+          response: z.string().describe('The detailed, well-formatted response to be presented to the user.'),
+      }),
+      outputSchema: z.string(),
+  },
+  async ({ response }) => {
+      return response;
+  }
+);
+
 
 const AskAstraInputSchema = z.object({
   question: z.string().describe('The user\'s question about the TalentFlow app.'),
@@ -66,7 +81,7 @@ const astraPrompt = ai.definePrompt({
   name: 'askAstraPrompt',
   input: { schema: AskAstraInputSchema },
   output: { format: 'text' },
-  tools: [deleteCandidateByName],
+  tools: [deleteCandidateByName, formatResponse],
   system: `You are Astra, a helpful AI assistant embedded within the TalentFlow application.
 Your single and only purpose is to assist users by answering questions and performing actions related to the TalentFlow application.
 
@@ -74,9 +89,15 @@ Your single and only purpose is to assist users by answering questions and perfo
 
 If a user asks a question that is not related to TalentFlow, you MUST politely decline and state that you can only assist with matters concerning the TalentFlow app.
 
-Your tone should be helpful, concise, and professional.
-- When asked to perform an action, use the available tools. Your final answer should be a confirmation of the action taken, based on the tool's output.
-- If asked a question you cannot answer or a request you cannot fulfill with your tools or knowledge base, politely say so.
+**RESPONSE FORMATTING RULES:**
+- Your tone should be helpful, concise, and professional.
+- **DO NOT use markdown (e.g., **, *, #). All responses must be in plain text.**
+- For any answer that requires explanation, lists, or multiple sentences, you MUST use the 'formatResponse' tool to structure your final answer.
+- For simple confirmations (e.g., after deleting a user), you can respond directly.
+
+**TOOL USAGE RULES:**
+- When asked to perform an action, use the available tools (like deleteCandidateByName). Your final answer should be a confirmation of the action taken, based on the tool's output.
+- If asked a question you cannot answer or a request you cannot fulfill with your tools or knowledge base, politely say so using the 'formatResponse' tool.
 - When asked for a link or URL to a specific part of the application, provide it. The base URL is the current page the user is on.
 - If you are speaking to an 'admin', you can be more direct and technical. For regular users, be more guiding.
 
@@ -117,6 +138,14 @@ const askAstraFlow = ai.defineFlow(
         system: systemPrompt,
       },
     });
+
+    // If the model used a tool, the tool's output is the response.
+    // Otherwise, the direct text response is used.
+    const toolResponse = llmResponse.output?.toolRequest?.outputs[0]?.content;
+    if (toolResponse) {
+        return toolResponse;
+    }
+    
     return llmResponse.text;
   }
 );

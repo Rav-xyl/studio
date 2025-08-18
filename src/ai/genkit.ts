@@ -8,5 +8,5 @@ export const ai = genkit({
     googleAI(),
   ],
   // Use a fast and reliable Google model as the default
-  model: 'googleai/gemini-2.0-flash-preview',
+  model: 'googleai/gemini-2.0-flash',
 });
