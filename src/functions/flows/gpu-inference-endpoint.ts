@@ -1,6 +1,7 @@
 'use server';
 
-import { configureGenkit, defineFlow, z } from 'genkit/lib/core';
+import { configureGenkit, defineFlow } from 'genkit';
+import { z } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 
 configureGenkit({

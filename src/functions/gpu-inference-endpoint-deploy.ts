@@ -1,6 +1,6 @@
 
 import { defineString, defineSecret } from 'firebase-functions/params';
-import { onFlow } from '@genkit-ai/firebase/lib/functions';
+import { onFlow } from '@genkit-ai/firebase';
 import { gpuInferenceFlow } from './flows/gpu-inference-endpoint';
 
 // Define the environment variable for the Google Cloud region.
@@ -14,7 +14,7 @@ const region = defineString('REGION', {
 const serviceAccount = defineString('SERVICE_ACCOUNT', {
   description: 'The service account for the function.',
   // This should be the service account that your Firebase app uses.
-  default: 'talentflow-ai-1lu7m@appspot.gserviceaccount.com',
+  default: 'firebase-adminsdk@talentflow-ai-1lu7m.iam.gserviceaccount.com',
 });
 
 // Expose the Genkit flow as an HTTPS endpoint.
