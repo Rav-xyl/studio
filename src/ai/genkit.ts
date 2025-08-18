@@ -12,5 +12,5 @@ export const ai = genkit({
     }),
   ],
   // Use the correct and latest available model name
-  model: 'openai/gpt-5',
+  model: 'openai/gpt-4-turbo',
 });
