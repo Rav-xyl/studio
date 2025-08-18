@@ -33,6 +33,8 @@ export function AssistantChat({ open, onOpenChange, onActionHandled }: Assistant
   const [isLoading, setIsLoading] = useState(false);
   const [userContext, setUserContext] = useState<UserContext>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     if (open) {
@@ -54,11 +56,8 @@ export function AssistantChat({ open, onOpenChange, onActionHandled }: Assistant
 
   useEffect(() => {
     // Auto-scroll to the bottom when new messages are added
-    if (scrollAreaRef.current) {
-        const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-        if (viewport) {
-            viewport.scrollTop = viewport.scrollHeight;
-        }
+    if (viewportRef.current) {
+        viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
     }
   }, [messages]);
 
@@ -110,8 +109,8 @@ export function AssistantChat({ open, onOpenChange, onActionHandled }: Assistant
                 {userContext?.role === 'admin' && <span className="font-semibold text-primary"> (Admin Mode)</span>}
             </SheetDescription>
         </SheetHeader>
-        <div className="flex-1 flex flex-col">
-            <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+        <div className="flex-1 flex flex-col min-h-0">
+            <ScrollArea className="flex-1 p-4" ref={scrollAreaRef} viewportRef={viewportRef}>
                  <div className="space-y-6">
                     {messages.map((message, index) => (
                         <div key={index} className={`flex items-start gap-3 ${message.role === 'user' ? 'justify-end' : ''}`}>
