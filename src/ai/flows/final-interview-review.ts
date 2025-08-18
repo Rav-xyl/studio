@@ -59,7 +59,7 @@ const finalInterviewReviewFlow = ai.defineFlow(
     outputSchema: FinalInterviewReviewOutputSchema,
   },
   async input => {
-    const {output} = await finalReviewPrompt(input, { model: googleAI.model('gemini-1.5-pro-latest') });
+    const {output} = await finalReviewPrompt(input, { model: googleAI.model('gemini-2.5-pro') });
     return output!;
   }
 );

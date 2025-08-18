@@ -108,7 +108,7 @@ const askAstraFlow = ai.defineFlow(
     const llmResponse = await ai.generate({
       prompt: question,
       // Here we override the default model to use a more powerful one for this specific task.
-      model: googleAI.model('gemini-1.5-pro-latest'),
+      model: googleAI.model('gemini-2.5-pro'),
       tools: astraPrompt.tools,
       config: {
         ...astraPrompt.config,
