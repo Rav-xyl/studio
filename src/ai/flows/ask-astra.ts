@@ -11,6 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { googleAI } from '@genkit-ai/googleai';
 
 // Tool to delete a candidate by name
 const deleteCandidateByName = ai.defineTool(
@@ -106,7 +107,8 @@ const askAstraFlow = ai.defineFlow(
 
     const llmResponse = await ai.generate({
       prompt: question,
-      model: astraPrompt.model,
+      // Here we override the default model to use a more powerful one for this specific task.
+      model: googleAI.model('gemini-1.5-pro-latest'),
       tools: astraPrompt.tools,
       config: {
         ...astraPrompt.config,
