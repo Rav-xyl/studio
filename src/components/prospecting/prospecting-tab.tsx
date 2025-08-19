@@ -26,7 +26,7 @@ const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
 }
 
-type SortKey = keyof Pick<Candidate, 'name' | 'aiInitialScore'>;
+type SortKey = keyof Pick<Candidate, 'name' | 'aiInitialScore' | 'cgpa'>;
 
 interface ProspectingTabProps {
     candidates: Candidate[];
@@ -53,8 +53,8 @@ export function ProspectingTab({
         let sortableCandidates = [...candidates];
         if (sortConfig !== null) {
             sortableCandidates.sort((a, b) => {
-                const aValue = a[sortConfig.key] || (sortConfig.key === 'aiInitialScore' ? 0 : '');
-                const bValue = b[sortConfig.key] || (sortConfig.key === 'aiInitialScore' ? 0 : '');
+                const aValue = a[sortConfig.key] || 0;
+                const bValue = b[sortConfig.key] || 0;
                 
                 if (aValue < bValue) {
                     return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -137,9 +137,15 @@ export function ProspectingTab({
                                     <ArrowUpDown className="ml-2 h-4 w-4" />
                                 </Button>
                             </TableHead>
-                            <TableHead className="w-[15%] text-center">
+                            <TableHead className="text-center">
                                  <Button variant="ghost" onClick={() => requestSort('aiInitialScore')}>
                                     AI Score
+                                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </TableHead>
+                            <TableHead className="text-center">
+                                 <Button variant="ghost" onClick={() => requestSort('cgpa')}>
+                                    CGPA
                                     <ArrowUpDown className="ml-2 h-4 w-4" />
                                 </Button>
                             </TableHead>
@@ -173,6 +179,9 @@ export function ProspectingTab({
                                     </TableCell>
                                     <TableCell className="text-center">
                                         <Badge variant="secondary">{Math.round(candidate.aiInitialScore || 0)}</Badge>
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        <Badge variant="outline">{candidate.cgpa ? candidate.cgpa.toFixed(2) : 'N/A'}</Badge>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex flex-wrap gap-1">
@@ -221,7 +230,7 @@ export function ProspectingTab({
                             )})
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={6} className="h-48 text-center">
+                                <TableCell colSpan={7} className="h-48 text-center">
                                     <UserSearch className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                                     <h3 className="text-xl font-semibold">No Unassigned Candidates</h3>
                                     <p className="text-muted-foreground mt-1">Upload new resumes to the candidate pool to start prospecting.</p>

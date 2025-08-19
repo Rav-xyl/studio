@@ -2,6 +2,7 @@
 
 
 
+
 export type KanbanStatus = 'Sourcing' | 'Screening' | 'Interview' | 'Hired';
 
 export interface LogEntry {
@@ -51,6 +52,7 @@ export interface Candidate {
   archived?: boolean;
   log?: LogEntry[];
   aiInitialScore?: number;
+  cgpa?: number;
   gauntletStartDate?: string;
   gauntletState?: GauntletState;
   communicationSent?: boolean;

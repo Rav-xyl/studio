@@ -11,8 +11,6 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { extractTextFromDocx } from '@/lib/docx-extractor';
-
 
 const AutomatedResumeScreeningInputSchema = z.object({
   resumeDataUri: z
@@ -21,9 +19,6 @@ const AutomatedResumeScreeningInputSchema = z.object({
       "The resume to screen, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'"
     ),
   fileName: z.string().describe("The original filename of the resume, to be used as a fallback for the candidate's name if it cannot be extracted from the document."),
-  resumeText: z.string().optional().describe('Extracted text from the resume, if not a direct media type.'),
-  skillMappings: z.record(z.string(), z.string()).optional().describe('A map of candidate skills to company-preferred skills.'),
-  companyPreferences: z.string().optional().describe('Any specific company preferences for candidates.'),
   companyType: z.enum(['startup', 'enterprise']).describe('The type of company hiring, which dictates the evaluation criteria.'),
 });
 export type AutomatedResumeScreeningInput = z.infer<typeof AutomatedResumeScreeningInputSchema>;
@@ -38,6 +33,7 @@ const AutomatedResumeScreeningOutputSchema = z.object({
     experience: z.string().describe("A summary of the candidate's experience."),
     narrative: z.string().describe("A 2-3 sentence narrative summary of the candidate's profile."),
     inferredSkills: z.array(z.string()).describe("A list of 2-3 inferred soft skills or related technical skills."),
+    cgpa: z.number().optional().describe("The candidate's CGPA or equivalent score if mentioned. Must be a number."),
   }),
   candidateScore: z.number().describe("A score representing the candidate's suitability for the role, between 0 and 100."),
   reasoning: z.string().describe('Explanation of how the candidate score was derived, incorporating skill mappings and company preferences.'),
@@ -72,22 +68,7 @@ const prompt = ai.definePrompt({
   3.  **Format Output:** Structure your entire response in the required JSON format.
 
   **Resume Content:**
-  {{#if resumeText}}
-    {{{resumeText}}}
-  {{else}}
-    {{media url=resumeDataUri}}
-  {{/if}}
-
-
-  {{#if skillMappings}}
-  **Skill Mappings:**
-  {{{skillMappings}}}
-  {{/if}}
-
-  {{#if companyPreferences}}
-  **Company Preferences:**
-  {{{companyPreferences}}}
-  {{/if}}
+  {{media url=resumeDataUri}}
 
   **Extraction Rules:**
   - **Name:** Extract the candidate's full name. If a name is not found, you MUST use the provided filename as the fallback: {{{fileName}}}
@@ -96,8 +77,9 @@ const prompt = ai.definePrompt({
   - **Experience:** Summarize the candidate's work experience in a succinct paragraph.
   - **Narrative:** Create a 2-3 sentence professional summary based *only* on the information in the resume.
   - **Inferred Skills:** Infer 2-3 relevant soft skills (e.g., "Leadership", "Team Collaboration") or related technical skills based on project descriptions and work history.
+  - **CGPA:** Find the candidate's CGPA or equivalent grade. Extract only the number (e.g., for '8.5/10', extract 8.5). If not found, do not include the field.
   - **Candidate Score:** Score between 0 and 100 based on the specified company context.
-  - **Reasoning:** Explain how the score was derived, strictly following the evaluation criteria for the given company type. Incorporate skill mappings and company preferences if provided.
+  - **Reasoning:** Explain how the score was derived, strictly following the evaluation criteria for the given company type.
   
   IMPORTANT: Your response MUST be in the JSON format specified by the output schema. Do not add any extra commentary before or after the JSON object. Your primary directive is to be consistent and accurate.
   `,
@@ -110,24 +92,8 @@ const automatedResumeScreeningFlow = ai.defineFlow(
     outputSchema: AutomatedResumeScreeningOutputSchema,
   },
   async (input) => {
-    const promptInput = { ...input };
-    promptInput.resumeText = undefined; // Ensure resumeText is initially undefined
-
-    const docxMimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    const docMimeType = 'application/msword';
-    const mimeType = input.resumeDataUri.split(';')[0].split(':')[1];
-
-    if (mimeType === docxMimeType || mimeType === docMimeType) {
-        try {
-            promptInput.resumeText = await extractTextFromDocx(input.resumeDataUri);
-        } catch (error) {
-            console.error("Error extracting text from DOCX, proceeding with media object:", error);
-            // If extraction fails, we let the model try with the media object by leaving resumeText undefined
-        }
-    }
-
     const { output } = await prompt({
-      ...promptInput,
+      ...input,
       companyType: {
         [input.companyType]: true,
       } as any,
