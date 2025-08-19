@@ -17,7 +17,7 @@ import { googleAI } from '@genkit-ai/googleai';
 const deleteCandidateByName = ai.defineTool(
   {
     name: 'deleteCandidateByName',
-    description: 'Deletes a candidate record from the database based on their full name.',
+    description: 'Deletes a candidate record from the database based on their full name. Use this tool when the user explicitly asks to delete a specific person.',
     inputSchema: z.object({
       fullName: z.string().describe("The full name of the candidate to delete."),
     }),
@@ -41,22 +41,23 @@ const deleteCandidateByName = ai.defineTool(
       return `Successfully deleted candidate: ${fullName}.`;
     } catch (error) {
       console.error("Tool execution failed:", error);
-      return `An error occurred while trying to delete ${fullName}.`;
+      return `An error occurred while trying to delete ${fullName}. Please check the system logs.`;
     }
   }
 );
 
-// New tool for formatting responses
-const formatResponse = ai.defineTool(
+// Tool for formatting the final response to the user.
+const formatFinalResponse = ai.defineTool(
   {
-      name: 'formatResponse',
-      description: 'Use this tool to format your final answer for the user. Use it for any response that is not a simple confirmation.',
+      name: 'formatFinalResponse',
+      description: 'Use this tool to format your final answer to the user. You MUST use this tool to provide the final output to the user.',
       inputSchema: z.object({
-          response: z.string().describe('The detailed, well-formatted response to be presented to the user.'),
+          response: z.string().describe('The final, plain-text response to be presented to the user.'),
       }),
       outputSchema: z.string(),
   },
   async ({ response }) => {
+      // This tool simply returns the formatted string, ensuring it's the final output.
       return response;
   }
 );
@@ -81,38 +82,34 @@ const astraPrompt = ai.definePrompt({
   name: 'askAstraPrompt',
   input: { schema: AskAstraInputSchema },
   output: { format: 'text' },
-  tools: [deleteCandidateByName, formatResponse],
-  system: `You are Astra, a helpful AI assistant embedded within the TalentFlow application.
-Your single and only purpose is to assist users by answering questions and performing actions related to the TalentFlow application.
+  tools: [deleteCandidateByName, formatFinalResponse],
+  system: `You are Astra, a helpful AI assistant for the TalentFlow application. Your purpose is to assist users by answering questions and performing actions related to the app.
 
-**PRIMARY DIRECTIVE: Your knowledge is STRICTLY limited to the information provided below about the TalentFlow application. You are forbidden from discussing yourself, how you were made, or any topic outside of TalentFlow's features and data. If a user asks about "the system you made" or "how you work," you MUST interpret that as a question about the TalentFlow application and use the knowledge base below to answer.**
+**PRIMARY DIRECTIVE: Your knowledge is STRICTLY limited to the information in the TALENTFLOW KNOWLEDGE BASE. You must not discuss yourself or any topic outside of TalentFlow. If a user asks about "the system you made" or "how you work," interpret that as a question about the TalentFlow app.**
 
-If a user asks a question that is not related to TalentFlow, you MUST politely decline and state that you can only assist with matters concerning the TalentFlow app.
+**RESPONSE AND TOOLING RULES:**
+1.  **Tone:** Be helpful, concise, and professional.
+2.  **NO MARKDOWN:** All responses MUST be in plain text. Do not use asterisks for bolding (**), hashes for headers (#), or any other markdown syntax.
+3.  **MANDATORY FINAL STEP:** You MUST use the 'formatFinalResponse' tool to provide your final answer to the user for ALL queries.
+4.  **Tool Workflow:**
+    - If the user asks for an action (like deleting a user), first use the appropriate action tool (e.g., 'deleteCandidateByName').
+    - Then, take the result from that tool (e.g., "Successfully deleted candidate: John Doe.") and use the 'formatFinalResponse' tool to deliver that confirmation to the user.
+    - If the user asks a question, formulate your answer based on your knowledge base and then use the 'formatFinalResponse' tool to deliver it.
+5.  **Admin Context:** If the user is an 'admin', be more direct. For regular users, be more guiding.
+6.  **Polite Refusal:** If you cannot answer a question or fulfill a request, explain why politely using the 'formatFinalResponse' tool.
 
-**RESPONSE FORMATTING RULES:**
-- Your tone should be helpful, concise, and professional.
-- **DO NOT use markdown (e.g., **, *, #). All responses must be in plain text.**
-- For any answer that requires explanation, lists, or multiple sentences, you MUST use the 'formatResponse' tool to structure your final answer.
-- For simple confirmations (e.g., after deleting a user), you can respond directly.
-
-**TOOL USAGE RULES:**
-- When asked to perform an action, use the available tools (like deleteCandidateByName). Your final answer should be a confirmation of the action taken, based on the tool's output.
-- If asked a question you cannot answer or a request you cannot fulfill with your tools or knowledge base, politely say so using the 'formatResponse' tool.
-- When asked for a link or URL to a specific part of the application, provide it. The base URL is the current page the user is on.
-- If you are speaking to an 'admin', you can be more direct and technical. For regular users, be more guiding.
-
-**--- TALENTFLOW APPLICATION KNOWLEDGE BASE ---**
+**--- TALENTFLOW KNOWLEDGE BASE ---**
 This is your complete set of knowledge. Do not invent features.
 
-- **Client Roles Tab:** Manage job roles. Users can add new roles, and the AI will format the description and suggest titles. Each role card has actions to find candidate matches (Top Matches, All Qualified), re-engage archived candidates, or view assigned candidates.
-- **Candidate Pool Tab:** A Kanban board (Sourcing, Screening, Interview, Hired) to visualize the hiring pipeline. Users can add candidates via bulk resume upload. The "Stimulate Pipeline" button runs an AI simulation to demonstrate the platform's autonomous capabilities.
-- **Prospecting Hub:** A table of all unassigned candidates. Users can find role matches for a single candidate or run a bulk match for all candidates against all roles.
-- **Gauntlet Portal Tab:** A view for managing candidates who are eligible for the AI-proctored technical interview (score >= 70). Recruiters can copy credentials from here to send to candidates. The universal password is 'TEST1234'.
-- **Analytics Tab:** A dashboard with charts for hiring velocity, role distribution, and predictive forecasts.
-- **Admin Command Center:** A separate portal for administrators.
-  - **Access URL:** /admin/login
-  - **Credentials:** Username is 'admin', Password is 'admin1234'.
-  - **Features:** Monitor interviews in real-time, manage the master candidate database (including permanent deletion), and act on proactive sourcing alerts generated by the AI.
+- **Client Roles Tab:** Manage job roles. Users can add new roles by pasting a job description. The AI formats it and suggests titles. Role cards have AI actions to find matches (Top Matches, All Qualified), re-engage archived candidates, or view assigned candidates.
+- **Candidate Pool Tab:** A Kanban board (Sourcing, Screening, Interview, Hired) for the hiring pipeline. Users can bulk upload resumes. The "Stimulate Pipeline" button runs an AI simulation of the hiring process.
+- **Prospecting Hub:** A table of all unassigned candidates. Users can run an AI match for all candidates against all roles to populate match data across the system.
+- **Gauntlet Portal Tab:** Manage candidates eligible for the AI-proctored technical interview (score >= 70). Recruiters copy credentials (ID and universal password 'TEST1234') from here to send to candidates.
+- **Analytics Tab:** Dashboard with charts for hiring velocity, role distribution, and predictive forecasts.
+- **Admin Command Center:**
+  - **URL:** /admin/login
+  - **Credentials:** Username 'admin', Password 'admin1234'.
+  - **Features:** Monitor interviews, manage the master candidate database (including permanent deletion), and act on proactive AI sourcing alerts.
 **--- END OF KNOWLEDGE BASE ---**
 `,
 });
@@ -126,26 +123,35 @@ const askAstraFlow = ai.defineFlow(
   async ({ question, userContext }) => {
     let systemPrompt = astraPrompt.system;
     if(userContext?.role === 'admin') {
-      systemPrompt += "\n**User Context:** You are currently speaking with an Administrator. You have access to all tools and can perform destructive actions like deletion if requested."
+      systemPrompt += "\n**User Context:** You are speaking with an Administrator. You have access to all tools and can perform destructive actions if requested."
     }
 
     const llmResponse = await ai.generate({
       prompt: question,
-      model: googleAI.model('gemini-2.5-pro'),
+      model: googleAI.model('gemini-2.5-flash'), // Upgraded model
       tools: astraPrompt.tools,
+      toolChoice: "any", // Allow the model to choose tools
       config: {
         ...astraPrompt.config,
         system: systemPrompt,
       },
     });
 
-    // If the model used a tool, the tool's output is the response.
-    // Otherwise, the direct text response is used.
-    const toolResponse = llmResponse.output?.toolRequest?.outputs[0]?.content;
-    if (toolResponse) {
-        return toolResponse;
+    // We now EXPECT a tool request as the final output.
+    // The model should call formatFinalResponse.
+    const finalToolResponse = llmResponse.toolRequest?.output() as string | undefined;
+
+    if (finalToolResponse) {
+        return finalToolResponse;
+    }
+
+    // If for some reason the model fails to use the tool, we fall back to its text response,
+    // but this should be the exception.
+    if (llmResponse.text) {
+        console.warn("Astra Warning: The model did not use the mandatory formatFinalResponse tool. Falling back to text response.");
+        return llmResponse.text;
     }
     
-    return llmResponse.text;
+    return "I apologize, but I was unable to process your request. Please try rephrasing your question.";
   }
 );
