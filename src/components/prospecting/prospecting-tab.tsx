@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog";
 import { Checkbox } from "../ui/checkbox";
+import { Input } from "../ui/input";
 
 
 const getInitials = (name: string) => {
@@ -48,25 +49,28 @@ export function ProspectingTab({
     const { toast } = useToast();
     const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'aiInitialScore', direction: 'descending' });
+    const [searchTerm, setSearchTerm] = useState('');
 
-    const sortedCandidates = useMemo(() => {
-        let sortableCandidates = [...candidates];
-        if (sortConfig !== null) {
-            sortableCandidates.sort((a, b) => {
-                const aValue = a[sortConfig.key] || 0;
-                const bValue = b[sortConfig.key] || 0;
-                
-                if (aValue < bValue) {
-                    return sortConfig.direction === 'ascending' ? -1 : 1;
-                }
-                if (aValue > bValue) {
-                    return sortConfig.direction === 'ascending' ? 1 : -1;
-                }
-                return 0;
-            });
-        }
-        return sortableCandidates;
-    }, [candidates, sortConfig]);
+    const sortedAndFilteredCandidates = useMemo(() => {
+        let processableCandidates = [...candidates].filter(c => 
+            c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            c.skills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+
+        processableCandidates.sort((a, b) => {
+            const aValue = a[sortConfig.key] || 0;
+            const bValue = b[sortConfig.key] || 0;
+            
+            if (aValue < bValue) {
+                return sortConfig.direction === 'ascending' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === 'ascending' ? 1 : -1;
+            }
+            return 0;
+        });
+        return processableCandidates;
+    }, [candidates, sortConfig, searchTerm]);
 
     const requestSort = (key: SortKey) => {
         let direction: 'ascending' | 'descending' = 'ascending';
@@ -91,13 +95,13 @@ export function ProspectingTab({
     
     const handleSelectAll = (isSelected: boolean) => {
         if (isSelected) {
-            setSelectedCandidates(sortedCandidates.map(c => c.id));
+            setSelectedCandidates(sortedAndFilteredCandidates.map(c => c.id));
         } else {
             setSelectedCandidates([]);
         }
     }
 
-    const isAllSelected = sortedCandidates.length > 0 && selectedCandidates.length === sortedCandidates.length;
+    const isAllSelected = sortedAndFilteredCandidates.length > 0 && selectedCandidates.length === sortedAndFilteredCandidates.length;
 
 
     return (
@@ -110,9 +114,15 @@ export function ProspectingTab({
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    {selectedCandidates.length > 0 && (
-                        <Button variant="secondary">Analyze {selectedCandidates.length} Selected</Button>
-                    )}
+                    <div className="relative w-full max-w-xs">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search by name or skill..."
+                            className="pl-9"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
                      <Button onClick={onRunBulkMatch} disabled={candidates.length === 0 || roles.length === 0}>
                         <Zap className="mr-2 h-4 w-4" />
                         Run AI Match for All
@@ -155,8 +165,8 @@ export function ProspectingTab({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {sortedCandidates.length > 0 ? (
-                            sortedCandidates.map(candidate => {
+                        {sortedAndFilteredCandidates.length > 0 ? (
+                            sortedAndFilteredCandidates.map(candidate => {
                                 const matches = matchResults[candidate.id] || [];
                                 const bestMatch = matches[0];
                                 return (
@@ -232,8 +242,8 @@ export function ProspectingTab({
                             <TableRow>
                                 <TableCell colSpan={7} className="h-48 text-center">
                                     <UserSearch className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                                    <h3 className="text-xl font-semibold">No Unassigned Candidates</h3>
-                                    <p className="text-muted-foreground mt-1">Upload new resumes to the candidate pool to start prospecting.</p>
+                                    <h3 className="text-xl font-semibold">No Unassigned Candidates Found</h3>
+                                    <p className="text-muted-foreground mt-1">Try adjusting your search or upload new resumes to the candidate pool.</p>
                                 </TableCell>
                             </TableRow>
                         )}

@@ -4,6 +4,7 @@
 import {
   FilterX,
   PlusCircle,
+  Search,
   Trash2,
   Zap,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ import { BulkUploadDialog } from './bulk-upload-dialog';
 import { db } from '@/lib/firebase';
 import { writeBatch, collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { Input } from '../ui/input';
 
 const KANBAN_COLUMNS: KanbanStatus[] = [
   'Sourcing',
@@ -53,6 +55,7 @@ export function CandidatePoolTab({
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [isSheetOpen, setSheetOpen] = useState(false);
   const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
 
   const handleCardClick = (candidate: Candidate) => {
@@ -69,11 +72,23 @@ export function CandidatePoolTab({
 
   const displayedCandidates = useMemo(() => {
     const activeCandidates = candidates.filter(c => !c.archived);
-    if (!filteredRole) {
-      return activeCandidates;
+    
+    let filteredByRole = activeCandidates;
+    if (filteredRole) {
+      filteredByRole = activeCandidates.filter(c => c.role === filteredRole.title);
     }
-    return activeCandidates.filter(c => c.role === filteredRole.title);
-  }, [candidates, filteredRole]);
+    
+    if (!searchTerm) {
+        return filteredByRole;
+    }
+
+    return filteredByRole.filter(c => 
+        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.skills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+  }, [candidates, filteredRole, searchTerm]);
 
 
   const columns = KANBAN_COLUMNS.map((status: KanbanStatus) => ({
@@ -122,6 +137,15 @@ export function CandidatePoolTab({
             </div>
             
             <div className="flex items-center gap-2">
+                <div className="relative w-full max-w-xs">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search candidates..."
+                        className="pl-9"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
                 <Button onClick={() => setUploadDialogOpen(true)} variant="outline">
                   <PlusCircle className="w-4 h-4 mr-2" /> Add Candidates
                 </Button>

@@ -4,7 +4,7 @@
 import type { Candidate } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { Badge } from "../ui/badge";
-import { ShieldQuestion, Info, Link as LinkIcon, Send, Loader2 } from "lucide-react";
+import { ShieldQuestion, Info, Link as LinkIcon, Send, Loader2, Search, ArrowUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Progress } from "../ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
@@ -12,15 +12,21 @@ import { Button } from "../ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { aiDrivenCandidateEngagement } from "@/ai/flows/ai-driven-candidate-engagement";
+import { Input } from "../ui/input";
 
 interface GauntletPortalTabProps {
     candidates: Candidate[];
 }
 
+type SortKey = 'name' | 'role' | 'aiInitialScore';
+
 export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
     const { toast } = useToast();
     const router = useRouter();
     const [isSendingReminders, setIsSendingReminders] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'aiInitialScore', direction: 'descending' });
+
 
     const shortlistedCandidates = useMemo(() => {
         // A candidate is eligible for the Gauntlet only if they have a high score, are not archived, AND have been assigned a role.
@@ -30,6 +36,36 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
             c.role !== 'Unassigned'
         );
     }, [candidates]);
+
+    const filteredAndSortedCandidates = useMemo(() => {
+        let sortableCandidates = [...shortlistedCandidates].filter(c => 
+            c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            c.role.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        sortableCandidates.sort((a, b) => {
+            const aValue = a[sortConfig.key] || 0;
+            const bValue = b[sortConfig.key] || 0;
+            
+            if (aValue < bValue) {
+                return sortConfig.direction === 'ascending' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === 'ascending' ? 1 : -1;
+            }
+            return 0;
+        });
+
+        return sortableCandidates;
+    }, [shortlistedCandidates, searchTerm, sortConfig]);
+
+    const requestSort = (key: SortKey) => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
 
     const getGauntletStatus = (candidate: Candidate) => {
         if (!candidate.gauntletState) return { text: 'Not Started', value: 0 };
@@ -101,10 +137,21 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
                         Manage and monitor candidates who have been shortlisted for the AI Gauntlet.
                     </p>
                 </div>
-                <Button onClick={handleSendReminders} disabled={isSendingReminders}>
-                    {isSendingReminders ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                    Send AI Reminders
-                </Button>
+                <div className="flex items-center gap-2">
+                    <div className="relative w-full max-w-xs">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search by name or role..."
+                            className="pl-9"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <Button onClick={handleSendReminders} disabled={isSendingReminders}>
+                        {isSendingReminders ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Send AI Reminders
+                    </Button>
+                </div>
             </div>
             
             <Alert className="mb-6">
@@ -120,15 +167,27 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Candidate</TableHead>
-                            <TableHead>Assigned Role</TableHead>
-                            <TableHead className="text-center">AI Score</TableHead>
+                            <TableHead>
+                                <Button variant="ghost" onClick={() => requestSort('name')}>
+                                    Candidate <ArrowUpDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </TableHead>
+                            <TableHead>
+                                <Button variant="ghost" onClick={() => requestSort('role')}>
+                                    Assigned Role <ArrowUpDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </TableHead>
+                            <TableHead className="text-center">
+                                <Button variant="ghost" onClick={() => requestSort('aiInitialScore')}>
+                                    AI Score <ArrowUpDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {shortlistedCandidates.length > 0 ? (
-                            shortlistedCandidates.map(candidate => {
+                        {filteredAndSortedCandidates.length > 0 ? (
+                            filteredAndSortedCandidates.map(candidate => {
                                 const status = getGauntletStatus(candidate);
                                 return (
                                 <TableRow key={candidate.id}>
@@ -151,7 +210,7 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
                             <TableRow>
                                 <TableCell colSpan={4} className="h-24 text-center">
                                     <ShieldQuestion className="mx-auto h-10 w-10 text-muted-foreground mb-2" />
-                                    No candidates are currently eligible for the Gauntlet.
+                                    No candidates match your search.
                                     <p className="text-xs text-muted-foreground">Ensure candidates have a score of 70+ and are assigned to a role.</p>
                                 </TableCell>
                             </TableRow>
