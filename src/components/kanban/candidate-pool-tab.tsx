@@ -32,7 +32,7 @@ interface CandidatePoolTabProps {
     candidates: Candidate[];
     roles: JobRole[];
     onUpload: (files: FileList | null, companyType: 'startup' | 'enterprise') => void;
-    onStimulateFullPipeline: () => void;
+    onRunAiAudit: () => void;
     filteredRole: JobRole | null;
     onClearFilter: () => void;
     onUpdateCandidate: (candidate: Candidate) => void;
@@ -44,7 +44,7 @@ export function CandidatePoolTab({
     candidates,
     roles,
     onUpload,
-    onStimulateFullPipeline,
+    onRunAiAudit,
     filteredRole,
     onClearFilter,
     onUpdateCandidate,
@@ -150,8 +150,8 @@ export function CandidatePoolTab({
                   <PlusCircle className="w-4 h-4 mr-2" /> Add Candidates
                 </Button>
                 
-                <Button onClick={onStimulateFullPipeline} variant="secondary">
-                  <Zap className="w-4 h-4 mr-2" /> Stimulate Pipeline
+                <Button onClick={onRunAiAudit} variant="secondary">
+                  <Zap className="w-4 h-4 mr-2" /> Run AI Audit
                 </Button>
             </div>
         </div>

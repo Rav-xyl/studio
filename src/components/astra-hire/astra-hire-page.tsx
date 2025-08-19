@@ -14,8 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
 import { nanoid } from 'nanoid';
 import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
-import { finalInterviewReview } from '@/ai/flows/final-interview-review';
-import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { db, storage } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, arrayUnion, getDoc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
@@ -28,6 +26,7 @@ import { bulkMatchCandidatesToRoles } from '@/ai/flows/bulk-match-candidates';
 import { useRouter } from 'next/navigation';
 import { AdminTab } from '../admin/admin-tab';
 import { AnnouncementsTab } from '../announcements/announcements-tab';
+import { runSystemAudit } from '@/ai/flows/system-audit';
 
 
 // --- Helper Functions ---
@@ -320,91 +319,33 @@ export default function AstraHirePage() {
         setTimeout(() => setBackgroundTask(null), 5000);
     };
   
-    const handleStimulateFullPipeline = async () => {
-        const taskId = `task-${nanoid(5)}`;
-        const task: BackgroundTask = {
-            id: taskId,
-            type: 'Simulation',
-            status: 'in-progress',
-            progress: 0,
-            total: 5,
-            message: 'Starting pipeline simulation...'
-        };
-        setBackgroundTask(task);
-
-        const currentSimulationLog: any[] = [];
-        
-        const log = (step: string, description: string) => {
-            console.log(`[SAARTHI LOG] ${step}: ${description}`);
-            currentSimulationLog.push({ step, description });
-        };
+    const handleRunAiAudit = async () => {
+        const taskId = `task-audit-${nanoid(5)}`;
+        setBackgroundTask({
+            id: taskId, type: 'Audit', status: 'in-progress',
+            progress: 0, total: 1, message: 'SAARTHI is running a system audit...'
+        });
+        toast({ title: "AI Audit in Progress", description: "SAARTHI is analyzing the current pipeline state." });
 
         try {
-            log("Start Simulation", "Beginning autonomous pipeline simulation.");
-            setBackgroundTask(prev => prev ? ({ ...prev, progress: 1, message: 'Phase 1/5: Sourcing...' }) : null);
-            
-            const candidatesForSim = [...candidates];
-            const topCandidate = candidatesForSim
-                .filter(c => c.status === 'Screening' && !c.archived)
-                .sort((a,b) => (b.aiInitialScore || 0) - (a.aiInitialScore || 0))[0];
-
-            if(!topCandidate) {
-                throw new Error("Simulation ended: No qualified candidates found in 'Screening'. Add some candidates to run a simulation.");
-            }
-            log("Talent Identification", `Identified top talent: ${topCandidate.name} (Score: ${topCandidate.aiInitialScore}).`);
-
-            setBackgroundTask(prev => prev ? ({ ...prev, progress: 2, message: 'Phase 2/5: Synthesizing Role...' }) : null);
-            
-            const targetRoleTitle = "Lead Software Engineer";
-            log("Role Suggestion", `AI suggested a role similar to '${targetRoleTitle}' for ${topCandidate.name}.`);
-
-            const jdResult = await synthesizeJobDescription({ jobDescriptionText: `Seeking a candidate for ${targetRoleTitle} with skills like ${topCandidate.skills.join(', ')}.` });
-            const newRole: JobRole = { id: `role-${nanoid(10)}`, title: targetRoleTitle, description: jdResult.formattedDescription, department: "Engineering", openings: 1 };
-            await setDoc(doc(db, 'roles', newRole.id), newRole);
-            log("Role Synthesis Complete", `Created and saved new role: '${newRole.title}'.`);
-
-            setBackgroundTask(prev => prev ? ({ ...prev, progress: 3, message: 'Phase 3/5: Simulating Gauntlet...' }) : null);
-            log("Gauntlet Simulation", `Simulating technical gauntlet for ${topCandidate.name}.`);
-            const bossReview = await finalInterviewReview({interviewReport: "Simulated Technical and System Design phases. The candidate demonstrated exceptional problem-solving skills and a strong grasp of architectural principles."});
-            
-            if (bossReview.finalRecommendation !== "Strong Hire") {
-                await updateDoc(doc(db, 'candidates', topCandidate.id), { archived: true, 'gauntletState.phase': 'Failed' });
-                throw new Error(`Simulation ended: Top candidate ${topCandidate.name} did not pass the Gauntlet. Recommendation: ${bossReview.finalRecommendation}.`);
-            }
-            log("BOSS Validation", `BOSS AI approved ${topCandidate.name} with recommendation: ${bossReview.finalRecommendation}.`);
-
-            setBackgroundTask(prev => prev ? ({ ...prev, progress: 4, message: 'Phase 4/5: Promoting to Interview...' }) : null);
-            await updateDoc(doc(db, 'candidates', topCandidate.id), { 
-                status: 'Interview', 
-                role: newRole.title,
-                'gauntletState.phase': 'Complete'
+            const auditResult = await runSystemAudit({
+                candidates: candidates,
+                roles: roles
             });
-            log("Pipeline Progression", `Moved ${topCandidate.name} to 'Interview' and assigned role '${newRole.title}'.`);
 
-            setBackgroundTask(prev => prev ? ({ ...prev, progress: 5, message: 'Phase 5/5: Drafting Offer & Hiring...' }) : null);
-            const offer = await draftOfferLetter({
-               candidateName: topCandidate.name, roleTitle: newRole.title, candidateSkills: topCandidate.skills, candidateExperience: topCandidate.narrative, companyName: "AstraHire Client", companySalaryBands: "Senior: $120k-$150k", simulatedMarketData: "Market avg: $135k"
-            });
-            log("Offer Drafted", `Market-aware offer drafted for ${topCandidate.name} with salary ${offer.suggestedSalary}.`);
-            
-            await updateDoc(doc(db, 'candidates', topCandidate.id), { status: 'Hired' });
-            log("Hiring Decision", `Autonomously hired ${topCandidate.name} for the role of ${newRole.title}.`);
-            
             setLastSaarthiReport({
-                reportType: "Pipeline Simulation",
-                simulationSummary: `The end-to-end simulation successfully processed the pipeline. It identified ${topCandidate.name} as a top candidate, synthesized the role of '${newRole.title}', validated them through the Gauntlet, and autonomously hired them.`,
-                detailedProcessLog: currentSimulationLog,
+                reportType: "System Audit",
+                simulationSummary: auditResult.overallStatus,
+                detailedProcessLog: auditResult.checks,
             });
             setIsSaarthiReportOpen(true);
-            setBackgroundTask(prev => prev ? { ...prev, status: 'complete', message: 'Simulation complete!' } : null);
-
+            setBackgroundTask(prev => prev ? ({ ...prev, progress: 1, status: 'complete', message: 'Audit complete!' }) : null);
 
         } catch (error) {
-            console.error("Full pipeline simulation failed:", error);
+            console.error("AI Audit failed:", error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            toast({ title: "Simulation Error", description: errorMessage, variant: "destructive"});
-            log("Error", `The simulation was interrupted: ${errorMessage}`);
-            setBackgroundTask(prev => prev ? ({ ...prev, status: 'error', message: 'Simulation failed.' }) : null);
+            toast({ title: "Audit Error", description: errorMessage, variant: "destructive"});
+            setBackgroundTask(prev => prev ? ({ ...prev, status: 'error', message: 'Audit failed.' }) : null);
         } finally {
              setTimeout(() => { setBackgroundTask(null); }, 5000);
         }
@@ -693,7 +634,7 @@ export default function AstraHirePage() {
     const handleOpenReport = () => {
          setLastSaarthiReport({
             reportType: "No Report",
-            simulationSummary: "No simulation has been run yet. Click 'Stimulate Pipeline' in the Candidate Pool tab to generate a report."
+            simulationSummary: "No audit has been run yet. Click 'Run AI Audit' in the Candidate Pool tab to generate a report."
         });
         setIsSaarthiReportOpen(true);
     }
@@ -728,10 +669,10 @@ export default function AstraHirePage() {
                 candidates={candidates}
                 roles={roles}
                 onUpload={handleBulkUpload}
-                onStimulateFullPipeline={handleStimulateFullPipeline}
-                onUpdateCandidate={handleUpdateCandidate}
+                onRunAiAudit={handleRunAiAudit}
                 filteredRole={filteredRole}
                 onClearFilter={() => setFilteredRole(null)}
+                onUpdateCandidate={handleUpdateCandidate}
                 onAddRole={handleAddRole}
                 onDeleteCandidate={handleDeleteCandidate}
             />
