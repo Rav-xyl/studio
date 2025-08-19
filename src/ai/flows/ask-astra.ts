@@ -120,15 +120,15 @@ const askAstraFlow = ai.defineFlow(
     inputSchema: AskAstraInputSchema,
     outputSchema: AskAstraOutputSchema,
   },
-  async ({ question, userContext }) => {
+  async (input: AskAstraInput) => { // Correctly accept the full input object
     let finalSystemPrompt = astraPrompt.system;
-    if (userContext?.role === 'admin') {
+    if (input.userContext?.role === 'admin') {
       finalSystemPrompt += "\n**User Context:** You are speaking with an Administrator. You have access to all tools and can perform destructive actions if requested.";
     }
 
     // By calling the prompt object itself, we ensure all its configurations (tools, system prompt, etc.) are used.
     const llmResponse = await astraPrompt(
-      { question, userContext }, // Pass the original input
+      input, // Pass the original, complete input object
       {
         model: googleAI.model('gemini-2.0-flash'),
         // Override the system prompt with our dynamically adjusted one
@@ -138,9 +138,10 @@ const askAstraFlow = ai.defineFlow(
         }
       }
     );
-
+    
     // We expect the model's final action to be a call to our formatting tool.
     // Use optional chaining and check for the correct property 'output'
+    // Per Genkit v1.x, the tool output is on the 'output' property, not a function call.
     const finalToolResponse = llmResponse.toolRequest?.output as string | undefined;
 
     if (finalToolResponse) {
@@ -148,6 +149,7 @@ const askAstraFlow = ai.defineFlow(
     }
 
     // Fallback in case the model fails to use the required tool.
+    // Per Genkit v1.x, the text response is on the 'text' property.
     if (llmResponse.text) {
       console.warn("Astra Warning: The model did not use the mandatory formatFinalResponse tool. Falling back to text response.");
       return llmResponse.text;
@@ -156,3 +158,5 @@ const askAstraFlow = ai.defineFlow(
     return "I apologize, but I was unable to process your request. Please try rephrasing your question.";
   }
 );
+
+    
