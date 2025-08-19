@@ -130,7 +130,7 @@ const askAstraFlow = ai.defineFlow(
     const llmResponse = await astraPrompt(
       { question, userContext }, // Pass the original input
       {
-        model: googleAI.model('gemini-2.5-flash'),
+        model: googleAI.model('gemini-2.0-flash'),
         toolChoice: "auto",
         // Override the system prompt with our dynamically adjusted one
         config: {
