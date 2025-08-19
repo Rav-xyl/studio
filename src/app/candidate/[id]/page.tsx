@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, BrainCircuit, FileText, CheckCircle, XCircle, Download, LogOut } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import type { Candidate, GauntletPhase, GauntletState } from '@/lib/types';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 import { db } from '@/lib/firebase';
@@ -22,8 +22,9 @@ const InterviewGauntlet = dynamic(() => import('@/components/interview/interview
 
 type StageStatus = 'Locked' | 'Unlocked' | 'Pending' | 'Complete' | 'Failed';
 
-export default function CandidatePortalPage({ params }: { params: { id: string } }) {
-    const { id: candidateId } = params;
+export default function CandidatePortalPage() {
+    const params = useParams();
+    const candidateId = params.id as string;
     const router = useRouter();
     const { toast } = useToast();
     
