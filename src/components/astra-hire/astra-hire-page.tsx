@@ -738,13 +738,21 @@ export default function AstraHirePage() {
       <main>
         <div className="border-b border-border mb-6">
           <nav className="flex space-x-2">
-            {isAdmin && (
+            {isAdmin ? (
                  <button
                     className={`tab-btn ${activeTab === 'admin' ? 'active' : ''}`}
                     onClick={() => handleTabClick('admin')}
                     >
                     <UserCog className="inline-block w-4 h-4 mr-2" />
                     Admin
+                </button>
+            ) : (
+                <button
+                    className={`tab-btn`}
+                    onClick={() => router.push('/admin/login')}
+                    >
+                    <UserCog className="inline-block w-4 h-4 mr-2" />
+                    Login as Admin
                 </button>
             )}
             <button
