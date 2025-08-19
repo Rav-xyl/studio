@@ -246,94 +246,73 @@ export default function AstraHirePage() {
 
     const handleBulkUpload = async (files: FileList | null, companyType: 'startup' | 'enterprise') => {
         if (!files || files.length === 0) return;
-
+    
         const taskId = `task-${nanoid(5)}`;
-        const task: BackgroundTask = {
-            id: taskId,
-            type: 'Screening',
-            status: 'in-progress',
-            progress: 0,
-            total: files.length,
-            message: 'Preparing uploads...'
-        };
-        setBackgroundTask(task);
-
+        setBackgroundTask({
+            id: taskId, type: 'Screening', status: 'in-progress',
+            progress: 0, total: files.length, message: 'Starting uploads...',
+        });
+    
         const filesToProcess = Array.from(files);
         let processedCount = 0;
         let successfulCount = 0;
         let skippedCount = 0;
-        
+    
         const currentCandidatesSnapshot = await getDocs(collection(db, 'candidates'));
         const existingCandidateNames = new Set(currentCandidatesSnapshot.docs.map(doc => doc.data().name?.toLowerCase()));
-
+    
         const processFile = async (file: File) => {
             try {
                 const resumeDataUri = await convertFileToDataUri(file);
-                
-                const result = await automatedResumeScreening({ 
-                    resumeDataUri, 
-                    fileName: file.name, // Pass the filename here
-                    companyType 
-                });
-                
+                const result = await automatedResumeScreening({ resumeDataUri, fileName: file.name, companyType });
+    
                 if (existingCandidateNames.has(result.extractedInformation.name.toLowerCase())) {
                     skippedCount++;
-                    return;
+                    return; 
                 }
-
+    
                 const candidateId = `cand-${nanoid(10)}`;
                 const storageRef = ref(storage, `resumes/${candidateId}/${file.name}`);
                 await uploadBytes(storageRef, file);
                 const resumeUrl = await getDownloadURL(storageRef);
-
-                let status: KanbanStatus = 'Screening';
-                let archived = false;
-                if (result.candidateScore < 40) {
-                    status = 'Sourcing';
-                    archived = true;
-                }
-
-                const finalCandidate: Candidate = {
-                    id: candidateId,
-                    ...result.extractedInformation,
-                    status,
-                    role: 'Unassigned',
-                    aiInitialScore: result.candidateScore,
-                    lastUpdated: new Date().toISOString(),
-                    archived,
-                    resumeUrl,
+    
+                const status: KanbanStatus = result.candidateScore < 40 ? 'Sourcing' : 'Screening';
+                const archived = result.candidateScore < 40;
+    
+                const newCandidate: Candidate = {
+                    id: candidateId, ...result.extractedInformation,
+                    status, role: 'Unassigned', aiInitialScore: result.candidateScore,
+                    lastUpdated: new Date().toISOString(), archived, resumeUrl,
                     log: [{
-                        timestamp: new Date().toISOString(),
-                        event: 'Resume Uploaded & Screened',
-                        details: `Profile created from ${file.name}. Initial score: ${result.candidateScore}.`,
-                        author: 'AI'
+                        timestamp: new Date().toISOString(), event: 'Resume Uploaded & Screened',
+                        details: `Profile created from ${file.name}. Initial score: ${result.candidateScore}.`, author: 'AI',
                     }],
                 };
-                
-                await setDoc(doc(db, "candidates", candidateId), finalCandidate);
+    
+                await setDoc(doc(db, "candidates", candidateId), newCandidate);
                 successfulCount++;
-            
+                existingCandidateNames.add(newCandidate.name.toLowerCase()); // Add to set to prevent duplicates within the same batch
+    
             } catch (error) {
                 console.error(`Failed to process ${file.name}:`, error);
                 toast({
-                    title: `Processing Error`,
-                    description: `Could not process ${file.name}. Check the console for details.`,
+                    title: `Processing Error`, description: `Could not process ${file.name}.`,
                     variant: 'destructive',
                 });
             } finally {
                 processedCount++;
-                setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount, message: "Screening resumes..." }) : null);
+                setBackgroundTask(prev => prev ? { ...prev, progress: processedCount, message: `Screening: ${file.name}` } : null);
             }
         };
-
-        const uploadPromises = filesToProcess.map(processFile);
+    
+        const uploadPromises = filesToProcess.map(file => processFile(file));
         await Promise.all(uploadPromises);
-
+    
         let completionMessage = `Screening complete. ${successfulCount} new candidate(s) added.`;
         if (skippedCount > 0) completionMessage += ` ${skippedCount} duplicate(s) skipped.`;
         
         toast({ title: "Bulk Upload Finished", description: completionMessage });
-        setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: completionMessage }) : null);
+        setBackgroundTask(prev => prev ? { ...prev, status: 'complete', message: completionMessage } : null);
         setTimeout(() => setBackgroundTask(null), 5000);
     };
   
@@ -897,3 +876,5 @@ export default function AstraHirePage() {
     </div>
   );
 }
+
+    
