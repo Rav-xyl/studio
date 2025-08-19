@@ -338,10 +338,11 @@ export function CandidateDetailSheet({
                     </CardHeader>
                     <CardContent>
                       <p className='text-sm text-muted-foreground mb-4'>Invite the candidate to the AI Gauntlet and copy their unique credentials.</p>
-                       <Button onClick={handleSendInterviewInvite} className="w-full" disabled={!candidate.id}>
+                       <Button onClick={handleSendInterviewInvite} className="w-full" disabled={!candidate.id || candidate.role === 'Unassigned'}>
                           <Link className="mr-2 h-4 w-4" />
                           Start Gauntlet & Copy Credentials
                         </Button>
+                         {candidate.role === 'Unassigned' && <p className="text-xs text-center text-muted-foreground mt-2">A role must be assigned to start the Gauntlet.</p>}
                     </CardContent>
                   </Card>
                  <Card>
@@ -408,5 +409,3 @@ export function CandidateDetailSheet({
     </Sheet>
   );
 }
-
-    

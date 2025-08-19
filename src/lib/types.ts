@@ -48,6 +48,7 @@ export interface Candidate {
   lastUpdated: string;
   archived?: boolean;
   log?: LogEntry[];
+  aiInitialScore?: number;
   gauntletStartDate?: string;
   gauntletState?: GauntletState;
   communicationSent?: boolean;
@@ -126,5 +127,3 @@ export type FeedbackNote = {
     createdAt: any;
     replies?: FeedbackReply[];
 };
-
-    
