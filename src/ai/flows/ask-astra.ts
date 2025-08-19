@@ -121,35 +121,36 @@ const askAstraFlow = ai.defineFlow(
     outputSchema: AskAstraOutputSchema,
   },
   async ({ question, userContext }) => {
-    let systemPrompt = astraPrompt.system;
-    if(userContext?.role === 'admin') {
-      systemPrompt += "\n**User Context:** You are speaking with an Administrator. You have access to all tools and can perform destructive actions if requested."
+    let finalSystemPrompt = astraPrompt.system;
+    if (userContext?.role === 'admin') {
+      finalSystemPrompt += "\n**User Context:** You are speaking with an Administrator. You have access to all tools and can perform destructive actions if requested.";
     }
 
-    const llmResponse = await ai.generate({
-      prompt: question,
-      model: googleAI.model('gemini-2.5-flash'), // Upgraded model
-      tools: astraPrompt.tools,
-      toolChoice: "auto", // Allow the model to choose tools
-      config: {
-        ...astraPrompt.config,
-        system: systemPrompt,
-      },
-    });
+    // By calling the prompt object itself, we ensure all its configurations (tools, system prompt, etc.) are used.
+    const llmResponse = await astraPrompt(
+      { question, userContext }, // Pass the original input
+      {
+        model: googleAI.model('gemini-2.5-flash'),
+        toolChoice: "auto",
+        // Override the system prompt with our dynamically adjusted one
+        config: {
+          ...astraPrompt.config,
+          system: finalSystemPrompt
+        }
+      }
+    );
 
-    // We now EXPECT a tool request as the final output.
-    // The model should call formatFinalResponse.
+    // We expect the model's final action to be a call to our formatting tool.
     const finalToolResponse = llmResponse.toolRequest?.output() as string | undefined;
 
     if (finalToolResponse) {
-        return finalToolResponse;
+      return finalToolResponse;
     }
 
-    // If for some reason the model fails to use the tool, we fall back to its text response,
-    // but this should be the exception.
+    // Fallback in case the model fails to use the required tool.
     if (llmResponse.text) {
-        console.warn("Astra Warning: The model did not use the mandatory formatFinalResponse tool. Falling back to text response.");
-        return llmResponse.text;
+      console.warn("Astra Warning: The model did not use the mandatory formatFinalResponse tool. Falling back to text response.");
+      return llmResponse.text;
     }
     
     return "I apologize, but I was unable to process your request. Please try rephrasing your question.";
