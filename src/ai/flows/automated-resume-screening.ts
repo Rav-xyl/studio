@@ -11,7 +11,8 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import mammoth from 'mammoth';
+import { extractTextFromDocx } from '@/lib/docx-extractor';
+
 
 const AutomatedResumeScreeningInputSchema = z.object({
   resumeDataUri: z
@@ -19,6 +20,7 @@ const AutomatedResumeScreeningInputSchema = z.object({
     .describe(
       "The resume to screen, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'"
     ),
+  fileName: z.string().describe("The original filename of the resume, to be used as a fallback for the candidate's name if it cannot be extracted from the document."),
   resumeText: z.string().optional().describe('Extracted text from the resume, if not a direct media type.'),
   skillMappings: z.record(z.string(), z.string()).optional().describe('A map of candidate skills to company-preferred skills.'),
   companyPreferences: z.string().optional().describe('Any specific company preferences for candidates.'),
@@ -88,7 +90,7 @@ const prompt = ai.definePrompt({
   {{/if}}
 
   **Extraction Rules:**
-  - **Name:** Extract the candidate's full name. If not found, use the filename from the original upload.
+  - **Name:** Extract the candidate's full name. If a name is not found, you MUST use the provided filename as the fallback: {{{fileName}}}
   - **Contact Info:** Extract email and phone if available. Find one social media or portfolio URL (LinkedIn, GitHub, Personal Website etc.) if available.
   - **Skills:** Extract only the skills explicitly listed or mentioned in the resume. List them in order of relevance. Do not invent skills.
   - **Experience:** Summarize the candidate's work experience in a succinct paragraph.
@@ -115,10 +117,12 @@ const automatedResumeScreeningFlow = ai.defineFlow(
     const mimeType = input.resumeDataUri.split(';')[0].split(':')[1];
 
     if (mimeType === docxMimeType || mimeType === docMimeType) {
-      const base64Data = input.resumeDataUri.split(',')[1];
-      const buffer = Buffer.from(base64Data, 'base64');
-      const { value } = await mammoth.extractRawText({ buffer });
-      promptInput.resumeText = value;
+        try {
+            promptInput.resumeText = await extractTextFromDocx(input.resumeDataUri);
+        } catch (error) {
+            console.error("Error extracting text from DOCX, proceeding with media object:", error);
+            // If extraction fails, we still let the model try with the media object
+        }
     }
 
     const { output } = await prompt({

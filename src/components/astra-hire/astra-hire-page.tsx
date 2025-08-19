@@ -262,35 +262,22 @@ export default function AstraHirePage() {
         let processedCount = 0;
         let successfulCount = 0;
         let skippedCount = 0;
-
-        // Immediately show placeholders in the UI
-        const placeholderCandidates: Candidate[] = filesToProcess.map(file => ({
-            id: `placeholder-${nanoid(10)}`,
-            name: file.name,
-            isProcessing: true,
-            status: 'Sourcing',
-            role: 'Unassigned',
-            skills: [],
-            narrative: '',
-            inferredSkills: [],
-            lastUpdated: new Date().toISOString(),
-            avatarUrl: ''
-        }));
-        setCandidates(prev => [...prev, ...placeholderCandidates]);
         
-        const processFile = async (file: File, placeholderId: string) => {
+        const currentCandidatesSnapshot = await getDocs(collection(db, 'candidates'));
+        const existingCandidateNames = new Set(currentCandidatesSnapshot.docs.map(doc => doc.data().name?.toLowerCase()));
+
+        const processFile = async (file: File) => {
             try {
-                // Fetch current candidates inside the async function to get the latest state
-                const currentCandidatesSnapshot = await getDocs(collection(db, 'candidates'));
-                const existingCandidateNames = new Set(currentCandidatesSnapshot.docs.map(doc => doc.data().name.toLowerCase()));
-                
                 const resumeDataUri = await convertFileToDataUri(file);
-                const result = await automatedResumeScreening({ resumeDataUri, companyType });
+                
+                const result = await automatedResumeScreening({ 
+                    resumeDataUri, 
+                    fileName: file.name, // Pass the filename here
+                    companyType 
+                });
                 
                 if (existingCandidateNames.has(result.extractedInformation.name.toLowerCase())) {
                     skippedCount++;
-                    // Remove placeholder from UI state
-                    setCandidates(prev => prev.filter(c => c.id !== placeholderId)); 
                     return;
                 }
 
@@ -321,24 +308,25 @@ export default function AstraHirePage() {
                         details: `Profile created from ${file.name}. Initial score: ${result.candidateScore}.`,
                         author: 'AI'
                     }],
-                    isProcessing: false,
                 };
                 
-                // Add to Firestore, which will trigger the onSnapshot listener to update the UI
                 await setDoc(doc(db, "candidates", candidateId), finalCandidate);
                 successfulCount++;
             
             } catch (error) {
                 console.error(`Failed to process ${file.name}:`, error);
+                toast({
+                    title: `Processing Error`,
+                    description: `Could not process ${file.name}. Check the console for details.`,
+                    variant: 'destructive',
+                });
             } finally {
                 processedCount++;
-                // This will remove the placeholder for processed files (success or failure)
-                setCandidates(prev => prev.filter(c => c.id !== placeholderId));
                 setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount, message: "Screening resumes..." }) : null);
             }
         };
 
-        const uploadPromises = filesToProcess.map((file, index) => processFile(file, placeholderCandidates[index].id));
+        const uploadPromises = filesToProcess.map(processFile);
         await Promise.all(uploadPromises);
 
         let completionMessage = `Screening complete. ${successfulCount} new candidate(s) added.`;
@@ -909,5 +897,3 @@ export default function AstraHirePage() {
     </div>
   );
 }
-
-    
