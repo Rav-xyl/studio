@@ -144,7 +144,7 @@ export default function FeedbackPage() {
                 id: `reply-${nanoid(10)}`,
                 author: session.username,
                 text: currentReplyText,
-                createdAt: serverTimestamp(),
+                createdAt: new Date().toISOString(),
             };
 
             await updateDoc(noteRef, {
@@ -167,6 +167,17 @@ export default function FeedbackPage() {
     if (isLoading || !session) {
         return <div className="flex h-screen items-center justify-center"><Loader2 className="h-10 w-10 animate-spin" /></div>;
     }
+    
+    const getReplyDate = (reply: FeedbackReply) => {
+        if (reply.createdAt?.toDate) {
+            return new Date(reply.createdAt.toDate()).toLocaleTimeString();
+        }
+        if (typeof reply.createdAt === 'string') {
+            return new Date(reply.createdAt).toLocaleTimeString();
+        }
+        return '...';
+    }
+
 
     return (
         <div className="p-4 sm:p-6 lg:p-10 min-h-screen bg-secondary/50">
@@ -239,7 +250,7 @@ export default function FeedbackPage() {
                                         </Badge>
                                     </div>
                                     <p className="text-sm text-muted-foreground mt-2">
-                                        By <span className="font-semibold text-foreground">{note.author}</span> on {new Date(note.createdAt?.toDate()).toLocaleDateString()}
+                                        By <span className="font-semibold text-foreground">{note.author}</span> on {note.createdAt?.toDate ? new Date(note.createdAt.toDate()).toLocaleDateString() : '...'}
                                     </p>
                                 </div>
                                 {session.username === 'owner' && (
@@ -304,7 +315,7 @@ export default function FeedbackPage() {
                                                 <div className="flex-1 bg-secondary/50 p-3 rounded-md">
                                                     <div className="flex items-center justify-between">
                                                         <p className="text-sm font-semibold">{reply.author}</p>
-                                                        <p className="text-xs text-muted-foreground">{new Date(reply.createdAt?.toDate()).toLocaleTimeString()}</p>
+                                                        <p className="text-xs text-muted-foreground">{getReplyDate(reply)}</p>
                                                     </div>
                                                     <p className="text-sm mt-1 text-muted-foreground">{reply.text}</p>
                                                 </div>
@@ -344,3 +355,5 @@ export default function FeedbackPage() {
         </div>
     );
 }
+
+    

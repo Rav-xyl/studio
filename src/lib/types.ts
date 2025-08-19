@@ -113,7 +113,7 @@ export type FeedbackReply = {
     id: string;
     author: string;
     text: string;
-    createdAt: any;
+    createdAt: any; // Can be a server timestamp or an ISO string
 };
 
 export type FeedbackNote = {
@@ -125,3 +125,5 @@ export type FeedbackNote = {
     createdAt: any;
     replies?: FeedbackReply[];
 };
+
+    
