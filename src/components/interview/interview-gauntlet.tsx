@@ -114,11 +114,11 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
             if (!isPreFlightComplete) return;
             setIsLoading(true);
             try {
+                const result = await generateSystemDesignQuestion({ jobTitle: candidate.role });
                 if (phase === 'Technical') {
-                    setTechnicalQuestion("Given a list of integers, write a function to find the first missing positive integer. For example, for [3, 4, -1, 1], the answer is 2. For [1, 2, 0], the answer is 3. Your solution should run in O(n) time and use constant extra space.");
+                    setTechnicalQuestion(result.question);
                     recognitionRef.current?.start();
                 } else if (phase === 'SystemDesign') {
-                    const result = await generateSystemDesignQuestion({ jobTitle: candidate.role });
                     setSystemDesignQuestion(result.question);
                      recognitionRef.current?.start();
                 }
@@ -206,7 +206,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
     const currentQuestionText = phase === 'Technical' ? technicalQuestion : systemDesignQuestion;
 
     if (isLoading && !currentQuestionText) {
-         return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin h-10 w-10 text-primary" /><p className='ml-4'>Preparing Gauntlet Phase: {phase}...</p></div>
+         return <div className="flex items-center justify-center h-screen"><Loader2 className="animate-spin h-10 w-10 text-primary" /><p className='ml-4'>Generating a role-specific question for {phase} phase...</p></div>
     }
 
     return (
@@ -256,5 +256,3 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
         </div>
     );
 }
-
-    
