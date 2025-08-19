@@ -4,10 +4,9 @@ import { Button } from "../ui/button";
 interface AstraHireHeaderProps {
     onReportClick: () => void;
     onManualClick: () => void;
-    onAssistantClick: () => void;
 }
 
-export function AstraHireHeader({ onReportClick, onManualClick, onAssistantClick }: AstraHireHeaderProps) {
+export function AstraHireHeader({ onReportClick, onManualClick }: AstraHireHeaderProps) {
   return (
     <header className="flex justify-between items-center mb-8">
       <div className="flex items-center gap-3">
@@ -64,13 +63,6 @@ export function AstraHireHeader({ onReportClick, onManualClick, onAssistantClick
           onClick={onReportClick}
         >
           <Brain className="w-4 h-4" /> SAARTHI Report
-        </Button>
-         <Button
-            variant="outline"
-            className="text-sm flex items-center gap-2"
-            onClick={onAssistantClick}
-            >
-            <MessageSquare className="w-4 h-4" /> Ask Astra
         </Button>
       </div>
     </header>
