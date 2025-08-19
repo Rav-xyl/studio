@@ -227,24 +227,7 @@ export default function AstraHirePage() {
 
 
   const handleBulkUpload = async (files: FileList | null, companyType: 'startup' | 'enterprise') => {
-    if (!files) return;
-
-    const existingCandidateNames = new Set(candidates.map(c => c.name));
-    const filesToProcess = Array.from(files).filter(file => 
-        !existingCandidateNames.has(file.name.split('.').slice(0, -1).join('.'))
-    );
-    
-    const skippedCount = files.length - filesToProcess.length;
-    if (skippedCount > 0) {
-        toast({ title: "Duplicates Skipped", description: `${skippedCount} resume(s) were skipped as they already exist in the pool.` });
-    }
-
-    if (filesToProcess.length === 0) {
-        toast({ title: "No new resumes to add", description: "All selected files were already in the pool." });
-        return;
-    }
-    
-    toast({ title: "Upload Successful", description: `Starting to screen ${filesToProcess.length} new resumes in the background.` });
+    if (!files || files.length === 0) return;
     
     const taskId = `task-${nanoid(5)}`;
     const task: BackgroundTask = {
@@ -252,20 +235,30 @@ export default function AstraHirePage() {
         type: 'Screening',
         status: 'in-progress',
         progress: 0,
-        total: filesToProcess.length,
+        total: files.length,
         message: 'Screening Resumes...'
     };
     setBackgroundTask(task);
     
     let processedCount = 0;
     let failedCount = 0;
+    let skippedCount = 0;
 
     const batch = writeBatch(db);
+    const existingCandidateNames = new Set(candidates.map(c => c.name.toLowerCase()));
 
-    for (const file of filesToProcess) {
+    for (const file of Array.from(files)) {
         try {
             const resumeDataUri = await convertFileToDataUri(file);
             const result = await automatedResumeScreening({ resumeDataUri, companyType });
+            
+            // Smarter duplicate check: after extracting the name
+            if (existingCandidateNames.has(result.extractedInformation.name.toLowerCase())) {
+                skippedCount++;
+                processedCount++; // Still counts as "processed" for progress bar
+                setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount }) : null);
+                continue; // Skip to the next file
+            }
             
             const candidateId = `cand-${nanoid(10)}`;
             const storageRef = ref(storage, `resumes/${candidateId}/${file.name}`);
@@ -303,19 +296,34 @@ export default function AstraHirePage() {
             
             const candidateRef = doc(db, "candidates", newCandidate.id);
             batch.set(candidateRef, newCandidate);
-            processedCount++;
+            existingCandidateNames.add(newCandidate.name.toLowerCase()); // Add to set to prevent duplicates within the same batch
+
         } catch (error) {
             console.error(`Failed to process ${file.name}:`, error);
             failedCount++;
         }
 
-        setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount + failedCount }) : null);
+        processedCount++;
+        setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount }) : null);
         await new Promise(resolve => setTimeout(resolve, 200)); 
     }
       
     await batch.commit();
+    
+    let completionMessage = `Screening complete.`;
+    if (skippedCount > 0) {
+        completionMessage += ` ${skippedCount} duplicate(s) skipped.`
+    }
+     if (failedCount > 0) {
+        completionMessage += ` ${failedCount} failed.`
+    }
+    
+    toast({
+        title: "Bulk Upload Finished",
+        description: completionMessage,
+    });
 
-    setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: `Screening complete. ${failedCount > 0 ? `${failedCount} failed.` : ''}` }) : null);
+    setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: completionMessage }) : null);
     
     setTimeout(() => {
         setBackgroundTask(null);
