@@ -130,7 +130,7 @@ const askAstraFlow = ai.defineFlow(
       prompt: question,
       model: googleAI.model('gemini-2.5-flash'), // Upgraded model
       tools: astraPrompt.tools,
-      toolChoice: "any", // Allow the model to choose tools
+      toolChoice: "auto", // Allow the model to choose tools
       config: {
         ...astraPrompt.config,
         system: systemPrompt,
