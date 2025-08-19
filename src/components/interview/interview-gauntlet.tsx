@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mic, Video, Brain, AlertTriangle, Send, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, Mic, Video, Brain, AlertTriangle, Send, CheckCircle, XCircle, LogOut } from 'lucide-react';
 import type { Candidate } from '@/lib/types';
 import { Textarea } from '../ui/textarea';
 import { proctorTechnicalExam } from '@/ai/flows/proctor-technical-exam';
@@ -21,9 +21,10 @@ interface InterviewGauntletProps {
     candidate: Candidate;
     initialPhase: InterviewPhase;
     onPhaseComplete: (phase: 'Technical' | 'SystemDesign', report: string) => void;
+    onLogout: () => void;
 }
 
-export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: InterviewGauntletProps) {
+export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete, onLogout }: InterviewGauntletProps) {
     const { toast } = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
     const recognitionRef = useRef<any>(null);
@@ -212,9 +213,13 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete }: 
     return (
         <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
             <Card className="w-full max-w-6xl">
-                <CardHeader className="text-center">
+                <CardHeader className="text-center relative">
                     <CardTitle className="text-3xl text-primary flex items-center justify-center gap-3"><Brain /> AI Interview Gauntlet</CardTitle>
                     <CardDescription>Candidate: {candidate.name} | Role: {candidate.role} | Phase: {phase}</CardDescription>
+                    <Button variant="ghost" size="sm" className="absolute top-4 right-4 text-muted-foreground" onClick={onLogout}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Logout
+                    </Button>
                 </CardHeader>
 
                 <CardContent className="grid grid-cols-1 lg:grid-cols-5 gap-6">

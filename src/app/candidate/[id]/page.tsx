@@ -3,9 +3,9 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, BrainCircuit, FileText, CheckCircle, XCircle, Download } from 'lucide-react';
+import { Loader2, BrainCircuit, FileText, CheckCircle, XCircle, Download, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Candidate, GauntletPhase, GauntletState } from '@/lib/types';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
@@ -215,6 +215,12 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
         report += `\n\n--- END OF REPORT ---`;
         return report;
     }
+    
+    const handleLogout = () => {
+        sessionStorage.removeItem('gauntlet-auth-id');
+        toast({ title: "Logged Out", description: "You have been successfully logged out." });
+        router.replace('/gauntlet/login');
+    };
 
     if (isLoading || !isAuthenticated) {
         return <div className="flex h-screen items-center justify-center"><Loader2 className="h-10 w-10 animate-spin" /><p className="ml-4">Loading Candidate Portal...</p></div>;
@@ -241,6 +247,7 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                 candidate={candidate} 
                 initialPhase={phase}
                 onPhaseComplete={handlePhaseComplete}
+                onLogout={handleLogout}
             />
         );
     }
@@ -272,8 +279,8 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
 
     return (
          <div className="flex items-center justify-center h-screen bg-secondary">
-            <Card className="w-full max-w-2xl p-8 text-center">
-                <CardHeader>
+            <Card className="w-full max-w-2xl p-8">
+                <CardHeader className="text-center">
                     <CardTitle className="text-3xl">Your Gauntlet Progress</CardTitle>
                     <CardDescription>Welcome back, {candidate.name}. Here is your current status.</CardDescription>
                 </CardHeader>
@@ -327,6 +334,12 @@ export default function CandidatePortalPage({ params }: { params: { id: string }
                         </div>
                     )}
                 </CardContent>
+                <CardFooter className="pt-6">
+                    <Button variant="ghost" className="w-full text-muted-foreground" onClick={handleLogout}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Logout & Exit
+                    </Button>
+                </CardFooter>
             </Card>
         </div>
     );
