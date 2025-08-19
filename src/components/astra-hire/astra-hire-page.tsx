@@ -813,3 +813,5 @@ export function AstraHirePage() {
     </div>
   );
 }
+
+    
