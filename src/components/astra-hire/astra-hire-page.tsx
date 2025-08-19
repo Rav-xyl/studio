@@ -280,14 +280,17 @@ export default function AstraHirePage() {
         
         const processFile = async (file: File, placeholderId: string) => {
             try {
-                const existingCandidateNames = new Set(candidates.filter(c => !c.isProcessing).map(c => c.name.toLowerCase()));
+                // Fetch current candidates inside the async function to get the latest state
+                const currentCandidatesSnapshot = await getDocs(collection(db, 'candidates'));
+                const existingCandidateNames = new Set(currentCandidatesSnapshot.docs.map(doc => doc.data().name.toLowerCase()));
                 
                 const resumeDataUri = await convertFileToDataUri(file);
                 const result = await automatedResumeScreening({ resumeDataUri, companyType });
                 
                 if (existingCandidateNames.has(result.extractedInformation.name.toLowerCase())) {
                     skippedCount++;
-                    setCandidates(prev => prev.filter(c => c.id !== placeholderId)); // Remove placeholder
+                    // Remove placeholder from UI state
+                    setCandidates(prev => prev.filter(c => c.id !== placeholderId)); 
                     return;
                 }
 
@@ -320,17 +323,17 @@ export default function AstraHirePage() {
                     }],
                     isProcessing: false,
                 };
-
+                
+                // Add to Firestore, which will trigger the onSnapshot listener to update the UI
                 await setDoc(doc(db, "candidates", candidateId), finalCandidate);
                 successfulCount++;
-                // The onSnapshot listener will handle adding the final candidate to the UI
-                setCandidates(prev => prev.filter(c => c.id !== placeholderId)); // Remove placeholder
             
             } catch (error) {
                 console.error(`Failed to process ${file.name}:`, error);
-                setCandidates(prev => prev.filter(c => c.id !== placeholderId)); // Remove errored placeholder
             } finally {
                 processedCount++;
+                // This will remove the placeholder for processed files (success or failure)
+                setCandidates(prev => prev.filter(c => c.id !== placeholderId));
                 setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount, message: "Screening resumes..." }) : null);
             }
         };
