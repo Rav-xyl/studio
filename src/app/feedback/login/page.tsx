@@ -23,11 +23,9 @@ export default function FeedbackLoginPage() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
-    await new Promise(resolve => setTimeout(resolve, 500));
 
     if ((username === FEEDBACK_USERNAME && password === FEEDBACK_PASSWORD) || (username === OWNER_USERNAME && password === OWNER_PASSWORD)) {
       sessionStorage.setItem('feedback-auth', JSON.stringify({ username }));
