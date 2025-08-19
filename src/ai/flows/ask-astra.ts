@@ -131,7 +131,6 @@ const askAstraFlow = ai.defineFlow(
       { question, userContext }, // Pass the original input
       {
         model: googleAI.model('gemini-2.0-flash'),
-        toolChoice: "auto",
         // Override the system prompt with our dynamically adjusted one
         config: {
           ...astraPrompt.config,
@@ -141,7 +140,8 @@ const askAstraFlow = ai.defineFlow(
     );
 
     // We expect the model's final action to be a call to our formatting tool.
-    const finalToolResponse = llmResponse.toolRequest?.output() as string | undefined;
+    // Use optional chaining and check for the correct property 'output'
+    const finalToolResponse = llmResponse.toolRequest?.output as string | undefined;
 
     if (finalToolResponse) {
       return finalToolResponse;
@@ -156,5 +156,3 @@ const askAstraFlow = ai.defineFlow(
     return "I apologize, but I was unable to process your request. Please try rephrasing your question.";
   }
 );
-
-    
