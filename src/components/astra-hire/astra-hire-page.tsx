@@ -246,53 +246,64 @@ export default function AstraHirePage() {
 
     const handleBulkUpload = async (files: FileList | null, companyType: 'startup' | 'enterprise') => {
         if (!files || files.length === 0) return;
-    
+
         const taskId = `task-${nanoid(5)}`;
         setBackgroundTask({
             id: taskId, type: 'Screening', status: 'in-progress',
             progress: 0, total: files.length, message: 'Starting uploads...',
         });
-    
+
         const filesToProcess = Array.from(files);
         let processedCount = 0;
         let successfulCount = 0;
         let skippedCount = 0;
-    
+
         const currentCandidatesSnapshot = await getDocs(collection(db, 'candidates'));
         const existingCandidateNames = new Set(currentCandidatesSnapshot.docs.map(doc => doc.data().name?.toLowerCase()));
-    
+
         const processFile = async (file: File) => {
             try {
                 const resumeDataUri = await convertFileToDataUri(file);
                 const result = await automatedResumeScreening({ resumeDataUri, fileName: file.name, companyType });
-    
+
                 if (existingCandidateNames.has(result.extractedInformation.name.toLowerCase())) {
                     skippedCount++;
-                    return; 
+                    toast({
+                        title: 'Duplicate Skipped',
+                        description: `A candidate named ${result.extractedInformation.name} already exists.`,
+                    });
+                    return; // Stop processing this file
                 }
-    
+
                 const candidateId = `cand-${nanoid(10)}`;
                 const storageRef = ref(storage, `resumes/${candidateId}/${file.name}`);
                 await uploadBytes(storageRef, file);
                 const resumeUrl = await getDownloadURL(storageRef);
-    
+
                 const status: KanbanStatus = result.candidateScore < 40 ? 'Sourcing' : 'Screening';
                 const archived = result.candidateScore < 40;
-    
+
                 const newCandidate: Candidate = {
-                    id: candidateId, ...result.extractedInformation,
-                    status, role: 'Unassigned', aiInitialScore: result.candidateScore,
-                    lastUpdated: new Date().toISOString(), archived, resumeUrl,
+                    id: candidateId,
+                    ...result.extractedInformation,
+                    status,
+                    role: 'Unassigned',
+                    aiInitialScore: result.candidateScore,
+                    lastUpdated: new Date().toISOString(),
+                    archived,
+                    resumeUrl,
                     log: [{
-                        timestamp: new Date().toISOString(), event: 'Resume Uploaded & Screened',
-                        details: `Profile created from ${file.name}. Initial score: ${result.candidateScore}.`, author: 'AI',
+                        timestamp: new Date().toISOString(),
+                        event: 'Resume Uploaded & Screened',
+                        details: `Profile created from ${file.name}. Initial score: ${result.candidateScore}.`,
+                        author: 'AI',
                     }],
                 };
-    
+                
                 await setDoc(doc(db, "candidates", candidateId), newCandidate);
                 successfulCount++;
-                existingCandidateNames.add(newCandidate.name.toLowerCase()); // Add to set to prevent duplicates within the same batch
-    
+                existingCandidateNames.add(newCandidate.name.toLowerCase());
+
             } catch (error) {
                 console.error(`Failed to process ${file.name}:`, error);
                 toast({
@@ -304,10 +315,9 @@ export default function AstraHirePage() {
                 setBackgroundTask(prev => prev ? { ...prev, progress: processedCount, message: `Screening: ${file.name}` } : null);
             }
         };
-    
-        const uploadPromises = filesToProcess.map(file => processFile(file));
-        await Promise.all(uploadPromises);
-    
+
+        await Promise.all(filesToProcess.map(file => processFile(file)));
+
         let completionMessage = `Screening complete. ${successfulCount} new candidate(s) added.`;
         if (skippedCount > 0) completionMessage += ` ${skippedCount} duplicate(s) skipped.`;
         
@@ -876,5 +886,3 @@ export default function AstraHirePage() {
     </div>
   );
 }
-
-    
