@@ -30,9 +30,9 @@ export default function AdminLoginPage() {
       localStorage.setItem('admin-auth', JSON.stringify({ username: 'admin', role: 'admin' }));
       toast({
         title: 'Login Successful',
-        description: 'Welcome, Admin. Redirecting to the dashboard...',
+        description: 'Welcome, Admin. Redirecting to the main dashboard...',
       });
-      router.push('/admin');
+      router.push('/');
     } else {
       toast({
         variant: 'destructive',

@@ -2,12 +2,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart2, Briefcase, Users, Loader2, Shield, X, Search, HelpCircle, MessageSquare, Notebook } from 'lucide-react';
+import { BarChart2, Briefcase, Users, Loader2, Shield, X, Search, HelpCircle, MessageSquare, Notebook, UserCog } from 'lucide-react';
 import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
 import { AnalyticsTab } from '../analytics/analytics-tab';
-import type { Candidate, JobRole, KanbanStatus, LogEntry, RubricChange, RoleMatch } from '@/lib/types';
+import type { Candidate, JobRole, KanbanStatus, LogEntry, RubricChange, RoleMatch, ProactiveSourcingNotification } from '@/lib/types';
 import { automatedResumeScreening } from '@/ai/flows/automated-resume-screening';
 import { SaarthiReportModal } from './saarthi-report-modal';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +25,7 @@ import { MatchedCandidatesDialog } from '../roles/matched-candidates-dialog';
 import { ProspectingTab } from '../prospecting/prospecting-tab';
 import { bulkMatchCandidatesToRoles } from '@/ai/flows/bulk-match-candidates';
 import { useRouter } from 'next/navigation';
+import { AdminTab } from '../admin/admin-tab';
 
 
 // --- Helper Functions ---
@@ -63,6 +64,7 @@ export function AstraHirePage() {
   // --- State Management ---
   const [roles, setRoles] = useState<JobRole[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [notifications, setNotifications] = useState<ProactiveSourcingNotification[]>([]);
   const [lastSaarthiReport, setLastSaarthiReport] = useState<any>(null);
   const [filteredRole, setFilteredRole] = useState<JobRole | null>(null);
   const [suggestedChanges, setSuggestedChanges] = useState<RubricChange[]>([]);
@@ -71,6 +73,7 @@ export function AstraHirePage() {
   const [matchedCandidates, setMatchedCandidates] = useState<RoleMatch[]>([]);
   const [selectedRoleForMatching, setSelectedRoleForMatching] = useState<JobRole | null>(null);
   const [matchResults, setMatchResults] = useState<Record<string, any[]>>({});
+  const [isAdmin, setIsAdmin] = useState(false);
 
 
   // UI State
@@ -80,6 +83,13 @@ export function AstraHirePage() {
 
   // --- Firestore Data Fetching ---
   useEffect(() => {
+     // Check for admin auth
+    const authData = localStorage.getItem('admin-auth');
+    if (authData) {
+        setIsAdmin(true);
+        setActiveTab('admin');
+    }
+    
     const candidatesUnsub = onSnapshot(collection(db, "candidates"), (snapshot) => {
         const candidatesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Candidate[];
         setCandidates(candidatesData);
@@ -99,10 +109,15 @@ export function AstraHirePage() {
         setRoles(rolesData);
     });
 
+     const notificationsUnsub = onSnapshot(collection(db, "notifications"), (snapshot) => {
+        setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ProactiveSourcingNotification[]);
+    });
+
     // Cleanup subscription on unmount
     return () => {
         candidatesUnsub();
         rolesUnsub();
+        notificationsUnsub();
     };
   }, [toast]);
 
@@ -111,27 +126,29 @@ export function AstraHirePage() {
     const handleUpdateCandidate = async (updatedCandidate: Candidate) => {
         const originalCandidate = candidates.find(c => c.id === updatedCandidate.id);
         if (!originalCandidate) return;
+        
+        // --- Divine Law & Order: Gauntlet Validation (OVERRIDDEN for Admins) ---
+        if (!isAdmin) {
+            const hasFailedGauntlet = originalCandidate.gauntletState?.phase === 'Failed';
+            if (hasFailedGauntlet && (updatedCandidate.status === 'Interview' || updatedCandidate.status === 'Hired')) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Action Blocked by Divine Law',
+                    description: 'This candidate has failed the Gauntlet and cannot be moved forward.'
+                });
+                return; // Halt execution
+            }
 
-        // --- Divine Law & Order: Gauntlet Validation ---
-        const hasFailedGauntlet = originalCandidate.gauntletState?.phase === 'Failed';
-        if (hasFailedGauntlet && (updatedCandidate.status === 'Interview' || updatedCandidate.status === 'Hired')) {
-            toast({
-                variant: 'destructive',
-                title: 'Action Blocked by Divine Law',
-                description: 'This candidate has failed the Gauntlet and cannot be moved forward.'
-            });
-            return; // Halt execution
-        }
-
-        const isGauntletRequired = (originalCandidate.aiInitialScore || 0) >= 70;
-        const isGauntletComplete = originalCandidate.gauntletState?.phase === 'Complete';
-        if (isGauntletRequired && updatedCandidate.status === 'Hired' && !isGauntletComplete) {
-            toast({
-                variant: 'destructive',
-                title: 'Action Blocked by Divine Law',
-                description: 'A candidate with a high score must pass the Gauntlet to be hired.'
-            });
-            return; // Halt execution
+            const isGauntletRequired = (originalCandidate.aiInitialScore || 0) >= 70;
+            const isGauntletComplete = originalCandidate.gauntletState?.phase === 'Complete';
+            if (isGauntletRequired && updatedCandidate.status === 'Hired' && !isGauntletComplete) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Action Blocked by Divine Law',
+                    description: 'A candidate with a high score must pass the Gauntlet to be hired.'
+                });
+                return; // Halt execution
+            }
         }
         
         // Optimistically update UI
@@ -148,7 +165,7 @@ export function AstraHirePage() {
             await addLog(id, {
                 event: 'Status Change',
                 details: `Candidate moved from ${originalCandidate.status} to ${updatedCandidate.status}`,
-                author: 'System',
+                author: isAdmin ? 'Admin' : 'System',
             });
         }
 
@@ -419,18 +436,15 @@ export function AstraHirePage() {
       try {
           const batch = writeBatch(db);
 
-          // 1. Delete the candidate document
           const candidateRef = doc(db, 'candidates', candidateId);
           batch.delete(candidateRef);
 
-          // 2. Find and delete all notifications for this candidate
           const notificationsQuery = query(collection(db, 'notifications'), where('candidateId', '==', candidateId));
           const notificationsSnapshot = await getDocs(notificationsQuery);
           notificationsSnapshot.forEach((doc) => {
               batch.delete(doc.ref);
           });
 
-          // 3. Purge candidate from all role caches
           const rolesSnapshot = await getDocs(collection(db, 'roles'));
           rolesSnapshot.forEach(roleDoc => {
               const roleData = roleDoc.data() as JobRole;
@@ -508,7 +522,6 @@ export function AstraHirePage() {
     const handleFindMatches = (role: JobRole, mode: 'top' | 'qualified') => {
         setSelectedRoleForMatching(role);
 
-        // Instantly get matches from the role's cache
         const cachedMatches = role.roleMatches || [];
 
         if (cachedMatches.length === 0) {
@@ -523,7 +536,7 @@ export function AstraHirePage() {
         if (mode === 'qualified') {
             matchesToShow = cachedMatches.filter(match => match.confidenceScore >= 70);
         } else { // 'top'
-            matchesToShow = cachedMatches.slice(0, 10); // Show top 10 for 'top matches'
+            matchesToShow = cachedMatches.slice(0, 10);
         }
 
         setMatchedCandidates(matchesToShow);
@@ -535,7 +548,6 @@ export function AstraHirePage() {
         if (candidate) {
             await handleUpdateCandidate({ ...candidate, role: roleTitle, status: 'Interview' });
             
-            // Update local state for the dialog
             setMatchedCandidates(prev => prev.filter(m => m.candidateId !== candidateId));
             
             toast({ title: "Role Assigned!", description: `${candidate.name} has been assigned to ${roleTitle} and moved to Interview.` });
@@ -552,7 +564,6 @@ export function AstraHirePage() {
             batch.update(candidateRef, { role: selectedRoleForMatching.title, status: 'Interview' });
         });
 
-        // Clear the entire cache for this role after bulk assignment
         const roleRef = doc(db, 'roles', selectedRoleForMatching.id);
         batch.update(roleRef, { roleMatches: [] });
 
@@ -596,10 +607,8 @@ export function AstraHirePage() {
                 jobRoles: roles,
             });
 
-            // This structure will hold all matches grouped by role ID
             const matchesByRole: Record<string, RoleMatch[]> = roles.reduce((acc, role) => ({ ...acc, [role.id]: [] }), {});
 
-            // This structure will hold the best match for each candidate
             const newMatchResults: Record<string, any[]> = {};
 
             result.results.forEach(candidateResult => {
@@ -622,10 +631,8 @@ export function AstraHirePage() {
                 });
             });
 
-            // Update the local state for the Prospecting Hub display
             setMatchResults(newMatchResults);
 
-            // Update the cache on each role document in Firestore
             const batch = writeBatch(db);
             roles.forEach(role => {
                 const roleRef = doc(db, 'roles', role.id);
@@ -700,6 +707,9 @@ export function AstraHirePage() {
         return <GauntletPortalTab candidates={candidates} />;
       case 'analytics':
         return <AnalyticsTab roles={roles} candidates={candidates} suggestedChanges={suggestedChanges} setSuggestedChanges={setSuggestedChanges} />;
+       case 'admin':
+        if (!isAdmin) return null;
+        return <AdminTab allCandidates={candidates} roles={roles} notifications={notifications} />;
       default:
         return null;
     }
@@ -741,6 +751,15 @@ export function AstraHirePage() {
       <main>
         <div className="border-b border-border mb-6">
           <nav className="flex space-x-2">
+            {isAdmin && (
+                 <button
+                    className={`tab-btn ${activeTab === 'admin' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('admin')}
+                    >
+                    <UserCog className="inline-block w-4 h-4 mr-2" />
+                    Admin
+                </button>
+            )}
             <button
               className={`tab-btn ${activeTab === 'roles' ? 'active' : ''}`}
               onClick={() => { setActiveTab('roles'); setFilteredRole(null); }}
