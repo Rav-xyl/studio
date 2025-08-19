@@ -6,8 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { useState } from "react";
-import { Loader2, Search, Trash2, UserSearch, Zap } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Loader2, Search, Trash2, UserSearch, Zap, ArrowUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -25,6 +25,8 @@ const getInitials = (name: string) => {
     if (!name) return '??';
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
 }
+
+type SortKey = keyof Pick<Candidate, 'name' | 'aiInitialScore'>;
 
 interface ProspectingTabProps {
     candidates: Candidate[];
@@ -45,6 +47,34 @@ export function ProspectingTab({
 }: ProspectingTabProps) {
     const { toast } = useToast();
     const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'aiInitialScore', direction: 'descending' });
+
+    const sortedCandidates = useMemo(() => {
+        let sortableCandidates = [...candidates];
+        if (sortConfig !== null) {
+            sortableCandidates.sort((a, b) => {
+                const aValue = a[sortConfig.key] || (sortConfig.key === 'aiInitialScore' ? 0 : '');
+                const bValue = b[sortConfig.key] || (sortConfig.key === 'aiInitialScore' ? 0 : '');
+                
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableCandidates;
+    }, [candidates, sortConfig]);
+
+    const requestSort = (key: SortKey) => {
+        let direction: 'ascending' | 'descending' = 'ascending';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
 
     const handleAssignRole = (candidate: Candidate, roleTitle: string) => {
         onUpdateCandidate({ ...candidate, role: roleTitle, status: 'Interview' });
@@ -61,13 +91,13 @@ export function ProspectingTab({
     
     const handleSelectAll = (isSelected: boolean) => {
         if (isSelected) {
-            setSelectedCandidates(candidates.map(c => c.id));
+            setSelectedCandidates(sortedCandidates.map(c => c.id));
         } else {
             setSelectedCandidates([]);
         }
     }
 
-    const isAllSelected = candidates.length > 0 && selectedCandidates.length === candidates.length;
+    const isAllSelected = sortedCandidates.length > 0 && selectedCandidates.length === sortedCandidates.length;
 
 
     return (
@@ -101,16 +131,26 @@ export function ProspectingTab({
                                     aria-label="Select all"
                                 />
                             </TableHead>
-                            <TableHead className="w-[30%]">Candidate</TableHead>
-                            <TableHead className="w-[15%] text-center">AI Score</TableHead>
+                            <TableHead className="w-[30%]">
+                                <Button variant="ghost" onClick={() => requestSort('name')}>
+                                    Candidate
+                                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </TableHead>
+                            <TableHead className="w-[15%] text-center">
+                                 <Button variant="ghost" onClick={() => requestSort('aiInitialScore')}>
+                                    AI Score
+                                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </TableHead>
                             <TableHead>Top Skills</TableHead>
                             <TableHead className="w-[25%]">Best Role Match (AI)</TableHead>
                              <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {candidates.length > 0 ? (
-                            candidates.map(candidate => {
+                        {sortedCandidates.length > 0 ? (
+                            sortedCandidates.map(candidate => {
                                 const matches = matchResults[candidate.id] || [];
                                 const bestMatch = matches[0];
                                 return (
