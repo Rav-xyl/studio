@@ -78,7 +78,7 @@ export default function FeedbackPage() {
 
         const announcementsQuery = query(collection(db, "announcements"), orderBy("createdAt", "desc"));
         const announcementsUnsub = onSnapshot(announcementsQuery, (snapshot) => {
-            setAnnouncements(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Announcement)));
+            setAnnouncements(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Announcement[]);
         });
 
         return () => {
