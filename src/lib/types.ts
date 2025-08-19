@@ -38,6 +38,7 @@ export interface GauntletState {
 export interface Candidate {
   id: string;
   name: string;
+  email?: string;
   avatarUrl: string;
   role: string;
   skills: string[];
@@ -125,5 +126,3 @@ export type FeedbackNote = {
     createdAt: any;
     replies?: FeedbackReply[];
 };
-
-    

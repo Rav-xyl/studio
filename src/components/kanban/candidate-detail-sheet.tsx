@@ -203,7 +203,8 @@ export function CandidateDetailSheet({
                 <SheetDescription className="text-base text-muted-foreground">
                   {candidate.role}
                 </SheetDescription>
-                <div className='mt-2'>
+                <div className='mt-2 flex items-center gap-2'>
+                    {candidate.email && <Badge variant="outline">{candidate.email}</Badge>}
                     <SocialLink url={candidate.socialUrl} />
                 </div>
               </div>
