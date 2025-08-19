@@ -352,7 +352,7 @@ export default function FeedbackPage() {
                                                     <AlertDialogDescription>This action cannot be undone and will permanently delete this note.</AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancel</Button>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                     <AlertDialogAction onClick={() => handleDeleteNote(note.id)}>Confirm Deletion</AlertDialogAction>
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
