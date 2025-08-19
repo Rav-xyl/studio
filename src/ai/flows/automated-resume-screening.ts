@@ -73,9 +73,9 @@ const prompt = ai.definePrompt({
 
   **Resume Content:**
   {{#if resumeText}}
-  {{resumeText}}
+    {{{resumeText}}}
   {{else}}
-  {{media url=resumeDataUri}}
+    {{media url=resumeDataUri}}
   {{/if}}
 
 
@@ -111,6 +111,7 @@ const automatedResumeScreeningFlow = ai.defineFlow(
   },
   async (input) => {
     const promptInput = { ...input };
+    promptInput.resumeText = undefined; // Ensure resumeText is initially undefined
 
     const docxMimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     const docMimeType = 'application/msword';
@@ -121,7 +122,7 @@ const automatedResumeScreeningFlow = ai.defineFlow(
             promptInput.resumeText = await extractTextFromDocx(input.resumeDataUri);
         } catch (error) {
             console.error("Error extracting text from DOCX, proceeding with media object:", error);
-            // If extraction fails, we still let the model try with the media object
+            // If extraction fails, we let the model try with the media object by leaving resumeText undefined
         }
     }
 
