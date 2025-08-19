@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog";
+import { Checkbox } from "../ui/checkbox";
 
 
 const getInitials = (name: string) => {
@@ -43,11 +44,31 @@ export function ProspectingTab({
     matchResults,
 }: ProspectingTabProps) {
     const { toast } = useToast();
-    
+    const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
+
     const handleAssignRole = (candidate: Candidate, roleTitle: string) => {
         onUpdateCandidate({ ...candidate, role: roleTitle, status: 'Interview' });
         toast({ title: "Role Assigned!", description: `${candidate.name} has been assigned to ${roleTitle} and moved to the Interview column.` });
     }
+
+    const handleSelectCandidate = (candidateId: string, isSelected: boolean) => {
+        if (isSelected) {
+            setSelectedCandidates(prev => [...prev, candidateId]);
+        } else {
+            setSelectedCandidates(prev => prev.filter(id => id !== candidateId));
+        }
+    }
+    
+    const handleSelectAll = (isSelected: boolean) => {
+        if (isSelected) {
+            setSelectedCandidates(candidates.map(c => c.id));
+        } else {
+            setSelectedCandidates([]);
+        }
+    }
+
+    const isAllSelected = candidates.length > 0 && selectedCandidates.length === candidates.length;
+
 
     return (
         <div className="fade-in-slide-up">
@@ -58,16 +79,28 @@ export function ProspectingTab({
                         Discover and assign your top unassigned talent to open roles.
                     </p>
                 </div>
-                 <Button onClick={onRunBulkMatch} disabled={candidates.length === 0 || roles.length === 0}>
-                    <Zap className="mr-2 h-4 w-4" />
-                    Run AI Match for All
-                </Button>
+                <div className="flex items-center gap-2">
+                    {selectedCandidates.length > 0 && (
+                        <Button variant="secondary">Analyze {selectedCandidates.length} Selected</Button>
+                    )}
+                     <Button onClick={onRunBulkMatch} disabled={candidates.length === 0 || roles.length === 0}>
+                        <Zap className="mr-2 h-4 w-4" />
+                        Run AI Match for All
+                    </Button>
+                </div>
             </div>
             
             <div className="rounded-lg border">
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-[40px]">
+                                <Checkbox 
+                                    checked={isAllSelected}
+                                    onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
+                                    aria-label="Select all"
+                                />
+                            </TableHead>
                             <TableHead className="w-[30%]">Candidate</TableHead>
                             <TableHead className="w-[15%] text-center">AI Score</TableHead>
                             <TableHead>Top Skills</TableHead>
@@ -81,7 +114,14 @@ export function ProspectingTab({
                                 const matches = matchResults[candidate.id] || [];
                                 const bestMatch = matches[0];
                                 return (
-                                <TableRow key={candidate.id}>
+                                <TableRow key={candidate.id} data-state={selectedCandidates.includes(candidate.id) && "selected"}>
+                                    <TableCell>
+                                        <Checkbox
+                                            checked={selectedCandidates.includes(candidate.id)}
+                                            onCheckedChange={(checked) => handleSelectCandidate(candidate.id, Boolean(checked))}
+                                            aria-label={`Select ${candidate.name}`}
+                                        />
+                                    </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-3">
                                             <Avatar>
@@ -141,7 +181,7 @@ export function ProspectingTab({
                             )})
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={5} className="h-48 text-center">
+                                <TableCell colSpan={6} className="h-48 text-center">
                                     <UserSearch className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                                     <h3 className="text-xl font-semibold">No Unassigned Candidates</h3>
                                     <p className="text-muted-foreground mt-1">Upload new resumes to the candidate pool to start prospecting.</p>
