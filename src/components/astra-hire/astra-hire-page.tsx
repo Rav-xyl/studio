@@ -265,7 +265,7 @@ export default function AstraHirePage() {
             try {
                 const resumeDataUri = await convertFileToDataUri(file);
                 const result = await automatedResumeScreening({ resumeDataUri, fileName: file.name, companyType });
-
+                
                 if (existingCandidateNames.has(result.extractedInformation.name.toLowerCase())) {
                     skippedCount++;
                     toast({
@@ -283,8 +283,7 @@ export default function AstraHirePage() {
                 const status: KanbanStatus = result.candidateScore < 40 ? 'Sourcing' : 'Screening';
                 const archived = result.candidateScore < 40;
 
-                const newCandidate: Candidate = {
-                    id: candidateId,
+                const newCandidate: Omit<Candidate, 'id'> = {
                     ...result.extractedInformation,
                     status,
                     role: 'Unassigned',
@@ -299,7 +298,7 @@ export default function AstraHirePage() {
                         author: 'AI',
                     }],
                 };
-                
+
                 await setDoc(doc(db, "candidates", candidateId), newCandidate);
                 successfulCount++;
                 existingCandidateNames.add(newCandidate.name.toLowerCase());
@@ -402,7 +401,7 @@ export default function AstraHirePage() {
                 detailedProcessLog: currentSimulationLog,
             });
             setIsSaarthiReportOpen(true);
-            setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: 'Simulation complete!' }) : null);
+            setBackgroundTask(prev => prev ? { ...prev, status: 'complete', message: 'Simulation complete!' } : null);
 
 
         } catch (error) {
@@ -673,7 +672,7 @@ export default function AstraHirePage() {
             await batch.commit();
 
             toast({ title: "Analysis Complete!", description: "AI role matching has been completed for all candidates and results are cached." });
-            setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: 'Bulk matching complete!' }) : null);
+            setBackgroundTask(prev => prev ? { ...prev, status: 'complete', message: 'Bulk matching complete!' } : null);
 
         } catch (error) {
             console.error("Failed to run bulk match:", error);
