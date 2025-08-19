@@ -3,13 +3,14 @@
 import type { Candidate } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { Badge } from "../ui/badge";
-import { ShieldQuestion, Info, Link as LinkIcon } from "lucide-react";
-import { useMemo } from "react";
+import { ShieldQuestion, Info, Link as LinkIcon, Send, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Progress } from "../ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button } from "../ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { aiDrivenCandidateEngagement } from "@/ai/flows/ai-driven-candidate-engagement";
 
 interface GauntletPortalTabProps {
     candidates: Candidate[];
@@ -18,6 +19,7 @@ interface GauntletPortalTabProps {
 export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
     const { toast } = useToast();
     const router = useRouter();
+    const [isSendingReminders, setIsSendingReminders] = useState(false);
 
     const shortlistedCandidates = useMemo(() => {
         return candidates.filter(c => (c.aiInitialScore || 0) >= 70 && !c.archived);
@@ -42,14 +44,61 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
             description: `Login details for ${candidate.name} copied to clipboard.`
         });
     };
+    
+    const handleSendReminders = async () => {
+        setIsSendingReminders(true);
+        const candidatesToRemind = shortlistedCandidates.filter(c => {
+             if (!c.gauntletStartDate || c.gauntletState?.phase === 'Complete' || c.gauntletState?.phase === 'Failed') return false;
+            const now = new Date();
+            const startDate = new Date(c.gauntletStartDate);
+            const deadline = new Date(new Date(startDate).setDate(startDate.getDate() + 7));
+            const daysRemaining = (deadline.getTime() - now.getTime()) / (1000 * 3600 * 24);
+            return daysRemaining > 0 && daysRemaining <= 3; // Nudge candidates with 3 or fewer days left
+        });
+
+        if (candidatesToRemind.length === 0) {
+            toast({ title: "No Reminders Needed", description: "No candidates are currently within the 3-day deadline window." });
+            setIsSendingReminders(false);
+            return;
+        }
+
+        toast({ title: `Sending ${candidatesToRemind.length} Reminders`, description: "The AI is drafting personalized emails..." });
+
+        try {
+            const reminderPromises = candidatesToRemind.map(c => 
+                aiDrivenCandidateEngagement({
+                    candidateName: c.name,
+                    candidateStage: 'Gauntlet Deadline Approaching',
+                    jobTitle: c.role,
+                    companyName: 'AstraHire',
+                    recruiterName: 'The Hiring Team',
+                    candidateSkills: c.skills.join(', '),
+                })
+            );
+            await Promise.all(reminderPromises);
+            toast({ title: "Reminders Sent!", description: "AI has successfully drafted and sent all reminders." });
+        } catch (error) {
+            console.error("Failed to send reminders:", error);
+            toast({ title: "Error", description: "Could not send AI reminders. Check console for details.", variant: "destructive" });
+        } finally {
+            setIsSendingReminders(false);
+        }
+    };
+
 
     return (
         <div className="fade-in-slide-up">
-            <div className="mb-6">
-                <h2 className="text-3xl font-bold tracking-tighter">Gauntlet Portal</h2>
-                <p className="text-muted-foreground mt-1">
-                    Manage and monitor candidates who have been shortlisted for the AI Gauntlet.
-                </p>
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tighter">Gauntlet Portal</h2>
+                    <p className="text-muted-foreground mt-1">
+                        Manage and monitor candidates who have been shortlisted for the AI Gauntlet.
+                    </p>
+                </div>
+                <Button onClick={handleSendReminders} disabled={isSendingReminders}>
+                    {isSendingReminders ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                    Send AI Reminders
+                </Button>
             </div>
             
             <Alert className="mb-6">
