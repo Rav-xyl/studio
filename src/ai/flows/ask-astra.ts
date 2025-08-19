@@ -120,7 +120,7 @@ const askAstraFlow = ai.defineFlow(
     inputSchema: AskAstraInputSchema,
     outputSchema: AskAstraOutputSchema,
   },
-  async (input: AskAstraInput) => { // Correctly accept the full input object
+  async (input: AskAstraInput) => {
     let finalSystemPrompt = astraPrompt.system;
     if (input.userContext?.role === 'admin') {
       finalSystemPrompt += "\n**User Context:** You are speaking with an Administrator. You have access to all tools and can perform destructive actions if requested.";
