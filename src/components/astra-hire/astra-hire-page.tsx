@@ -2,12 +2,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart2, Briefcase, Users, Loader2, Shield, X, Search, HelpCircle, MessageSquare, Notebook, UserCog } from 'lucide-react';
+import { BarChart2, Briefcase, Users, Loader2, Shield, X, Search, HelpCircle, MessageSquare, Notebook, UserCog, Megaphone } from 'lucide-react';
 import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
 import { AnalyticsTab } from '../analytics/analytics-tab';
-import type { Candidate, JobRole, KanbanStatus, LogEntry, RubricChange, RoleMatch, ProactiveSourcingNotification } from '@/lib/types';
+import type { Candidate, JobRole, KanbanStatus, LogEntry, RubricChange, RoleMatch, ProactiveSourcingNotification, Announcement } from '@/lib/types';
 import { automatedResumeScreening } from '@/ai/flows/automated-resume-screening';
 import { SaarthiReportModal } from './saarthi-report-modal';
 import { useToast } from '@/hooks/use-toast';
@@ -17,7 +17,7 @@ import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
 import { db, storage } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, arrayUnion, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, arrayUnion, getDoc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
 import { Card, CardContent } from '../ui/card';
@@ -27,6 +27,7 @@ import { ProspectingTab } from '../prospecting/prospecting-tab';
 import { bulkMatchCandidatesToRoles } from '@/ai/flows/bulk-match-candidates';
 import { useRouter } from 'next/navigation';
 import { AdminTab } from '../admin/admin-tab';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 
 
 // --- Helper Functions ---
@@ -66,6 +67,7 @@ export default function AstraHirePage() {
   const [roles, setRoles] = useState<JobRole[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [notifications, setNotifications] = useState<ProactiveSourcingNotification[]>([]);
+  const [latestAnnouncement, setLatestAnnouncement] = useState<Announcement | null>(null);
   const [lastSaarthiReport, setLastSaarthiReport] = useState<any>(null);
   const [filteredRole, setFilteredRole] = useState<JobRole | null>(null);
   const [suggestedChanges, setSuggestedChanges] = useState<RubricChange[]>([]);
@@ -113,12 +115,22 @@ export default function AstraHirePage() {
      const notificationsUnsub = onSnapshot(collection(db, "notifications"), (snapshot) => {
         setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ProactiveSourcingNotification[]);
     });
+    
+    const announcementsQuery = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
+    const announcementsUnsub = onSnapshot(announcementsQuery, (snapshot) => {
+        if (!snapshot.empty) {
+            setLatestAnnouncement(snapshot.docs[0].data() as Announcement);
+        } else {
+            setLatestAnnouncement(null);
+        }
+    });
 
     // Cleanup subscription on unmount
     return () => {
         candidatesUnsub();
         rolesUnsub();
         notificationsUnsub();
+        announcementsUnsub();
     };
   }, [toast]);
 
@@ -783,6 +795,15 @@ export default function AstraHirePage() {
         onReportClick={handleOpenReport}
         onManualClick={handleOpenManual}
       />
+       {latestAnnouncement && (
+          <Alert className="mb-6 bg-primary/5 border-primary/20">
+              <Megaphone className="h-4 w-4 text-primary" />
+              <AlertTitle className="text-primary font-semibold">{latestAnnouncement.title}</AlertTitle>
+              <AlertDescription>
+                  {latestAnnouncement.content}
+              </AlertDescription>
+          </Alert>
+      )}
       <main>
         <div className="border-b border-border mb-6">
           <nav className="flex space-x-2">

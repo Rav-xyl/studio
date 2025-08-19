@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MessageSquare, PlusCircle, Trash2, Edit, Send, LogOut, Home } from 'lucide-react';
+import { Loader2, MessageSquare, PlusCircle, Trash2, Edit, Send, LogOut, Home, Megaphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, arrayUnion } from 'firebase/firestore';
@@ -15,9 +15,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import type { FeedbackNote, FeedbackReply } from '@/lib/types';
+import type { FeedbackNote, FeedbackReply, Announcement } from '@/lib/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Input } from '@/components/ui/input';
 
 
 type UserSession = {
@@ -34,10 +35,16 @@ export default function FeedbackPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [session, setSession] = useState<UserSession | null>(null);
     const [notes, setNotes] = useState<FeedbackNote[]>([]);
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     
     const [newNote, setNewNote] = useState('');
     const [noteType, setNoteType] = useState<FeedbackNote['type']>('General');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // State for announcements
+    const [announcementTitle, setAnnouncementTitle] = useState('');
+    const [announcementContent, setAnnouncementContent] = useState('');
+    const [isAnnouncing, setIsAnnouncing] = useState(false);
 
     // State for editing a note
     const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -59,8 +66,8 @@ export default function FeedbackPage() {
         }
         setSession(JSON.parse(authData));
 
-        const q = query(collection(db, "feedback"), orderBy("createdAt", "desc"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const notesQuery = query(collection(db, "feedback"), orderBy("createdAt", "desc"));
+        const notesUnsub = onSnapshot(notesQuery, (snapshot) => {
             const notesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as FeedbackNote[];
             setNotes(notesData);
             setIsLoading(false);
@@ -69,13 +76,46 @@ export default function FeedbackPage() {
             toast({ title: "Connection Error", variant: "destructive" });
         });
 
-        return () => unsubscribe();
+        const announcementsQuery = query(collection(db, "announcements"), orderBy("createdAt", "desc"));
+        const announcementsUnsub = onSnapshot(announcementsQuery, (snapshot) => {
+            setAnnouncements(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Announcement[]));
+        });
+
+        return () => {
+            notesUnsub();
+            announcementsUnsub();
+        };
     }, [router, toast]);
 
     const handleLogout = () => {
         sessionStorage.removeItem('feedback-auth');
         toast({ title: "Logged Out", description: "You have been successfully logged out." });
         router.push('/feedback/login');
+    };
+    
+     const handlePostAnnouncement = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!announcementTitle.trim() || !announcementContent.trim() || session?.username !== 'owner') return;
+        
+        setIsAnnouncing(true);
+        const announcementId = `announcement-${nanoid(10)}`;
+        try {
+            await setDoc(doc(db, 'announcements', announcementId), {
+                id: announcementId,
+                title: announcementTitle,
+                content: announcementContent,
+                author: 'owner',
+                createdAt: serverTimestamp(),
+            });
+            setAnnouncementTitle('');
+            setAnnouncementContent('');
+            toast({ title: 'Announcement Posted!', description: 'Your announcement is now live for all users.' });
+        } catch (error) {
+            console.error("Error posting announcement:", error);
+            toast({ title: "Announcement Error", variant: "destructive" });
+        } finally {
+            setIsAnnouncing(false);
+        }
     };
 
     const handleSubmitNote = async (e: React.FormEvent) => {
@@ -185,7 +225,7 @@ export default function FeedbackPage() {
                 <div className="flex items-center gap-3">
                     <MessageSquare className="w-10 h-10 text-primary" />
                     <div>
-                        <h1 className="text-3xl font-bold text-foreground tracking-tight">Feedback Notes</h1>
+                        <h1 className="text-3xl font-bold text-foreground tracking-tight">Feedback & Announcements</h1>
                         <p className="text-sm text-muted-foreground">Logged in as: <span className="font-semibold">{session.username}</span></p>
                     </div>
                 </div>
@@ -204,7 +244,24 @@ export default function FeedbackPage() {
             </header>
 
             <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-1">
+                <div className="lg:col-span-1 space-y-6">
+                    {session.username === 'owner' && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2"><Megaphone /> Make an Announcement</CardTitle>
+                                <CardDescription>This will be shown to all users on the main dashboard.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <form onSubmit={handlePostAnnouncement} className="space-y-4">
+                                    <Input placeholder="Announcement Title" value={announcementTitle} onChange={(e) => setAnnouncementTitle(e.target.value)} required />
+                                    <Textarea placeholder="What's new?" value={announcementContent} onChange={(e) => setAnnouncementContent(e.target.value)} className="h-32" required />
+                                    <Button type="submit" className="w-full" disabled={isAnnouncing}>
+                                        {isAnnouncing ? <Loader2 className="animate-spin" /> : 'Post Announcement'}
+                                    </Button>
+                                </form>
+                            </CardContent>
+                        </Card>
+                    )}
                     <Card>
                         <CardHeader>
                             <CardTitle>Leave a New Note</CardTitle>
@@ -295,7 +352,7 @@ export default function FeedbackPage() {
                                                     <AlertDialogDescription>This action cannot be undone and will permanently delete this note.</AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogCancel>Cancel</Button>
                                                     <AlertDialogAction onClick={() => handleDeleteNote(note.id)}>Confirm Deletion</AlertDialogAction>
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
@@ -355,5 +412,3 @@ export default function FeedbackPage() {
         </div>
     );
 }
-
-    

@@ -1,5 +1,6 @@
 
 
+
 export type KanbanStatus = 'Sourcing' | 'Screening' | 'Interview' | 'Hired';
 
 export interface LogEntry {
@@ -127,4 +128,12 @@ export type FeedbackNote = {
     status: 'Open' | 'In Progress' | 'Resolved';
     createdAt: any;
     replies?: FeedbackReply[];
+};
+
+export type Announcement = {
+    id: string;
+    title: string;
+    content: string;
+    author: string;
+    createdAt: any;
 };
