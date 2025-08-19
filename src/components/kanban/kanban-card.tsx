@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { Clock, Star, Users, Briefcase, CheckCircle, ShieldAlert, Video, Trash2 } from 'lucide-react';
+import { Clock, Star, Users, Briefcase, CheckCircle, ShieldAlert, Video, Trash2, Loader2 } from 'lucide-react';
 import { useDrag } from 'react-dnd';
 import { Button } from '../ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
@@ -32,7 +32,11 @@ const StatusInfo = ({ status, candidate }: { status: string, candidate: Candidat
     }
 
     switch (status) {
-        case 'Sourcing': return <><Users className="h-3 w-3"/><span>New Candidate</span></>;
+        case 'Sourcing': 
+            if (candidate.isProcessing) {
+                return <><Loader2 className="h-3 w-3 animate-spin"/><span>Processing...</span></>
+            }
+            return <><Users className="h-3 w-3"/><span>New Candidate</span></>;
         case 'Screening': return <><CheckCircle className="h-3 w-3 text-green-500"/><span>Screening Passed</span></>;
         case 'Interview': return <><Video className="h-3 w-3 text-blue-500"/><span>AI Video Interview</span></>;
         default: return <><Clock className='h-3 w-3'/><span>{new Date(candidate.lastUpdated).toLocaleDateString()}</span></>;
@@ -57,6 +61,7 @@ export function KanbanCard({ candidate, onClick, onDelete, className }: KanbanCa
         'bg-card group relative cursor-pointer hover:border-primary/50 transition-all border',
         isDragging ? 'opacity-30' : 'opacity-100',
         hasFailedGauntlet && 'border-destructive/50 bg-destructive/10',
+        candidate.isProcessing && 'animate-pulse',
         className
         )}
     >
@@ -93,7 +98,7 @@ export function KanbanCard({ candidate, onClick, onDelete, className }: KanbanCa
               <AvatarFallback>{getInitials(candidate.name)}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-foreground truncate">{candidate.name}</p>
+              <p className="font-semibold text-foreground truncate">{candidate.isProcessing ? 'Processing Resume...' : candidate.name}</p>
               <p className="text-sm text-muted-foreground truncate">{candidate.role}</p>
             </div>
              {candidate.aiInitialScore && (
@@ -103,7 +108,7 @@ export function KanbanCard({ candidate, onClick, onDelete, className }: KanbanCa
                   </div>
               )}
           </div>
-          <div className="mt-3 flex flex-wrap gap-1">
+          <div className="mt-3 flex flex-wrap gap-1 min-h-[22px]">
             {candidate.skills.slice(0, 3).map((skill) => (
               <Badge key={skill} variant="secondary">{skill}</Badge>
             ))}

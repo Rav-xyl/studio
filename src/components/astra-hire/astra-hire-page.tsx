@@ -246,7 +246,7 @@ export default function AstraHirePage() {
 
   const handleBulkUpload = async (files: FileList | null, companyType: 'startup' | 'enterprise') => {
     if (!files || files.length === 0) return;
-    
+
     const taskId = `task-${nanoid(5)}`;
     const task: BackgroundTask = {
         id: taskId,
@@ -254,42 +254,61 @@ export default function AstraHirePage() {
         status: 'in-progress',
         progress: 0,
         total: files.length,
-        message: 'Screening Resumes...'
+        message: 'Uploading Resumes...'
     };
     setBackgroundTask(task);
-    
-    let processedCount = 0;
-    let failedCount = 0;
+
+    const existingCandidateNames = new Set(candidates.map(c => c.name.toLowerCase()));
+    const filesToProcess = Array.from(files);
     let skippedCount = 0;
 
-    const batch = writeBatch(db);
-    const existingCandidateNames = new Set(candidates.map(c => c.name.toLowerCase()));
+    // --- Phase 1: Immediate UI update with placeholders ---
+    const placeholderCandidates: Candidate[] = [];
+    for (const file of filesToProcess) {
+        const tempId = `temp-${nanoid(10)}`;
+        const placeholder: Candidate = {
+            id: tempId,
+            name: file.name,
+            role: 'Unassigned',
+            status: 'Sourcing',
+            isProcessing: true,
+            skills: [],
+            narrative: '',
+            inferredSkills: [],
+            lastUpdated: new Date().toISOString(),
+            avatarUrl: '',
+        };
+        placeholderCandidates.push(placeholder);
+    }
+    setCandidates(prev => [...prev, ...placeholderCandidates]);
 
-    for (const file of Array.from(files)) {
+    // --- Phase 2: Parallel background processing ---
+    let processedCount = 0;
+    const screeningPromises = filesToProcess.map(async (file, index) => {
+        const placeholderId = placeholderCandidates[index].id;
         try {
             const resumeDataUri = await convertFileToDataUri(file);
             const result = await automatedResumeScreening({ resumeDataUri, companyType });
-            
-            // Smarter duplicate check: after extracting the name
+
             if (existingCandidateNames.has(result.extractedInformation.name.toLowerCase())) {
                 skippedCount++;
-                processedCount++; // Still counts as "processed" for progress bar
-                setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount }) : null);
-                continue; // Skip to the next file
+                // Remove placeholder for skipped duplicate
+                setCandidates(prev => prev.filter(c => c.id !== placeholderId));
+                return null;
             }
-            
+
             const candidateId = `cand-${nanoid(10)}`;
             const storageRef = ref(storage, `resumes/${candidateId}/${file.name}`);
             await uploadBytes(storageRef, file);
             const resumeUrl = await getDownloadURL(storageRef);
-            
+
             let status: KanbanStatus = 'Screening';
             let archived = false;
             if (result.candidateScore < 40) {
-                status = 'Sourcing'; // Will be archived
+                status = 'Sourcing';
                 archived = true;
             }
-
+            
             const newCandidate: Candidate = {
                 id: candidateId,
                 ...result.extractedInformation,
@@ -301,51 +320,40 @@ export default function AstraHirePage() {
                 resumeUrl,
                 log: [{
                     timestamp: new Date().toISOString(),
-                    event: 'Resume Uploaded & Stored',
-                    details: `Candidate profile created from file: ${file.name}`,
-                    author: 'System'
-                }, {
-                    timestamp: new Date().toISOString(),
-                    event: 'AI Screening Complete',
-                    details: `Automated screening finished. Initial score: ${result.candidateScore}. Context: ${companyType}. Status set to: ${status}.`,
+                    event: 'Resume Uploaded & Screened',
+                    details: `Profile created from ${file.name}. Initial score: ${result.candidateScore}.`,
                     author: 'AI'
                 }]
             };
+
+            await setDoc(doc(db, "candidates", newCandidate.id), newCandidate);
+            existingCandidateNames.add(newCandidate.name.toLowerCase());
             
-            const candidateRef = doc(db, "candidates", newCandidate.id);
-            batch.set(candidateRef, newCandidate);
-            existingCandidateNames.add(newCandidate.name.toLowerCase()); // Add to set to prevent duplicates within the same batch
+            // Replace placeholder with final data
+            setCandidates(prev => prev.map(c => c.id === placeholderId ? newCandidate : c));
+            return newCandidate;
 
         } catch (error) {
             console.error(`Failed to process ${file.name}:`, error);
-            failedCount++;
+            // Remove placeholder on error
+            setCandidates(prev => prev.filter(c => c.id !== placeholderId));
+            return 'error';
+        } finally {
+            processedCount++;
+            setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount, message: "Screening resumes..." }) : null);
         }
-
-        processedCount++;
-        setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount }) : null);
-        await new Promise(resolve => setTimeout(resolve, 200)); 
-    }
-      
-    await batch.commit();
-    
-    let completionMessage = `Screening complete.`;
-    if (skippedCount > 0) {
-        completionMessage += ` ${skippedCount} duplicate(s) skipped.`
-    }
-     if (failedCount > 0) {
-        completionMessage += ` ${failedCount} failed.`
-    }
-    
-    toast({
-        title: "Bulk Upload Finished",
-        description: completionMessage,
     });
 
-    setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: completionMessage }) : null);
+    await Promise.all(screeningPromises);
+
+    let completionMessage = `Screening complete.`;
+    const failedCount = screeningPromises.filter(p => p === 'error').length;
+    if (skippedCount > 0) completionMessage += ` ${skippedCount} duplicate(s) skipped.`;
+    if (failedCount > 0) completionMessage += ` ${failedCount} failed.`;
     
-    setTimeout(() => {
-        setBackgroundTask(null);
-    }, 5000);
+    toast({ title: "Bulk Upload Finished", description: completionMessage });
+    setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: completionMessage }) : null);
+    setTimeout(() => { setBackgroundTask(null); }, 5000);
   };
   
     const handleStimulateFullPipeline = async () => {
