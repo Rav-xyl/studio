@@ -33,7 +33,7 @@ const AutomatedResumeScreeningOutputSchema = z.object({
     experience: z.string().describe("A summary of the candidate's experience."),
     narrative: z.string().describe("A 2-3 sentence narrative summary of the candidate's profile."),
     inferredSkills: z.array(z.string()).describe("A list of 2-3 inferred soft skills or related technical skills."),
-    cgpa: z.number().optional().describe("The candidate's CGPA or equivalent score if mentioned. Must be a number."),
+    cgpa: z.number().optional().describe("The candidate's CGPA or equivalent score if mentioned. Must be a number between 0 and 10."),
   }),
   candidateScore: z.number().describe("A score representing the candidate's suitability for the role, between 0 and 100."),
   reasoning: z.string().describe('Explanation of how the candidate score was derived, incorporating skill mappings and company preferences.'),
@@ -77,7 +77,11 @@ const prompt = ai.definePrompt({
   - **Experience:** Summarize the candidate's work experience in a succinct paragraph.
   - **Narrative:** Create a 2-3 sentence professional summary based *only* on the information in the resume.
   - **Inferred Skills:** Infer 2-3 relevant soft skills (e.g., "Leadership", "Team Collaboration") or related technical skills based on project descriptions and work history.
-  - **CGPA:** Find the candidate's CGPA or equivalent grade. Extract only the number (e.g., for '8.5/10', extract 8.5). If not found, do not include the field.
+  - **CGPA:** Find the candidate's CGPA or equivalent grade. This is CRITICAL. A CGPA is usually on a scale of 4 or 10. A percentage is on a scale of 100.
+    - If you find a percentage (e.g., "89.2%"), you MUST convert it to a 10-point scale (e.g., 8.92).
+    - If you find a CGPA on a 10-point scale (e.g., "8.5/10"), extract the number directly (8.5).
+    - If you find a CGPA on a 4-point scale (e.g., "3.8/4.0"), convert it to a 10-point scale (e.g., 9.5).
+    - The final extracted value MUST be a number between 0 and 10. If no score is found, do not include the field.
   - **Candidate Score:** Score between 0 and 100 based on the specified company context.
   - **Reasoning:** Explain how the score was derived, strictly following the evaluation criteria for the given company type.
   
