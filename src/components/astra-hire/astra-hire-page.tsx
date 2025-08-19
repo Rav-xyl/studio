@@ -263,9 +263,11 @@ export default function AstraHirePage() {
 
         const processFile = async (file: File) => {
             try {
+                // 1. AI Screening
                 const resumeDataUri = await convertFileToDataUri(file);
                 const result = await automatedResumeScreening({ resumeDataUri, fileName: file.name, companyType });
                 
+                // 2. Duplicate Check
                 if (existingCandidateNames.has(result.extractedInformation.name.toLowerCase())) {
                     skippedCount++;
                     toast({
@@ -275,14 +277,16 @@ export default function AstraHirePage() {
                     return; // Stop processing this file
                 }
 
+                // 3. File Upload to Storage
                 const candidateId = `cand-${nanoid(10)}`;
                 const storageRef = ref(storage, `resumes/${candidateId}/${file.name}`);
                 await uploadBytes(storageRef, file);
                 const resumeUrl = await getDownloadURL(storageRef);
 
+                // 4. Create and Save Candidate to Database
                 const status: KanbanStatus = result.candidateScore < 40 ? 'Sourcing' : 'Screening';
                 const archived = result.candidateScore < 40;
-
+                
                 const newCandidate: Omit<Candidate, 'id'> = {
                     ...result.extractedInformation,
                     status,
@@ -290,7 +294,7 @@ export default function AstraHirePage() {
                     aiInitialScore: result.candidateScore,
                     lastUpdated: new Date().toISOString(),
                     archived,
-                    resumeUrl,
+                    resumeUrl, // The crucial link
                     log: [{
                         timestamp: new Date().toISOString(),
                         event: 'Resume Uploaded & Screened',
@@ -301,7 +305,7 @@ export default function AstraHirePage() {
 
                 await setDoc(doc(db, "candidates", candidateId), newCandidate);
                 successfulCount++;
-                existingCandidateNames.add(newCandidate.name.toLowerCase());
+                existingCandidateNames.add(newCandidate.name.toLowerCase()); // Update the set to prevent duplicates within the same batch
 
             } catch (error) {
                 console.error(`Failed to process ${file.name}:`, error);
@@ -315,6 +319,7 @@ export default function AstraHirePage() {
             }
         };
 
+        // Run all file processing in parallel
         await Promise.all(filesToProcess.map(file => processFile(file)));
 
         let completionMessage = `Screening complete. ${successfulCount} new candidate(s) added.`;
@@ -677,7 +682,7 @@ export default function AstraHirePage() {
         } catch (error) {
             console.error("Failed to run bulk match:", error);
             toast({ title: "Bulk Match Error", description: "An error occurred during the bulk analysis. Please check the console.", variant: "destructive"});
-             setBackgroundTask(prev => prev ? ({ ...prev, status: 'error', message: 'Bulk matching failed.' }) : null);
+             setBackgroundTask(prev => prev ? { ...prev, status: 'error', message: 'Bulk matching failed.' } : null);
         } finally {
             setTimeout(() => { setBackgroundTask(null); }, 5000);
         }
