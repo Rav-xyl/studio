@@ -1,12 +1,14 @@
-import { Brain, HelpCircle, MessageSquare } from "lucide-react";
+import { Brain, HelpCircle, Bell } from "lucide-react";
 import { Button } from "../ui/button";
 
 interface AstraHireHeaderProps {
     onReportClick: () => void;
     onManualClick: () => void;
+    onBellClick: () => void;
+    unreadCount: number;
 }
 
-export function AstraHireHeader({ onReportClick, onManualClick }: AstraHireHeaderProps) {
+export function AstraHireHeader({ onReportClick, onManualClick, onBellClick, unreadCount }: AstraHireHeaderProps) {
   return (
     <header className="flex justify-between items-center mb-8">
       <div className="flex items-center gap-3">
@@ -63,6 +65,19 @@ export function AstraHireHeader({ onReportClick, onManualClick }: AstraHireHeade
           onClick={onReportClick}
         >
           <Brain className="w-4 h-4" /> SAARTHI Report
+        </Button>
+         <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground hover:bg-secondary relative"
+            onClick={onBellClick}
+            >
+            <Bell className="w-5 h-5" />
+            {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                    {unreadCount}
+                </span>
+            )}
         </Button>
       </div>
     </header>

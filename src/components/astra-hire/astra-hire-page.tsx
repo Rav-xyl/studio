@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart2, Briefcase, Users, Loader2, Shield, X, Search, HelpCircle, MessageSquare, Notebook, UserCog, Megaphone } from 'lucide-react';
+import { BarChart2, Briefcase, Users, Loader2, Shield, X, Search, HelpCircle, MessageSquare, Notebook, UserCog, Megaphone, Bell } from 'lucide-react';
 import { AstraHireHeader } from './astra-hire-header';
 import { CandidatePoolTab } from '../kanban/candidate-pool-tab';
 import { RolesTab } from '../roles/roles-tab';
@@ -27,7 +27,7 @@ import { ProspectingTab } from '../prospecting/prospecting-tab';
 import { bulkMatchCandidatesToRoles } from '@/ai/flows/bulk-match-candidates';
 import { useRouter } from 'next/navigation';
 import { AdminTab } from '../admin/admin-tab';
-import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
+import { AnnouncementsTab } from '../announcements/announcements-tab';
 
 
 // --- Helper Functions ---
@@ -67,7 +67,8 @@ export default function AstraHirePage() {
   const [roles, setRoles] = useState<JobRole[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [notifications, setNotifications] = useState<ProactiveSourcingNotification[]>([]);
-  const [latestAnnouncement, setLatestAnnouncement] = useState<Announcement | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
   const [lastSaarthiReport, setLastSaarthiReport] = useState<any>(null);
   const [filteredRole, setFilteredRole] = useState<JobRole | null>(null);
   const [suggestedChanges, setSuggestedChanges] = useState<RubricChange[]>([]);
@@ -116,12 +117,17 @@ export default function AstraHirePage() {
         setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ProactiveSourcingNotification[]);
     });
     
-    const announcementsQuery = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
+    const announcementsQuery = query(collection(db, "announcements"), orderBy("createdAt", "desc"));
     const announcementsUnsub = onSnapshot(announcementsQuery, (snapshot) => {
-        if (!snapshot.empty) {
-            setLatestAnnouncement(snapshot.docs[0].data() as Announcement);
+        const allAnnouncements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Announcement));
+        setAnnouncements(allAnnouncements);
+
+        const lastReadTimestamp = localStorage.getItem('lastReadAnnouncementTimestamp');
+        if (lastReadTimestamp && allAnnouncements.length > 0) {
+            const newAnnouncements = allAnnouncements.filter(ann => ann.createdAt && ann.createdAt.toDate().toISOString() > lastReadTimestamp);
+            setUnreadAnnouncements(newAnnouncements.length);
         } else {
-            setLatestAnnouncement(null);
+            setUnreadAnnouncements(allAnnouncements.length);
         }
     });
 
@@ -714,6 +720,18 @@ export default function AstraHirePage() {
         });
         setIsSaarthiReportOpen(true);
     }
+    
+    const handleTabClick = (tab: string) => {
+        setActiveTab(tab);
+        setFilteredRole(null);
+        if (tab === 'announcements') {
+            if (announcements.length > 0) {
+                const latestTimestamp = announcements[0].createdAt?.toDate().toISOString();
+                localStorage.setItem('lastReadAnnouncementTimestamp', latestTimestamp);
+            }
+            setUnreadAnnouncements(0);
+        }
+    };
 
   const renderActiveTabView = () => {
     switch (activeTab) {
@@ -754,6 +772,8 @@ export default function AstraHirePage() {
         return <GauntletPortalTab candidates={candidates} />;
       case 'analytics':
         return <AnalyticsTab roles={roles} candidates={candidates} suggestedChanges={suggestedChanges} setSuggestedChanges={setSuggestedChanges} />;
+       case 'announcements':
+        return <AnnouncementsTab announcements={announcements} />;
        case 'admin':
         if (!isAdmin) return null;
         return <AdminTab allCandidates={candidates} roles={roles} notifications={notifications} />;
@@ -794,23 +814,16 @@ export default function AstraHirePage() {
       <AstraHireHeader 
         onReportClick={handleOpenReport}
         onManualClick={handleOpenManual}
+        unreadCount={unreadAnnouncements}
+        onBellClick={() => handleTabClick('announcements')}
       />
-       {latestAnnouncement && (
-          <Alert className="mb-6 bg-primary/5 border-primary/20">
-              <Megaphone className="h-4 w-4 text-primary" />
-              <AlertTitle className="text-primary font-semibold">{latestAnnouncement.title}</AlertTitle>
-              <AlertDescription>
-                  {latestAnnouncement.content}
-              </AlertDescription>
-          </Alert>
-      )}
       <main>
         <div className="border-b border-border mb-6">
           <nav className="flex space-x-2">
             {isAdmin && (
                  <button
                     className={`tab-btn ${activeTab === 'admin' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('admin')}
+                    onClick={() => handleTabClick('admin')}
                     >
                     <UserCog className="inline-block w-4 h-4 mr-2" />
                     Admin
@@ -818,38 +831,45 @@ export default function AstraHirePage() {
             )}
             <button
               className={`tab-btn ${activeTab === 'roles' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('roles'); setFilteredRole(null); }}
+              onClick={() => handleTabClick('roles')}
             >
               <Briefcase className="inline-block w-4 h-4 mr-2" />
               Client Roles
             </button>
             <button
               className={`tab-btn ${activeTab === 'pool' ? 'active' : ''}`}
-              onClick={() => setActiveTab('pool')}
+              onClick={() => handleTabClick('pool')}
             >
               <Users className="inline-block w-4 h-4 mr-2" />
               Candidate Pool
             </button>
              <button
               className={`tab-btn ${activeTab === 'prospecting' ? 'active' : ''}`}
-              onClick={() => setActiveTab('prospecting')}
+              onClick={() => handleTabClick('prospecting')}
             >
               <Search className="inline-block w-4 h-4 mr-2" />
               Prospecting
             </button>
              <button
               className={`tab-btn ${activeTab === 'gauntlet' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('gauntlet'); setFilteredRole(null); }}
+              onClick={() => handleTabClick('gauntlet')}
             >
               <Shield className="inline-block w-4 h-4 mr-2" />
               Gauntlet Portal
             </button>
             <button
               className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('analytics'); setFilteredRole(null); }}
+              onClick={() => handleTabClick('analytics')}
             >
               <BarChart2 className="inline-block w-4 h-4 mr-2" />
               Analytics
+            </button>
+            <button
+                className={`tab-btn ${activeTab === 'announcements' ? 'active' : ''}`}
+                onClick={() => handleTabClick('announcements')}
+            >
+                <Megaphone className="inline-block w-4 h-4 mr-2" />
+                Announcements
             </button>
             <button
               className={`tab-btn`}
