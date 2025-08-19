@@ -52,6 +52,7 @@ export interface Candidate {
   gauntletStartDate?: string;
   gauntletState?: GauntletState;
   communicationSent?: boolean;
+  resumeUrl?: string;
   // Optional fields from AI processing
   [key: string]: any;
 }

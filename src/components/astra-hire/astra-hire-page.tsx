@@ -16,8 +16,9 @@ import { nanoid } from 'nanoid';
 import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
 import { draftOfferLetter } from '@/ai/flows/autonomous-offer-drafting';
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, arrayUnion, getDoc } from 'firebase/firestore';
+import { db, storage } from '@/lib/firebase';
+import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, arrayUnion, getDoc, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
 import { Card, CardContent } from '../ui/card';
 import { Progress } from '../ui/progress';
@@ -57,7 +58,7 @@ export interface BackgroundTask {
     message: string;
 }
 
-export function AstraHirePage() {
+export default function AstraHirePage() {
   const [activeTab, setActiveTab] = useState('roles');
   const router = useRouter();
 
@@ -267,6 +268,9 @@ export function AstraHirePage() {
             const result = await automatedResumeScreening({ resumeDataUri, companyType });
             
             const candidateId = `cand-${nanoid(10)}`;
+            const storageRef = ref(storage, `resumes/${candidateId}/${file.name}`);
+            await uploadBytes(storageRef, file);
+            const resumeUrl = await getDownloadURL(storageRef);
             
             let status: KanbanStatus = 'Screening';
             let archived = false;
@@ -283,9 +287,10 @@ export function AstraHirePage() {
                 aiInitialScore: result.candidateScore,
                 lastUpdated: new Date().toISOString(),
                 archived,
+                resumeUrl,
                 log: [{
                     timestamp: new Date().toISOString(),
-                    event: 'Resume Uploaded',
+                    event: 'Resume Uploaded & Stored',
                     details: `Candidate profile created from file: ${file.name}`,
                     author: 'System'
                 }, {
@@ -434,17 +439,39 @@ export function AstraHirePage() {
 
     const handleDeleteCandidate = async (candidateId: string) => {
       try {
+          const candidateToDelete = candidates.find(c => c.id === candidateId);
+          if (!candidateToDelete) {
+              toast({ title: 'Error', description: 'Candidate not found.', variant: 'destructive' });
+              return;
+          }
+
           const batch = writeBatch(db);
 
+          // 1. Delete Firestore document
           const candidateRef = doc(db, 'candidates', candidateId);
           batch.delete(candidateRef);
 
+          // 2. Delete resume from Storage
+          if (candidateToDelete.resumeUrl) {
+              try {
+                  const storageRef = ref(storage, candidateToDelete.resumeUrl);
+                  await deleteObject(storageRef);
+              } catch (storageError: any) {
+                  // If file doesn't exist, we can ignore the error, but log others
+                  if (storageError.code !== 'storage/object-not-found') {
+                      console.error("Error deleting resume from storage:", storageError);
+                  }
+              }
+          }
+
+          // 3. Delete related notifications
           const notificationsQuery = query(collection(db, 'notifications'), where('candidateId', '==', candidateId));
           const notificationsSnapshot = await getDocs(notificationsQuery);
           notificationsSnapshot.forEach((doc) => {
               batch.delete(doc.ref);
           });
-
+          
+          // 4. Clean up role match caches
           const rolesSnapshot = await getDocs(collection(db, 'roles'));
           rolesSnapshot.forEach(roleDoc => {
               const roleData = roleDoc.data() as JobRole;
@@ -832,5 +859,3 @@ export function AstraHirePage() {
     </div>
   );
 }
-
-    
