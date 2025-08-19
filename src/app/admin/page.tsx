@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2, Shield, Send, Bell, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, updateDoc, doc, setDoc, deleteDoc, query, where, getDocs, writeBatch, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, setDoc, deleteDoc, query, where, getDocs, writeBatch, getDoc, arrayUnion } from 'firebase/firestore';
 import type { Candidate, JobRole, ProactiveSourcingNotification } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { GauntletMonitorTable } from '@/components/admin/gauntlet-monitor-table';
@@ -13,6 +13,18 @@ import { AllCandidatesTable } from '@/components/admin/all-candidates-table';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
 import { proactiveCandidateSourcing } from '@/ai/flows/proactive-candidate-sourcing';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+const addLog = async (candidateId: string, event: string, details: string) => {
+    const candidateRef = doc(db, 'candidates', candidateId);
+    await updateDoc(candidateRef, {
+        log: arrayUnion({
+            timestamp: new Date().toISOString(),
+            event,
+            details,
+            author: 'Admin',
+        })
+    });
+};
 
 export default function AdminDashboardPage() {
     const router = useRouter();
@@ -152,7 +164,7 @@ export default function AdminDashboardPage() {
                 const stage = isHired ? 'Offer Extended' : 'Rejected';
                 if (isHired) hiredCount++; else rejectedCount++;
 
-                await aiDrivenCandidateEngagement({
+                const emailResult = await aiDrivenCandidateEngagement({
                     candidateName: c.name,
                     candidateStage: stage,
                     jobTitle: c.role,
@@ -161,16 +173,24 @@ export default function AdminDashboardPage() {
                     candidateSkills: c.skills.join(', '),
                     rejectionReason: 'After careful consideration of the final interview, we have decided to move forward with other candidates.'
                 });
-
-                // Mark communication as sent
-                await updateDoc(doc(db, 'candidates', c.id), { communicationSent: true });
+                
+                // Log the email for verification and mark as sent
+                await updateDoc(doc(db, 'candidates', c.id), { 
+                    communicationSent: true,
+                    log: arrayUnion({
+                        timestamp: new Date().toISOString(),
+                        event: `AI Email Drafted: ${stage}`,
+                        details: `Subject: ${emailResult.emailSubject}\nBody: ${emailResult.emailBody}`,
+                        author: 'AI',
+                    })
+                });
             });
             
             await Promise.all(communicationPromises);
 
             toast({
                 title: 'Communications Sent!',
-                description: `AI has sent ${hiredCount} offer emails and ${rejectedCount} rejection notices.`
+                description: `AI has drafted ${hiredCount} offer emails and ${rejectedCount} rejection notices. Check candidate logs to view content.`
             });
 
         } catch (error) {
