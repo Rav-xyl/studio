@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link, Github, Goal, PlusCircle, Trash2, Search, File } from 'lucide-react';
+import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link, Github, Goal, PlusCircle, Trash2, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
@@ -206,14 +206,6 @@ export function CandidateDetailSheet({
                 <div className='mt-2 flex items-center gap-2'>
                     {candidate.email && <Badge variant="outline">{candidate.email}</Badge>}
                     <SocialLink url={candidate.socialUrl} />
-                     {candidate.resumeUrl && (
-                        <a href={candidate.resumeUrl} target="_blank" rel="noopener noreferrer">
-                            <Button variant="ghost" size="sm" className="text-muted-foreground">
-                                <File className="h-4 w-4 mr-2" />
-                                View Resume
-                            </Button>
-                        </a>
-                     )}
                 </div>
               </div>
             </SheetHeader>
