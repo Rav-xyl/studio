@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { useState, useMemo } from "react";
-import { Loader2, Search, Trash2, UserSearch, Zap, ArrowUpDown } from "lucide-react";
+import { Loader2, Search, Trash2, UserSearch, Zap, ArrowUpDown, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
@@ -16,6 +16,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog";
 import { Checkbox } from "../ui/checkbox";
@@ -34,7 +35,7 @@ interface ProspectingTabProps {
     roles: JobRole[];
     onUpdateCandidate: (candidate: Candidate) => void;
     onDeleteCandidate: (candidateId: string) => void;
-    onRunBulkMatch: () => void;
+    onRunBulkMatch: (targetCandidateIds?: string[], targetRoleIds?: string[]) => void;
     matchResults: Record<string, any[]>;
 }
 
@@ -48,6 +49,7 @@ export function ProspectingTab({
 }: ProspectingTabProps) {
     const { toast } = useToast();
     const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
+    const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'aiInitialScore', direction: 'descending' });
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -92,6 +94,14 @@ export function ProspectingTab({
             setSelectedCandidates(prev => prev.filter(id => id !== candidateId));
         }
     }
+
+    const handleSelectRole = (roleId: string) => {
+        setSelectedRoles(prev => 
+            prev.includes(roleId) 
+                ? prev.filter(id => id !== roleId) 
+                : [...prev, roleId]
+        );
+    }
     
     const handleSelectAll = (isSelected: boolean) => {
         if (isSelected) {
@@ -100,9 +110,13 @@ export function ProspectingTab({
             setSelectedCandidates([]);
         }
     }
+    
+    const handleRunTargetedMatch = () => {
+        onRunBulkMatch(selectedCandidates, selectedRoles);
+    }
 
     const isAllSelected = sortedAndFilteredCandidates.length > 0 && selectedCandidates.length === sortedAndFilteredCandidates.length;
-
+    const isTargetedMatchDisabled = selectedCandidates.length === 0 || selectedRoles.length === 0;
 
     return (
         <div className="fade-in-slide-up">
@@ -123,7 +137,33 @@ export function ProspectingTab({
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                     <Button onClick={onRunBulkMatch} disabled={candidates.length === 0 || roles.length === 0}>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline">
+                                Select Roles ({selectedRoles.length}) <ChevronDown className="ml-2 h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="w-64">
+                            <DropdownMenuLabel>Available Client Roles</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {roles.map(role => (
+                                <DropdownMenuCheckboxItem
+                                    key={role.id}
+                                    checked={selectedRoles.includes(role.id)}
+                                    onSelect={(e) => e.preventDefault()}
+                                    onClick={() => handleSelectRole(role.id)}
+                                >
+                                    {role.title}
+                                </DropdownMenuCheckboxItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                     <Button onClick={handleRunTargetedMatch} disabled={isTargetedMatchDisabled}>
+                        <Zap className="mr-2 h-4 w-4" />
+                        Run Targeted Match
+                    </Button>
+                     <Button onClick={() => onRunBulkMatch()} variant="secondary" disabled={candidates.length === 0 || roles.length === 0}>
                         <Zap className="mr-2 h-4 w-4" />
                         Run AI Match for All
                     </Button>

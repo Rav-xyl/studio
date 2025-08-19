@@ -603,10 +603,17 @@ export default function AstraHirePage() {
         setMatchedCandidates([]);
     };
 
-    const handleRunBulkMatch = async () => {
-        const unassignedCandidates = candidates.filter(c => c.role === 'Unassigned' && !c.archived);
-        if (unassignedCandidates.length === 0 || roles.length === 0) {
-            toast({ title: "Nothing to Match", description: "Ensure there are unassigned candidates and open roles." });
+    const handleRunBulkMatch = async (targetCandidateIds?: string[], targetRoleIds?: string[]) => {
+        const candidatesToMatch = targetCandidateIds 
+            ? candidates.filter(c => targetCandidateIds.includes(c.id))
+            : candidates.filter(c => c.role === 'Unassigned' && !c.archived);
+        
+        const rolesToMatch = targetRoleIds
+            ? roles.filter(r => targetRoleIds.includes(r.id))
+            : roles;
+
+        if (candidatesToMatch.length === 0 || rolesToMatch.length === 0) {
+            toast({ title: "Nothing to Match", description: "Ensure there are unassigned candidates and open roles selected." });
             return;
         }
 
@@ -617,19 +624,19 @@ export default function AstraHirePage() {
             status: 'in-progress',
             progress: 0,
             total: 1,
-            message: `Matching ${unassignedCandidates.length} candidates...`
+            message: `Matching ${candidatesToMatch.length} candidates...`
         });
         
-        toast({ title: "AI Sourcing Started", description: `Analyzing ${unassignedCandidates.length} candidates against ${roles.length} roles. This is a background task.` });
+        toast({ title: "AI Sourcing Started", description: `Analyzing ${candidatesToMatch.length} candidates against ${rolesToMatch.length} roles. This is a background task.` });
 
         try {
             const result = await bulkMatchCandidatesToRoles({
-                candidates: unassignedCandidates.map(c => ({
+                candidates: candidatesToMatch.map(c => ({
                     id: c.id,
                     skills: c.skills,
                     narrative: c.narrative
                 })),
-                jobRoles: roles,
+                jobRoles: rolesToMatch,
             });
 
             const matchesByRole: Record<string, RoleMatch[]> = roles.reduce((acc, role) => ({ ...acc, [role.id]: [] }), {});
@@ -641,14 +648,14 @@ export default function AstraHirePage() {
                     .sort((a, b) => b.confidenceScore - a.confidenceScore)[0];
 
                 if(bestMatchForCandidate) {
-                     newMatchResults[candidateResult.candidateId] = [bestMatchForCandidate];
+                     setMatchResults(prev => ({...prev, [candidateResult.candidateId]: [bestMatchForCandidate]}));
                 }
 
                 candidateResult.matches.forEach(match => {
                     if (matchesByRole[match.roleId]) {
                         matchesByRole[match.roleId].push({
                             candidateId: candidateResult.candidateId,
-                            candidateName: unassignedCandidates.find(c => c.id === candidateResult.candidateId)?.name || 'Unknown',
+                            candidateName: candidatesToMatch.find(c => c.id === candidateResult.candidateId)?.name || 'Unknown',
                             justification: match.justification,
                             confidenceScore: match.confidenceScore,
                         });
@@ -656,12 +663,10 @@ export default function AstraHirePage() {
                 });
             });
 
-            setMatchResults(newMatchResults);
-
             const batch = writeBatch(db);
-            roles.forEach(role => {
+            rolesToMatch.forEach(role => {
                 const roleRef = doc(db, 'roles', role.id);
-                const sortedMatches = matchesByRole[role.id].sort((a, b) => b.confidenceScore - a.confidenceScore);
+                const sortedMatches = (matchesByRole[role.id] || []).sort((a, b) => b.confidenceScore - a.confidenceScore);
                 batch.update(roleRef, { roleMatches: sortedMatches, lastMatched: new Date().toISOString() });
             });
             await batch.commit();
