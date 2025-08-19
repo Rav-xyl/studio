@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Candidate } from "@/lib/types";
@@ -22,7 +23,12 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
     const [isSendingReminders, setIsSendingReminders] = useState(false);
 
     const shortlistedCandidates = useMemo(() => {
-        return candidates.filter(c => (c.aiInitialScore || 0) >= 70 && !c.archived);
+        // A candidate is eligible for the Gauntlet only if they have a high score, are not archived, AND have been assigned a role.
+        return candidates.filter(c => 
+            (c.aiInitialScore || 0) >= 70 && 
+            !c.archived && 
+            c.role !== 'Unassigned'
+        );
     }, [candidates]);
 
     const getGauntletStatus = (candidate: Candidate) => {
@@ -105,7 +111,7 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
                 <Info className="h-4 w-4" />
                 <AlertTitle>Instructions for Recruiters</AlertTitle>
                 <AlertDescription>
-                   Shortlisted candidates (AI Score 70+) appear here. Use the "Copy Credentials" button to get their unique login details for the candidate portal.
+                   Only candidates with an AI Score of 70+ and an assigned role will appear here. Use the "Copy Credentials" button to get their unique login details for the candidate portal.
                 </AlertDescription>
             </Alert>
 
@@ -115,8 +121,8 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Candidate</TableHead>
+                            <TableHead>Assigned Role</TableHead>
                             <TableHead className="text-center">AI Score</TableHead>
-                            <TableHead>Gauntlet Status</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -127,14 +133,11 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
                                 return (
                                 <TableRow key={candidate.id}>
                                     <TableCell className="font-medium">{candidate.name} <br/> <span className="text-xs text-muted-foreground">{candidate.id}</span></TableCell>
+                                    <TableCell>
+                                        <Badge>{candidate.role}</Badge>
+                                    </TableCell>
                                     <TableCell className="text-center">
                                         <Badge variant="secondary">{Math.round(candidate.aiInitialScore || 0)}</Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-col gap-2">
-                                            <span className="text-xs text-muted-foreground">{status.text}</span>
-                                            <Progress value={status.value} className="h-2" />
-                                        </div>
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="outline" size="sm" onClick={() => copyLoginCredentials(candidate)}>
@@ -148,7 +151,8 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
                             <TableRow>
                                 <TableCell colSpan={4} className="h-24 text-center">
                                     <ShieldQuestion className="mx-auto h-10 w-10 text-muted-foreground mb-2" />
-                                    No candidates have been shortlisted for the Gauntlet yet.
+                                    No candidates are currently eligible for the Gauntlet.
+                                    <p className="text-xs text-muted-foreground">Ensure candidates have a score of 70+ and are assigned to a role.</p>
                                 </TableCell>
                             </TableRow>
                         )}
@@ -158,3 +162,5 @@ export function GauntletPortalTab({ candidates }: GauntletPortalTabProps) {
         </div>
     );
 }
+
+    

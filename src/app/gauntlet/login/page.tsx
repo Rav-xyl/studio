@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Key, Loader2, User } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import type { Candidate } from '@/lib/types';
 
 const UNIVERSAL_PASSWORD = 'TEST1234';
 
@@ -50,11 +51,23 @@ export default function GauntletLoginPage() {
       const candidateDoc = await getDoc(candidateDocRef);
 
       if (candidateDoc.exists()) {
+        const candidateData = candidateDoc.data() as Candidate;
+
+        if (candidateData.role === 'Unassigned') {
+            toast({
+                variant: 'destructive',
+                title: 'Gauntlet Access Denied',
+                description: 'You have not been assigned to a role yet. Please contact your recruiter.',
+            });
+            setIsLoading(false);
+            return;
+        }
+
         // Store auth state in session storage for simple persistence across refreshes
         sessionStorage.setItem('gauntlet-auth-id', candidateId);
         toast({
           title: 'Login Successful',
-          description: `Welcome, ${candidateDoc.data().name}. Redirecting to your portal...`,
+          description: `Welcome, ${candidateData.name}. Redirecting to your portal...`,
         });
         router.push(`/candidate/${candidateId}`);
       } else {
@@ -122,3 +135,5 @@ export default function GauntletLoginPage() {
     </div>
   );
 }
+
+    

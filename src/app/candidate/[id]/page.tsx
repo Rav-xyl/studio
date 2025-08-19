@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, BrainCircuit, FileText, CheckCircle, XCircle, Download, LogOut } from 'lucide-react';
+import { Loader2, BrainCircuit, FileText, CheckCircle, XCircle, Download, LogOut, ShieldAlert } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import type { Candidate, GauntletPhase, GauntletState } from '@/lib/types';
 import { finalInterviewReview } from '@/ai/flows/final-interview-review';
@@ -13,7 +13,6 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import dynamic from 'next/dynamic';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
-import { skillGapAnalysis } from '@/ai/flows/skill-gap-analysis';
 
 const InterviewGauntlet = dynamic(() => import('@/components/interview/interview-gauntlet').then(mod => mod.InterviewGauntlet), {
     ssr: false,
@@ -240,6 +239,35 @@ export default function CandidatePortalPage() {
             </div>
         );
     }
+    
+    if (candidate.role === 'Unassigned') {
+        return (
+            <div className="flex items-center justify-center h-screen bg-secondary">
+                <Card className="w-full max-w-lg p-8 text-center">
+                    <CardHeader>
+                        <CardTitle className="text-2xl flex items-center justify-center gap-2">
+                            <ShieldAlert className="h-8 w-8 text-amber-500" />
+                            Gauntlet Locked
+                        </CardTitle>
+                        <CardDescription>
+                            Welcome, {candidate.name}.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-muted-foreground">
+                            You cannot begin the assessment because a recruiter has not assigned you to a specific role yet. Please wait for a recruiter to assign you a role.
+                        </p>
+                    </CardContent>
+                    <CardFooter>
+                         <Button variant="ghost" className="w-full text-muted-foreground" onClick={handleLogout}>
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Logout & Exit
+                        </Button>
+                    </CardFooter>
+                </Card>
+            </div>
+        )
+    }
 
     const { phase } = gauntletState;
     if (phase === 'Technical' || phase === 'SystemDesign') {
@@ -374,3 +402,5 @@ const PhaseCard = ({ icon, title, description, status }: { icon: React.ReactNode
         </div>
     )
 }
+
+    
