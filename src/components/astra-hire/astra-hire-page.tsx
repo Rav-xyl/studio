@@ -261,35 +261,18 @@ export default function AstraHirePage() {
     const existingCandidateNames = new Set(candidates.map(c => c.name.toLowerCase()));
     const filesToProcess = Array.from(files);
     let skippedCount = 0;
-
-    const placeholderCandidates: Candidate[] = filesToProcess.map(file => {
-        const tempId = `temp-${nanoid(10)}`;
-        return {
-            id: tempId,
-            name: file.name,
-            role: 'Unassigned',
-            status: 'Sourcing',
-            isProcessing: true,
-            skills: [],
-            narrative: '',
-            inferredSkills: [],
-            lastUpdated: new Date().toISOString(),
-            avatarUrl: '',
-        };
-    });
-    setCandidates(prev => [...prev, ...placeholderCandidates]);
-
+    
     let processedCount = 0;
-    const screeningPromises = filesToProcess.map(async (file, index) => {
-        const placeholderId = placeholderCandidates[index].id;
+
+    const screeningPromises = filesToProcess.map(async (file) => {
         try {
             const resumeDataUri = await convertFileToDataUri(file);
             const result = await automatedResumeScreening({ resumeDataUri, companyType });
 
+            // Check for duplicates AFTER screening
             if (existingCandidateNames.has(result.extractedInformation.name.toLowerCase())) {
                 skippedCount++;
-                setCandidates(prev => prev.filter(c => c.id !== placeholderId));
-                return null;
+                return; // Skip this file
             }
             
             const candidateId = `cand-${nanoid(10)}`;
@@ -304,7 +287,7 @@ export default function AstraHirePage() {
                 archived = true;
             }
             
-            const newCandidateData: Omit<Candidate, 'id'> = {
+            const newCandidate: Omit<Candidate, 'id'> = {
                 ...result.extractedInformation,
                 status,
                 role: 'Unassigned',
@@ -320,17 +303,11 @@ export default function AstraHirePage() {
                 }]
             };
             
-            await setDoc(doc(db, "candidates", candidateId), newCandidateData);
-            
-            const finalCandidate: Candidate = { id: candidateId, ...newCandidateData };
-            
-            setCandidates(prev => prev.map(c => (c.id === placeholderId ? finalCandidate : c)));
-            
-            existingCandidateNames.add(finalCandidate.name.toLowerCase());
+            await setDoc(doc(db, "candidates", candidateId), newCandidate);
+            existingCandidateNames.add(newCandidate.name.toLowerCase());
 
         } catch (error) {
             console.error(`Failed to process ${file.name}:`, error);
-            setCandidates(prev => prev.filter(c => c.id !== placeholderId));
         } finally {
             processedCount++;
             setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount, message: "Screening resumes..." }) : null);
@@ -909,3 +886,5 @@ export default function AstraHirePage() {
     </div>
   );
 }
+
+    
