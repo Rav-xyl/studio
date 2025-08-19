@@ -244,87 +244,107 @@ export default function AstraHirePage() {
   };
 
 
-  const handleBulkUpload = async (files: FileList | null, companyType: 'startup' | 'enterprise') => {
-    if (!files || files.length === 0) return;
+    const handleBulkUpload = async (files: FileList | null, companyType: 'startup' | 'enterprise') => {
+        if (!files || files.length === 0) return;
 
-    const taskId = `task-${nanoid(5)}`;
-    const task: BackgroundTask = {
-        id: taskId,
-        type: 'Screening',
-        status: 'in-progress',
-        progress: 0,
-        total: files.length,
-        message: 'Uploading Resumes...'
+        const taskId = `task-${nanoid(5)}`;
+        const task: BackgroundTask = {
+            id: taskId,
+            type: 'Screening',
+            status: 'in-progress',
+            progress: 0,
+            total: files.length,
+            message: 'Preparing uploads...'
+        };
+        setBackgroundTask(task);
+
+        const filesToProcess = Array.from(files);
+        let processedCount = 0;
+        let successfulCount = 0;
+        let skippedCount = 0;
+
+        // Immediately show placeholders in the UI
+        const placeholderCandidates: Candidate[] = filesToProcess.map(file => ({
+            id: `placeholder-${nanoid(10)}`,
+            name: file.name,
+            isProcessing: true,
+            status: 'Sourcing',
+            role: 'Unassigned',
+            skills: [],
+            narrative: '',
+            inferredSkills: [],
+            lastUpdated: new Date().toISOString(),
+            avatarUrl: ''
+        }));
+        setCandidates(prev => [...prev, ...placeholderCandidates]);
+        
+        const processFile = async (file: File, placeholderId: string) => {
+            try {
+                const existingCandidateNames = new Set(candidates.filter(c => !c.isProcessing).map(c => c.name.toLowerCase()));
+                
+                const resumeDataUri = await convertFileToDataUri(file);
+                const result = await automatedResumeScreening({ resumeDataUri, companyType });
+                
+                if (existingCandidateNames.has(result.extractedInformation.name.toLowerCase())) {
+                    skippedCount++;
+                    setCandidates(prev => prev.filter(c => c.id !== placeholderId)); // Remove placeholder
+                    return;
+                }
+
+                const candidateId = `cand-${nanoid(10)}`;
+                const storageRef = ref(storage, `resumes/${candidateId}/${file.name}`);
+                await uploadBytes(storageRef, file);
+                const resumeUrl = await getDownloadURL(storageRef);
+
+                let status: KanbanStatus = 'Screening';
+                let archived = false;
+                if (result.candidateScore < 40) {
+                    status = 'Sourcing';
+                    archived = true;
+                }
+
+                const finalCandidate: Candidate = {
+                    id: candidateId,
+                    ...result.extractedInformation,
+                    status,
+                    role: 'Unassigned',
+                    aiInitialScore: result.candidateScore,
+                    lastUpdated: new Date().toISOString(),
+                    archived,
+                    resumeUrl,
+                    log: [{
+                        timestamp: new Date().toISOString(),
+                        event: 'Resume Uploaded & Screened',
+                        details: `Profile created from ${file.name}. Initial score: ${result.candidateScore}.`,
+                        author: 'AI'
+                    }],
+                    isProcessing: false,
+                };
+
+                await setDoc(doc(db, "candidates", candidateId), finalCandidate);
+                successfulCount++;
+                // The onSnapshot listener will handle adding the final candidate to the UI
+                setCandidates(prev => prev.filter(c => c.id !== placeholderId)); // Remove placeholder
+            
+            } catch (error) {
+                console.error(`Failed to process ${file.name}:`, error);
+                setCandidates(prev => prev.filter(c => c.id !== placeholderId)); // Remove errored placeholder
+            } finally {
+                processedCount++;
+                setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount, message: "Screening resumes..." }) : null);
+            }
+        };
+
+        const uploadPromises = filesToProcess.map((file, index) => processFile(file, placeholderCandidates[index].id));
+        await Promise.all(uploadPromises);
+
+        let completionMessage = `Screening complete. ${successfulCount} new candidate(s) added.`;
+        if (skippedCount > 0) completionMessage += ` ${skippedCount} duplicate(s) skipped.`;
+        
+        toast({ title: "Bulk Upload Finished", description: completionMessage });
+        setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: completionMessage }) : null);
+        setTimeout(() => setBackgroundTask(null), 5000);
     };
-    setBackgroundTask(task);
-
-    const existingCandidateNames = new Set(candidates.map(c => c.name.toLowerCase()));
-    const filesToProcess = Array.from(files);
-    let skippedCount = 0;
-    
-    let processedCount = 0;
-
-    const screeningPromises = filesToProcess.map(async (file) => {
-        try {
-            const resumeDataUri = await convertFileToDataUri(file);
-            const result = await automatedResumeScreening({ resumeDataUri, companyType });
-
-            // Check for duplicates AFTER screening
-            if (existingCandidateNames.has(result.extractedInformation.name.toLowerCase())) {
-                skippedCount++;
-                return; // Skip this file
-            }
-            
-            const candidateId = `cand-${nanoid(10)}`;
-            const storageRef = ref(storage, `resumes/${candidateId}/${file.name}`);
-            await uploadBytes(storageRef, file);
-            const resumeUrl = await getDownloadURL(storageRef);
-
-            let status: KanbanStatus = 'Screening';
-            let archived = false;
-            if (result.candidateScore < 40) {
-                status = 'Sourcing';
-                archived = true;
-            }
-            
-            const newCandidate: Omit<Candidate, 'id'> = {
-                ...result.extractedInformation,
-                status,
-                role: 'Unassigned',
-                aiInitialScore: result.candidateScore,
-                lastUpdated: new Date().toISOString(),
-                archived,
-                resumeUrl,
-                log: [{
-                    timestamp: new Date().toISOString(),
-                    event: 'Resume Uploaded & Screened',
-                    details: `Profile created from ${file.name}. Initial score: ${result.candidateScore}.`,
-                    author: 'AI'
-                }]
-            };
-            
-            await setDoc(doc(db, "candidates", candidateId), newCandidate);
-            existingCandidateNames.add(newCandidate.name.toLowerCase());
-
-        } catch (error) {
-            console.error(`Failed to process ${file.name}:`, error);
-        } finally {
-            processedCount++;
-            setBackgroundTask(prev => prev ? ({ ...prev, progress: processedCount, message: "Screening resumes..." }) : null);
-        }
-    });
-
-    await Promise.all(screeningPromises);
-
-    let completionMessage = `Screening complete.`;
-    const successfulCount = filesToProcess.length - skippedCount;
-    completionMessage += ` ${successfulCount} new candidate(s) added.`
-    if (skippedCount > 0) completionMessage += ` ${skippedCount} duplicate(s) skipped.`;
-    
-    toast({ title: "Bulk Upload Finished", description: completionMessage });
-    setBackgroundTask(prev => prev ? ({ ...prev, status: 'complete', message: completionMessage }) : null);
-    setTimeout(() => { setBackgroundTask(null); }, 5000);
-  };
   
     const handleStimulateFullPipeline = async () => {
         const taskId = `task-${nanoid(5)}`;
