@@ -130,5 +130,3 @@ const automatedResumeScreeningFlow = ai.defineFlow(
     return output!;
   }
 );
-
-    
