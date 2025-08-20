@@ -1,9 +1,4 @@
 
-
-
-
-
-
 export type KanbanStatus = 'Sourcing' | 'Screening' | 'Interview' | 'Hired';
 
 export interface LogEntry {
