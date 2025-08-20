@@ -179,6 +179,18 @@ export function CandidateDetailSheet({
     toast({title: "Role Assigned", description: `${candidate.name} has been assigned to ${roleTitle} and moved to Interview.`});
   }
 
+  const handleViewCv = () => {
+    if (candidate?.resumeDataUri) {
+      const newWindow = window.open();
+      if (newWindow) {
+        newWindow.document.write(`<iframe src="${candidate.resumeDataUri}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+        newWindow.document.title = `${candidate.name} - CV`;
+      } else {
+        toast({ title: "Popup Blocked", description: "Please allow popups for this site to view the CV.", variant: "destructive"});
+      }
+    }
+  };
+
   const review = generatedData.review;
   const email = generatedData.email;
   const skillGaps = generatedData.skillGap?.skillGaps || [];
@@ -226,11 +238,9 @@ export function CandidateDetailSheet({
                             <FileText className='h-5 w-5 text-primary'/> Candidate Profile
                         </div>
                         {candidate.resumeDataUri && (
-                            <a href={candidate.resumeDataUri} target="_blank" rel="noopener noreferrer">
-                                <Button variant="link" className="h-auto p-0">
-                                    <File className="mr-2 h-4 w-4" /> View Original CV
-                                </Button>
-                            </a>
+                            <Button variant="link" className="h-auto p-0" onClick={handleViewCv}>
+                                <File className="mr-2 h-4 w-4" /> View Original CV
+                            </Button>
                         )}
                     </CardTitle>
                   </CardHeader>
