@@ -6,13 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mic, Video, Brain, AlertTriangle, Send, CheckCircle, XCircle, LogOut } from 'lucide-react';
+import { Loader2, Mic, Video, Brain, AlertTriangle, Send, CheckCircle, XCircle, LogOut, Settings2 } from 'lucide-react';
 import type { Candidate } from '@/lib/types';
 import { Textarea } from '../ui/textarea';
 import { proctorTechnicalExam } from '@/ai/flows/proctor-technical-exam';
 import { generateSystemDesignQuestion } from '@/ai/flows/generate-system-design-question';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
+import { detectFaces } from '@/ai/flows/face-detection';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 type InterviewPhase = 'Technical' | 'SystemDesign' | 'FinalInterview'; // FinalInterview is legacy but kept for type safety
 type PreFlightStatus = 'Pending' | 'Success' | 'Error';
@@ -24,15 +26,20 @@ interface InterviewGauntletProps {
     onLogout: () => void;
 }
 
+const FACEDETECTION_INTERVAL_MS = 10000; // Run face detection every 10 seconds
+
 export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete, onLogout }: InterviewGauntletProps) {
     const { toast } = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
     const recognitionRef = useRef<any>(null);
-    
-    const [cameraStatus, setCameraStatus] = useState<PreFlightStatus>('Pending');
-    const [micStatus, setMicStatus] = useState<PreFlightStatus>('Pending');
-    const [isPreFlightComplete, setIsPreFlightComplete] = useState(false);
-    
+    const faceDetectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const mediaStreamRef = useRef<MediaStream | null>(null);
+
+    const [isPreFlight, setIsPreFlight] = useState(true);
+    const [devices, setDevices] = useState<{ video: MediaDeviceInfo[], audio: MediaDeviceInfo[] }>({ video: [], audio: [] });
+    const [selectedVideoDevice, setSelectedVideoDevice] = useState('');
+    const [selectedAudioDevice, setSelectedAudioDevice] = useState('');
+
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
     
@@ -44,39 +51,89 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete, on
     const [ambientTranscript, setAmbientTranscript] = useState('');
 
     const answerSaveKey = `gauntlet_answer_${candidate.id}_${phase}`;
+    
+    // --- Device Management ---
+    useEffect(() => {
+        const getDevices = async () => {
+            try {
+                // We must get user media permission first to enumerate devices
+                await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const allDevices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = allDevices.filter(d => d.kind === 'videoinput');
+                const audioDevices = allDevices.filter(d => d.kind === 'audioinput');
+                setDevices({ video: videoDevices, audio: audioDevices });
+                if (videoDevices.length > 0) setSelectedVideoDevice(videoDevices[0].deviceId);
+                if (audioDevices.length > 0) setSelectedAudioDevice(audioDevices[0].deviceId);
+            } catch (err) {
+                 console.error("Error enumerating devices:", err);
+                 toast({ variant: 'destructive', title: "Device Error", description: "Could not access camera or microphone. Please check permissions."});
+            }
+        };
+        getDevices();
+
+        return () => { // Cleanup function
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            }
+             if (faceDetectionIntervalRef.current) {
+                clearInterval(faceDetectionIntervalRef.current);
+            }
+        };
+
+    }, [toast]);
 
     useEffect(() => {
-        const runPreFlightChecks = async () => {
-            // Check Camera
-            try {
-                const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                if (videoRef.current) videoRef.current.srcObject = videoStream;
-                setCameraStatus('Success');
-            } catch (error) { setCameraStatus('Error'); }
-
-            // Check Microphone
-            try {
-                await navigator.mediaDevices.getUserMedia({ audio: true });
-                const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-                if (SpeechRecognition) {
-                    const recognition = new SpeechRecognition();
-                    recognition.continuous = true;
-                    recognition.interimResults = true;
-                    recognition.onresult = (event: any) => {
-                        let finalTranscript = '';
-                        for (let i = event.resultIndex; i < event.results.length; ++i) {
-                            if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
-                        }
-                        if (finalTranscript) setAmbientTranscript(prev => prev + finalTranscript + '. ');
-                    };
-                    recognitionRef.current = recognition;
-                    setMicStatus('Success');
-                } else { setMicStatus('Error'); }
-            } catch (error) { setMicStatus('Error'); }
+        const startStream = async () => {
+            if (selectedVideoDevice && selectedAudioDevice) {
+                if (mediaStreamRef.current) {
+                    mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                }
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { deviceId: selectedVideoDevice },
+                        audio: { deviceId: selectedAudioDevice },
+                    });
+                    mediaStreamRef.current = stream;
+                    if (videoRef.current) videoRef.current.srcObject = stream;
+                } catch (err) {
+                    console.error("Error starting media stream:", err);
+                }
+            }
         };
-        runPreFlightChecks();
-    }, []);
+        startStream();
+    }, [selectedVideoDevice, selectedAudioDevice]);
     
+    // --- Face Detection Proctoring ---
+    useEffect(() => {
+        if (!isPreFlight) {
+            faceDetectionIntervalRef.current = setInterval(async () => {
+                if (videoRef.current && videoRef.current.readyState >= 3) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoRef.current.videoWidth;
+                    canvas.height = videoRef.current.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                    const dataUri = canvas.toDataURL('image/jpeg');
+
+                    try {
+                        const result = await detectFaces({ imageDataUri: dataUri });
+                        const logEntry = `[${new Date().toISOString()}] Face detection check: ${result.faceCount} face(s) found.`;
+                        setProctoringLog(prev => [...prev, logEntry]);
+                        if (result.faceCount === 0 || result.faceCount > 1) {
+                            toast({ variant: "destructive", title: "Proctoring Alert", description: `Detected ${result.faceCount} faces. Please ensure you are alone and visible.` });
+                        }
+                    } catch (error) {
+                        console.error("Face detection failed:", error);
+                    }
+                }
+            }, FACEDETECTION_INTERVAL_MS);
+        }
+        return () => {
+            if (faceDetectionIntervalRef.current) clearInterval(faceDetectionIntervalRef.current);
+        }
+    }, [isPreFlight, toast]);
+    
+
     useEffect(() => {
         const savedAnswer = localStorage.getItem(answerSaveKey);
         if (savedAnswer) {
@@ -91,6 +148,29 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete, on
         setWrittenAnswer(newAnswer);
         localStorage.setItem(answerSaveKey, newAnswer);
     };
+    
+     const startMicrophone = () => {
+        try {
+            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                const recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.onresult = (event: any) => {
+                    let finalTranscript = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+                    }
+                    if (finalTranscript) setAmbientTranscript(prev => prev + finalTranscript + '. ');
+                };
+                recognition.start();
+                recognitionRef.current = recognition;
+            }
+        } catch (error) {
+            console.error("Speech recognition failed:", error);
+        }
+    };
+
 
     useEffect(() => {
         const handleVisibilityChange = () => {
@@ -104,25 +184,24 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete, on
                 });
             }
         };
-        if(isPreFlightComplete) {
+        if(!isPreFlight) {
             document.addEventListener('visibilitychange', handleVisibilityChange);
             return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
         }
-    }, [isPreFlightComplete, toast]);
+    }, [isPreFlight, toast]);
 
     useEffect(() => {
         const fetchQuestion = async () => {
-            if (!isPreFlightComplete) return;
+            if (isPreFlight) return;
             setIsLoading(true);
             try {
                 const result = await generateSystemDesignQuestion({ jobTitle: candidate.role });
                 if (phase === 'Technical') {
                     setTechnicalQuestion(result.question);
-                    recognitionRef.current?.start();
                 } else if (phase === 'SystemDesign') {
                     setSystemDesignQuestion(result.question);
-                     recognitionRef.current?.start();
                 }
+                 startMicrophone();
             } catch (error) {
                 toast({ title: 'Error', description: 'Could not generate interview questions.', variant: 'destructive'});
             } finally {
@@ -130,7 +209,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete, on
             }
         };
         fetchQuestion();
-    }, [candidate.role, phase, toast, isPreFlightComplete]);
+    }, [candidate.role, phase, toast, isPreFlight]);
 
     const handleSubmitAnswer = async () => {
         if (writtenAnswer.trim() === '') {
@@ -139,6 +218,7 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete, on
         }
         setIsProcessing(true);
         recognitionRef.current?.stop();
+        if (faceDetectionIntervalRef.current) clearInterval(faceDetectionIntervalRef.current);
         localStorage.removeItem(answerSaveKey);
 
         try {
@@ -175,29 +255,39 @@ export function InterviewGauntlet({ candidate, initialPhase, onPhaseComplete, on
         return reportContent;
     }
 
-    if (!isPreFlightComplete) {
+    if (isPreFlight) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-secondary">
                 <Card className="w-full max-w-lg">
                     <CardHeader>
-                        <CardTitle>Gauntlet Pre-flight Check</CardTitle>
-                        <CardDescription>We need to check your camera and microphone before we begin.</CardDescription>
+                        <CardTitle className="flex items-center gap-2"><Settings2 /> Gauntlet Pre-flight Check</CardTitle>
+                        <CardDescription>Select and test your camera and microphone before we begin.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className={`flex items-center justify-between p-3 rounded-md ${cameraStatus === 'Pending' ? 'bg-secondary' : cameraStatus === 'Success' ? 'bg-green-100' : 'bg-red-100'}`}>
-                            <div className="flex items-center gap-2"> <Video /> <span className="font-medium">Camera</span> </div>
-                            {cameraStatus === 'Pending' && <Loader2 className="animate-spin" />}
-                            {cameraStatus === 'Success' && <CheckCircle className="text-green-600" />}
-                            {cameraStatus === 'Error' && <XCircle className="text-red-600" />}
+                        <div className="aspect-video bg-black rounded-lg">
+                            <video ref={videoRef} className="w-full h-full rounded-md" autoPlay muted />
                         </div>
-                         <div className={`flex items-center justify-between p-3 rounded-md ${micStatus === 'Pending' ? 'bg-secondary' : micStatus === 'Success' ? 'bg-green-100' : 'bg-red-100'}`}>
-                            <div className="flex items-center gap-2"> <Mic /> <span className="font-medium">Microphone</span> </div>
-                            {micStatus === 'Pending' && <Loader2 className="animate-spin" />}
-                            {micStatus === 'Success' && <CheckCircle className="text-green-600" />}
-                            {micStatus === 'Error' && <XCircle className="text-red-600" />}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="video-device">Camera</Label>
+                                <Select value={selectedVideoDevice} onValueChange={setSelectedVideoDevice}>
+                                    <SelectTrigger id="video-device"><SelectValue placeholder="Select camera..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {devices.video.map(d => <SelectItem key={d.deviceId} value={d.deviceId}>{d.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="audio-device">Microphone</Label>
+                                <Select value={selectedAudioDevice} onValueChange={setSelectedAudioDevice}>
+                                    <SelectTrigger id="audio-device"><SelectValue placeholder="Select microphone..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {devices.audio.map(d => <SelectItem key={d.deviceId} value={d.deviceId}>{d.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
-                        <Button className="w-full h-11" disabled={cameraStatus !== 'Success' || micStatus !== 'Success'} onClick={() => setIsPreFlightComplete(true)}> Begin Gauntlet </Button>
-                        {(cameraStatus === 'Error' || micStatus === 'Error') && <p className="text-xs text-center text-destructive">Please check your browser permissions and ensure your devices are connected.</p>}
+                        <Button className="w-full h-11" disabled={!selectedAudioDevice || !selectedVideoDevice} onClick={() => setIsPreFlight(false)}> Begin Gauntlet </Button>
                     </CardContent>
                 </Card>
             </div>

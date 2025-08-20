@@ -22,4 +22,5 @@ import '@/ai/flows/proctor-technical-exam.ts';
 import '@/ai/flows/proactive-candidate-sourcing.ts';
 import '@/ai/flows/bulk-match-candidates.ts';
 import '@/ai/flows/system-audit.ts';
+import '@/ai/flows/face-detection.ts';
 
