@@ -54,7 +54,7 @@ export default function FeedbackPage() {
     const [replyText, setReplyText] = useState<Record<string, string>>({});
 
     useEffect(() => {
-        const authData = sessionStorage.getItem('feedback-auth');
+        const authData = localStorage.getItem('feedback-auth');
         if (!authData) {
             toast({
                 variant: 'destructive',
@@ -88,7 +88,7 @@ export default function FeedbackPage() {
     }, [router, toast]);
 
     const handleLogout = () => {
-        sessionStorage.removeItem('feedback-auth');
+        localStorage.removeItem('feedback-auth');
         toast({ title: "Logged Out", description: "You have been successfully logged out." });
         router.push('/feedback/login');
     };

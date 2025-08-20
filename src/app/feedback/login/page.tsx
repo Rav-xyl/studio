@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -28,7 +29,7 @@ export default function FeedbackLoginPage() {
     setIsLoading(true);
 
     if ((username === FEEDBACK_USERNAME && password === FEEDBACK_PASSWORD) || (username === OWNER_USERNAME && password === OWNER_PASSWORD)) {
-      sessionStorage.setItem('feedback-auth', JSON.stringify({ username }));
+      localStorage.setItem('feedback-auth', JSON.stringify({ username }));
       toast({
         title: 'Login Successful',
         description: 'Redirecting to the feedback portal...',
