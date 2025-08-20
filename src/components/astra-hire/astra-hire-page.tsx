@@ -14,9 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { synthesizeJobDescription } from '@/ai/flows/automated-job-description-synthesis';
 import { nanoid } from 'nanoid';
 import { reEngageCandidate } from '@/ai/flows/re-engage-candidate';
-import { db, storage } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, writeBatch, getDocs, query, where, arrayUnion, getDoc, deleteDoc, orderBy, limit } from 'firebase/firestore';
-import { ref, deleteObject } from 'firebase/storage';
 import { GauntletPortalTab } from '../gauntlet/gauntlet-portal-tab';
 import { Card, CardContent } from '../ui/card';
 import { Progress } from '../ui/progress';
@@ -285,6 +284,7 @@ export default function AstraHirePage() {
                     aiInitialScore: result.candidateScore,
                     lastUpdated: new Date().toISOString(),
                     archived,
+                    resumeDataUri, // Store the data URI
                     log: [{
                         timestamp: new Date().toISOString(),
                         event: 'Resume Screened',
@@ -390,27 +390,14 @@ export default function AstraHirePage() {
           const candidateRef = doc(db, 'candidates', candidateId);
           batch.delete(candidateRef);
 
-          // 2. Delete resume from Storage
-          if (candidateToDelete.resumeUrl) {
-              try {
-                  const storageRef = ref(storage, candidateToDelete.resumeUrl);
-                  await deleteObject(storageRef);
-              } catch (storageError: any) {
-                  // If file doesn't exist, we can ignore the error, but log others
-                  if (storageError.code !== 'storage/object-not-found') {
-                      console.error("Error deleting resume from storage:", storageError);
-                  }
-              }
-          }
-
-          // 3. Delete related notifications
+          // 2. Delete related notifications
           const notificationsQuery = query(collection(db, 'notifications'), where('candidateId', '==', candidateId));
           const notificationsSnapshot = await getDocs(notificationsQuery);
           notificationsSnapshot.forEach((doc) => {
               batch.delete(doc.ref);
           });
           
-          // 4. Clean up role match caches
+          // 3. Clean up role match caches
           const rolesSnapshot = await getDocs(collection(db, 'roles'));
           rolesSnapshot.forEach(roleDoc => {
               const roleData = roleDoc.data() as JobRole;
@@ -806,7 +793,7 @@ export default function AstraHirePage() {
             </button>
           </nav>
         </div>
-        <div id="tab-content" className="fade-in">
+        <div>
             {renderActiveTabView()}
         </div>
       </main>

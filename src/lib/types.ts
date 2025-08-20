@@ -3,6 +3,7 @@
 
 
 
+
 export type KanbanStatus = 'Sourcing' | 'Screening' | 'Interview' | 'Hired';
 
 export interface LogEntry {
@@ -56,7 +57,7 @@ export interface Candidate {
   gauntletStartDate?: string;
   gauntletState?: GauntletState;
   communicationSent?: boolean;
-  resumeUrl?: string;
+  resumeDataUri?: string; // Changed from resumeUrl
   isProcessing?: boolean;
   // Optional fields from AI processing
   [key: string]: any;

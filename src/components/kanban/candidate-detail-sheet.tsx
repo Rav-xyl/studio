@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link, Github, Goal, PlusCircle, Trash2, Search } from 'lucide-react';
+import { Linkedin, Zap, Brain, Send, FileText, Loader2, FileSignature, Award, ShieldCheck, GitMerge, Archive, Link, Github, Goal, PlusCircle, Trash2, Search, File } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
@@ -221,7 +221,18 @@ export function CandidateDetailSheet({
               <TabsContent value="profile" className="mt-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle className='flex items-center gap-2 text-xl'><FileText className='h-5 w-5 text-primary'/> Candidate Profile</CardTitle>
+                    <CardTitle className='flex items-center justify-between text-xl'>
+                        <div className="flex items-center gap-2">
+                            <FileText className='h-5 w-5 text-primary'/> Candidate Profile
+                        </div>
+                        {candidate.resumeDataUri && (
+                            <a href={candidate.resumeDataUri} target="_blank" rel="noopener noreferrer">
+                                <Button variant="link" className="h-auto p-0">
+                                    <File className="mr-2 h-4 w-4" /> View Original CV
+                                </Button>
+                            </a>
+                        )}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground mb-4">{candidate.narrative}</p>
