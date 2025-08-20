@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -638,6 +637,16 @@ export default function AstraHirePage() {
         }
     };
 
+    const handleAdminLogout = () => {
+        localStorage.removeItem('admin-auth');
+        setIsAdmin(false);
+        setActiveTab('roles'); // Default to a non-admin tab
+        toast({
+            title: 'Admin Logout',
+            description: 'You have been logged out of admin mode.',
+        });
+    };
+
   const renderActiveTabView = () => {
     switch (activeTab) {
       case 'roles':
@@ -681,7 +690,13 @@ export default function AstraHirePage() {
         return <AnnouncementsTab announcements={announcements} />;
        case 'admin':
         if (!isAdmin) return null;
-        return <AdminTab allCandidates={candidates} roles={roles} notifications={notifications} />;
+        return <AdminTab 
+            allCandidates={candidates} 
+            roles={roles} 
+            notifications={notifications} 
+            onLogout={handleAdminLogout}
+            onNavigateToApp={() => setActiveTab('roles')}
+        />;
       default:
         return null;
     }
@@ -799,7 +814,7 @@ export default function AstraHirePage() {
       </main>
 
        {backgroundTask && (
-          <Card className="fixed bottom-4 right-4 w-80 shadow-2xl z-50 fade-in-slide-up">
+          <Card className="fixed bottom-4 right-4 w-80 shadow-2xl z-50">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold text-sm">{backgroundTask.message}</h4>

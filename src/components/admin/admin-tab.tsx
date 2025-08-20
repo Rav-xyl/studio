@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, Shield, Send, Bell, UserCheck, LogOut } from 'lucide-react';
+import { Loader2, Shield, Send, Bell, UserCheck, LogOut, Home } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { collection, updateDoc, doc, setDoc, deleteDoc, query, where, getDocs, writeBatch, getDoc, arrayUnion } from 'firebase/firestore';
@@ -12,30 +12,20 @@ import { AllCandidatesTable } from '@/components/admin/all-candidates-table';
 import { aiDrivenCandidateEngagement } from '@/ai/flows/ai-driven-candidate-engagement';
 import { proactiveCandidateSourcing } from '@/ai/flows/proactive-candidate-sourcing';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useRouter } from 'next/navigation';
 
 interface AdminTabProps {
     allCandidates: Candidate[];
     roles: JobRole[];
     notifications: ProactiveSourcingNotification[];
+    onLogout: () => void;
+    onNavigateToApp: () => void;
 }
 
-export function AdminTab({ allCandidates, roles, notifications }: AdminTabProps) {
-    const router = useRouter();
+export function AdminTab({ allCandidates, roles, notifications, onLogout, onNavigateToApp }: AdminTabProps) {
     const { toast } = useToast();
     const [isSendingCommunications, setIsSendingCommunications] = useState(false);
     const [isSourcing, setIsSourcing] = useState(false);
-    
-    const handleLogout = () => {
-        localStorage.removeItem('admin-auth');
-        toast({
-            title: 'Admin Logout',
-            description: 'You have been logged out of admin mode.',
-        });
-        // Force a re-render of the main page to remove admin controls
-        router.refresh();
-    };
-    
+
     const handleProactiveSourcing = async () => {
         setIsSourcing(true);
         toast({ title: "AI Sourcing Agent Activated", description: "Scanning for high-potential, unassigned candidates..." });
@@ -185,7 +175,7 @@ export function AdminTab({ allCandidates, roles, notifications }: AdminTabProps)
     const pendingNotifications = notifications.filter(n => n.status === 'pending' && candidateIds.has(n.candidateId));
 
     return (
-        <div className="fade-in-slide-up space-y-8">
+        <div className="space-y-8">
             <header className="flex flex-wrap justify-between items-center gap-4">
                 <div className="flex items-center gap-3">
                     <Shield className="w-10 h-10 text-primary" />
@@ -197,6 +187,10 @@ export function AdminTab({ allCandidates, roles, notifications }: AdminTabProps)
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                     <Button onClick={onNavigateToApp} variant="outline">
+                        <Home className="mr-2 h-4 w-4" />
+                        Back to App
+                    </Button>
                      <Button onClick={handleProactiveSourcing} variant="outline" disabled={isSourcing}>
                         {isSourcing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <UserCheck className="mr-2 h-4 w-4" />}
                         Run Sourcing Agent
@@ -205,7 +199,7 @@ export function AdminTab({ allCandidates, roles, notifications }: AdminTabProps)
                         {isSendingCommunications ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
                         Send Final Communications
                     </Button>
-                     <Button onClick={handleLogout} variant="destructive">
+                     <Button onClick={onLogout} variant="destructive">
                         <LogOut className="mr-2 h-4 w-4" />
                         Exit Admin Mode
                     </Button>
